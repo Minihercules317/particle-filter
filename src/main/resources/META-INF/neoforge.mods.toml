@@ -13,7 +13,7 @@ authors = "Minihercules317 (idea, design, testing), Claude by Anthropic (code)"
 displayURL = "https://github.com/Minihercules317/particle-filter"
 credits = "Code written by Claude (Anthropic's AI model) via Claude Code. Idea, design decisions and testing by Minihercules317."
 description = '''
-Find out which particles a machine or area spawns, then hide exactly those: everywhere, only inside named zones, or for specific blocks' breaking and mining effects. Client-side only; open the menu with /particles.
+Too many particles, or particles hurting your FPS? Scan to find out exactly which ones are on screen, then hide just those: everywhere, only inside areas you choose, or for specific blocks' breaking and mining effects. Works with vanilla and modded particles. Client-side only; open the menu with /particles.
 
 AI disclosure: this mod's code was written by an AI (Claude, by Anthropic). Minihercules317 contributed the idea, design decisions and testing, not the code.
 '''

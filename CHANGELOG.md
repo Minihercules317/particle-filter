@@ -2,6 +2,10 @@
 
 All code in this project is written by Claude (Anthropic's AI model); see the README's "Who did what" section.
 
+## Unreleased
+
+- In-game hints no longer assume particles come from a machine
+
 ## 1.0.1
 
 - Added the mod icon, shown in the in-game Mods list

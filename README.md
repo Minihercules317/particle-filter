@@ -2,16 +2,25 @@
 
 <img src="src/main/resources/particlefilter.png" alt="Particle Filter icon" width="128">
 
-A client-side NeoForge mod for finding out which particles are cluttering your screen and hiding exactly those: everywhere, only inside zones you define, or only for specific blocks' breaking and mining effects.
+A client-side NeoForge mod for hiding exactly the particles you don't want: everywhere, only inside areas you choose, or only for specific blocks' breaking and mining effects. Everything else keeps its particles.
 
-Built for big modded bases where automation (AE2 growth accelerators, crystal farms, machines) fills the screen with particles, and turning particles down to "Minimal" would remove them everywhere else too.
+The usual fix for too many particles is setting Particles to *Minimal*, which removes almost all of them everywhere. Particle Filter is for when you only want *some* gone. Use it to:
+
+- calm down busy bases, farms and automated setups
+- stop particular blocks from bursting into debris when you break or mine them
+- remove one annoying particle from a mod without uninstalling the mod
+- win back FPS when particles pile up (hidden particles are never created, not just drawn invisibly)
+- clean up the view for screenshots, recording or streaming
+- cut visual noise if certain effects are distracting or uncomfortable to look at
+
+You don't need to know what a particle is called: a built-in scan finds it for you. It works with vanilla and modded particles.
 
 > [!IMPORTANT]
 > **AI disclosure: this mod's code was written by an AI.** All of the source code, build configuration and documentation were written by Claude, an AI model made by Anthropic, working in Claude Code. The project owner, Minihercules317, contributed the idea, the feature requests and the design decisions, tested it in game, and drew the icon. Minihercules317 did not write the code. See [Who did what](#who-did-what) for details.
 
 ## Features
 
-- **Scan:** look at a machine and press Scan. For 5 seconds the mod records every particle spawned within 6 blocks, then lists them by particle ID (e.g. `ae2:energy_fx`) with how many appeared. Particles that mods spawn without a type are listed by class name.
+- **Scan:** look at where the particles are coming from (or just stand near them) and press Scan. For 5 seconds the mod records every particle spawned within 6 blocks, then lists them by particle ID (e.g. `minecraft:flame`, `ae2:energy_fx`) with how many appeared. Particles that mods spawn without a type are listed by class name.
 - **Hide everywhere** or **hide here** with a checkbox per particle. "Hide here" adds it to the zone around the scanned spot, creating a 9×5×9 zone if there isn't one (previewed in the world before you commit).
 - **Zones** are boxes with a name, a position (center X/Z, bottom Y) and a size (width × height × length, 1-256 blocks). Edit them by typing or with −/+, or snap them to your position or crosshair; the outline updates live in the world. Zones belong to one server (or singleplayer world) and dimension.
 - **Block particles:** hide the breaking, mining and block-dust (sprinting/landing) particles of specific blocks, whole mods (`geore:*`), or block tags (`#c:ores`). A keybind toggles the block you're looking at.
@@ -22,7 +31,7 @@ Built for big modded bases where automation (AE2 growth accelerators, crystal fa
 
 Open the menu with **`/particles`**, the **Open Particle Filter** keybind, or the Config button in the Mods list. It has three tabs:
 
-- **Scan:** look at the machine making the particles, press **Scan**, and tick **Hide everywhere** or **Hide here** next to each particle you want gone. The game keeps running while the menu is open, so the scan collects while you wait.
+- **Scan:** look at where the unwanted particles are coming from, press **Scan**, and tick **Hide everywhere** or **Hide here** next to each particle you want gone. The game keeps running while the menu is open, so the scan collects while you wait.
 - **Hidden:** everything hidden and where. Unhide anything, or type an ID to hide it directly.
 - **Zones:** zones in your current world. Hover a zone to highlight it, **Edit** to change its name, position, size and contents, or create a new one around you.
 
@@ -54,7 +63,7 @@ Settings are stored in `config/particlefilter.json`.
 
 **Minihercules317 (project owner): idea, design decisions, testing. No code.**
 
-- Found the problem (breaking particles from GeOre ores and particle spam from AE2 growth accelerators in a large modpack) and asked for a way to hide specific particles rather than all of them.
+- Found the problem in their own modpack (breaking particles from GeOre ores and particle spam from AE2 growth accelerators) and asked for a way to hide specific particles rather than all of them.
 - Asked for or decided on each feature: a menu reached by clicking the scan results, hiding particles only inside an area, seeing those areas in the world, outlines that update live while resizing, typing sizes instead of picking presets, naming and moving zones, one list showing everything hidden and where, one command for everything, and zones measured by width, height and length instead of a radius.
 - Decided to turn the work into a standalone mod instead of a fork, named it, asked for a cleaner and more intuitive GUI, and chose to publish it.
 - Tested every version in game and reported problems, with screenshots.
