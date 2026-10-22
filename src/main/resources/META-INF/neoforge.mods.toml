@@ -1,0 +1,32 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+issueTrackerURL = "https://github.com/Minihercules317/particle-filter/issues"
+
+[[mods]]
+modId = "particlefilter"
+version = "1.0.0"
+displayName = "Particle Filter"
+authors = "Minihercules317"
+displayURL = "https://github.com/Minihercules317/particle-filter"
+description = '''
+Find which particles a machine or area spawns, then hide them everywhere, only inside named zones, or for specific blocks' breaking/mining effects. Client-side only.
+Open the menu with /particles.
+'''
+
+[[mixins]]
+config = "particlefilter.mixins.json"
+
+[[dependencies.particlefilter]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1.0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.particlefilter]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.21.2)"
+ordering = "NONE"
+side = "CLIENT"
