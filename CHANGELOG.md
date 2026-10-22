@@ -1,5 +1,7 @@
 # Changelog
 
+All code in this project is written by Claude (Anthropic's AI model); see the README's "Who did what" section.
+
 ## 1.0.0
 
 First release, for Minecraft 1.21.1 / NeoForge 21.1.

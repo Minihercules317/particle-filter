@@ -7,11 +7,13 @@ issueTrackerURL = "https://github.com/Minihercules317/particle-filter/issues"
 modId = "particlefilter"
 version = "1.0.0"
 displayName = "Particle Filter"
-authors = "Minihercules317"
+authors = "Minihercules317 (idea, design, testing), Claude by Anthropic (code)"
 displayURL = "https://github.com/Minihercules317/particle-filter"
+credits = "Code written by Claude (Anthropic's AI model) via Claude Code. Idea, design decisions and testing by Minihercules317."
 description = '''
-Find which particles a machine or area spawns, then hide them everywhere, only inside named zones, or for specific blocks' breaking/mining effects. Client-side only.
-Open the menu with /particles.
+Find out which particles a machine or area spawns, then hide exactly those: everywhere, only inside named zones, or for specific blocks' breaking and mining effects. Client-side only; open the menu with /particles.
+
+AI disclosure: this mod's code was written by an AI (Claude, by Anthropic). Minihercules317 contributed the idea, design decisions and testing, not the code.
 '''
 
 [[mixins]]
