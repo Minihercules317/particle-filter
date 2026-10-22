@@ -26,14 +26,17 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import particlefilter.screen.HiddenScreen;
-import particlefilter.screen.HubScreen;
-import particlefilter.screen.ScanScreen;
-import particlefilter.screen.ZonesScreen;
+import particlefilter.config.PfConfig;
+import particlefilter.filter.FilterRules;
+import particlefilter.gui.ParticleFilterScreen;
+import particlefilter.gui.ParticleFilterScreen.Tab;
+import particlefilter.render.ZoneRenderer;
+import particlefilter.scan.ParticleScan;
 
 import java.util.Optional;
 import java.util.function.Supplier;
 
+/** Client-only entry point: config, commands, keybinds, and per-tick work. */
 @Mod(value = ParticleFilter.MOD_ID, dist = Dist.CLIENT)
 public final class ParticleFilter {
 
@@ -42,10 +45,10 @@ public final class ParticleFilter {
     public static final Logger LOGGER = LoggerFactory.getLogger("Particle Filter");
 
     private static final String CATEGORY = "key.categories.particlefilter";
-    private static final KeyMapping OPEN_MENU = new KeyMapping("key.particlefilter.open_menu", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
-    private static final KeyMapping SCAN = new KeyMapping("key.particlefilter.scan", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
-    private static final KeyMapping TOGGLE_BLOCK = new KeyMapping("key.particlefilter.toggle_block", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
-    private static final KeyMapping TOGGLE_OUTLINES = new KeyMapping("key.particlefilter.toggle_outlines", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
+    private static final KeyMapping OPEN_MENU = key("open_menu");
+    private static final KeyMapping SCAN = key("scan");
+    private static final KeyMapping TOGGLE_BLOCK = key("toggle_block");
+    private static final KeyMapping TOGGLE_OUTLINES = key("toggle_outlines");
 
     /** Screens requested by commands open on the next tick; the closing chat screen would otherwise replace them. */
     private static Supplier<Screen> pendingScreen;
@@ -61,24 +64,30 @@ public final class ParticleFilter {
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> onClientTick());
         NeoForge.EVENT_BUS.addListener(RegisterClientCommandsEvent.class, ParticleFilter::registerCommands);
         NeoForge.EVENT_BUS.addListener(RenderLevelStageEvent.class, ZoneRenderer::render);
-        container.registerExtensionPoint(IConfigScreenFactory.class, (mod, parent) -> new HubScreen(parent));
+        container.registerExtensionPoint(IConfigScreenFactory.class, (mod, parent) -> new ParticleFilterScreen(parent, null));
+    }
+
+    private static KeyMapping key(String name) {
+        return new KeyMapping("key.particlefilter." + name, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
     }
 
     private static void registerCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(Commands.literal(COMMAND)
-            .executes(ctx -> open(() -> new HubScreen(null)))
-            .then(Commands.literal("results").executes(ctx -> open(() -> new ScanScreen(null))))
-            .then(Commands.literal("hidden").executes(ctx -> open(() -> new HiddenScreen(null))))
-            .then(Commands.literal("zones").executes(ctx -> open(() -> new ZonesScreen(null))))
-            .then(Commands.literal("scan").executes(ctx -> {
-                Census.startAtCrosshair(false);
-                return 1;
-            })));
+            .executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, null)))
+            .then(Commands.literal("scan").executes(ctx -> openNextTick(ParticleFilter::scanAndOpen)))
+            .then(Commands.literal("hidden").executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, Tab.HIDDEN))))
+            .then(Commands.literal("zones").executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, Tab.ZONES)))));
     }
 
-    private static int open(Supplier<Screen> screen) {
+    private static int openNextTick(Supplier<Screen> screen) {
         pendingScreen = screen;
         return 1;
+    }
+
+    /** Starts a scan at the crosshair and opens the Scan tab, which fills in when the scan finishes. */
+    private static Screen scanAndOpen() {
+        ParticleScan.start();
+        return new ParticleFilterScreen(null, Tab.SCAN);
     }
 
     /** The block under the crosshair, if the player is looking at one. */
@@ -90,21 +99,18 @@ public final class ParticleFilter {
 
     private static void onClientTick() {
         Minecraft mc = Minecraft.getInstance();
-        PfRules.tick();
-        Census.tick();
+        FilterRules.tick();
+        ParticleScan.tick();
         if (pendingScreen != null) {
             Supplier<Screen> screen = pendingScreen;
             pendingScreen = null;
             mc.setScreen(screen.get());
         }
-        while (OPEN_MENU.consumeClick()) mc.setScreen(new HubScreen(null));
-        while (SCAN.consumeClick()) {
-            if (Screen.hasShiftDown()) mc.setScreen(new ScanScreen(null));
-            else Census.startAtCrosshair(false);
-        }
+        while (OPEN_MENU.consumeClick()) mc.setScreen(new ParticleFilterScreen(null, null));
+        while (SCAN.consumeClick()) mc.setScreen(scanAndOpen());
         while (TOGGLE_OUTLINES.consumeClick()) {
-            ZoneRenderer.showOutlines = !ZoneRenderer.showOutlines;
-            if (mc.player != null) mc.player.displayClientMessage(Component.translatable(ZoneRenderer.showOutlines
+            ZoneRenderer.alwaysShow = !ZoneRenderer.alwaysShow;
+            if (mc.player != null) mc.player.displayClientMessage(Component.translatable(ZoneRenderer.alwaysShow
                 ? "particlefilter.outlines.on" : "particlefilter.outlines.off"), true);
         }
         while (TOGGLE_BLOCK.consumeClick()) toggleTargetedBlock(mc);
@@ -121,13 +127,13 @@ public final class ParticleFilter {
         BlockState state = mc.level.getBlockState(target.get());
         String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         Component name = state.getBlock().getName();
-        if (PfRules.isBlockHidden(state) && !PfConfig.isBlockEntry(id)) {
+        if (FilterRules.isBlockHidden(state) && !PfConfig.hasBlockEntry(id)) {
             // Hidden by a wildcard or tag entry; toggling the exact id would do nothing.
             player.displayClientMessage(Component.translatable("particlefilter.block.by_rule", name).withStyle(ChatFormatting.YELLOW), true);
             return;
         }
-        boolean hide = !PfConfig.isBlockEntry(id);
+        boolean hide = !PfConfig.hasBlockEntry(id);
         PfConfig.setBlockHidden(id, hide);
-        player.displayClientMessage(Component.translatable(hide ? "particlefilter.block.hidden" : "particlefilter.block.shown", name, id), true);
+        player.displayClientMessage(Component.translatable(hide ? "particlefilter.block.hidden" : "particlefilter.block.shown", name), true);
     }
 }

@@ -1,4 +1,4 @@
-package particlefilter;
+package particlefilter.filter;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -8,20 +8,23 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import particlefilter.ParticleFilter;
+import particlefilter.config.PfConfig;
+import particlefilter.config.Zone;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
- * Immutable snapshot of {@link PfConfig}, compiled for fast checks during particle spawning. Particles can be
- * spawned off the client thread (e.g. by mods that tick particles asynchronously), so checks only ever read
- * the current snapshot, which is swapped atomically on rebuild.
+ * Immutable snapshot of {@link PfConfig}, compiled for fast checks while particles spawn. Some mods spawn particles
+ * off the client thread, so checks only read the current snapshot, which is replaced atomically on rebuild.
  */
-public final class PfRules {
+public final class FilterRules {
 
-    private record ZoneBox(double minX, double minY, double minZ, double maxX, double maxY, double maxZ, Set<String> particles) {
+    private record ZoneBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, Set<String> particles) {
         boolean contains(double x, double y, double z) {
             return x >= minX && x < maxX && y >= minY && y < maxY && z >= minZ && z < maxZ;
         }
@@ -29,6 +32,8 @@ public final class PfRules {
 
     private record Snapshot(Set<String> particles, List<ZoneBox> zones,
                             Set<ResourceLocation> blockIds, Set<String> blockNamespaces, List<TagKey<Block>> blockTags) {
+        static final Snapshot EMPTY = new Snapshot(Set.of(), List.of(), Set.of(), Set.of(), List.of());
+
         boolean hasParticleRules() {
             return !particles.isEmpty() || !zones.isEmpty();
         }
@@ -38,11 +43,11 @@ public final class PfRules {
         }
     }
 
-    private static volatile Snapshot snapshot = new Snapshot(Set.of(), List.of(), Set.of(), Set.of(), List.of());
+    private static volatile Snapshot snapshot = Snapshot.EMPTY;
     private static String world;
     private static String dimension;
 
-    private PfRules() {}
+    private FilterRules() {}
 
     /** Server address, or the save name in singleplayer. Null when not in a world. */
     public static String currentWorld() {
@@ -65,7 +70,7 @@ public final class PfRules {
             else newWorld = "unknown";
             newDimension = mc.level.dimension().location().toString();
         }
-        if (!java.util.Objects.equals(newWorld, world) || !java.util.Objects.equals(newDimension, dimension)) {
+        if (!Objects.equals(newWorld, world) || !Objects.equals(newDimension, dimension)) {
             world = newWorld;
             dimension = newDimension;
             rebuild();
@@ -74,10 +79,10 @@ public final class PfRules {
 
     public static void rebuild() {
         List<ZoneBox> zones = new ArrayList<>();
-        for (PfConfig.Zone zone : PfConfig.zonesHere()) {
+        for (Zone zone : PfConfig.zonesHere()) {
             if (zone.particles.isEmpty()) continue;
-            int r = zone.radius;
-            zones.add(new ZoneBox(zone.x - r, zone.y - r, zone.z - r, zone.x + r + 1, zone.y + r + 1, zone.z + r + 1, Set.copyOf(zone.particles)));
+            zones.add(new ZoneBox(zone.minX(), zone.minY(), zone.minZ(),
+                zone.minX() + zone.width, zone.minY() + zone.height, zone.minZ() + zone.length, Set.copyOf(zone.particles)));
         }
         Set<ResourceLocation> ids = new HashSet<>();
         Set<String> namespaces = new HashSet<>();
@@ -103,17 +108,17 @@ public final class PfRules {
         return snapshot.hasParticleRules();
     }
 
-    /** True if [entry] (a particle type id or particle class name) is hidden everywhere, or in a zone containing the point. */
-    public static boolean isParticleHidden(String entry, double x, double y, double z) {
+    /** True if [particle] (type id or class name) is hidden everywhere, or in a zone containing the point. */
+    public static boolean isParticleHidden(String particle, double x, double y, double z) {
         Snapshot s = snapshot;
-        if (s.particles.contains(entry)) return true;
+        if (s.particles.contains(particle)) return true;
         for (ZoneBox zone : s.zones) {
-            if (zone.contains(x, y, z) && zone.particles.contains(entry)) return true;
+            if (zone.contains(x, y, z) && zone.particles.contains(particle)) return true;
         }
         return false;
     }
 
-    /** True if breaking, mining and block-dust particles of this block are hidden. */
+    /** True if this block's breaking, mining and block-dust particles are hidden. */
     public static boolean isBlockHidden(BlockState state) {
         Snapshot s = snapshot;
         if (!s.hasBlockRules()) return false;
