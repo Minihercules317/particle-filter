@@ -7,7 +7,7 @@ A client-side NeoForge mod for finding out which particles are cluttering your s
 Built for big modded bases where automation (AE2 growth accelerators, crystal farms, machines) fills the screen with particles, and turning particles down to "Minimal" would remove them everywhere else too.
 
 > [!IMPORTANT]
-> **AI disclosure: this mod's code was written by an AI.** All of the source code, build configuration and documentation were written by Claude, an AI model made by Anthropic, working in Claude Code. The project owner, Minihercules317, contributed the idea, the feature requests and the design decisions, and tested it in game. Minihercules317 did not write the code. See [Who did what](#who-did-what) for details.
+> **AI disclosure: this mod's code was written by an AI.** All of the source code, build configuration and documentation were written by Claude, an AI model made by Anthropic, working in Claude Code. The project owner, Minihercules317, contributed the idea, the feature requests and the design decisions, tested it in game, and drew the icon. Minihercules317 did not write the code. See [Who did what](#who-did-what) for details.
 
 ## Features
 
@@ -58,6 +58,7 @@ Settings are stored in `config/particlefilter.json`.
 - Asked for or decided on each feature: a menu reached by clicking the scan results, hiding particles only inside an area, seeing those areas in the world, outlines that update live while resizing, typing sizes instead of picking presets, naming and moving zones, one list showing everything hidden and where, one command for everything, and zones measured by width, height and length instead of a radius.
 - Decided to turn the work into a standalone mod instead of a fork, named it, asked for a cleaner and more intuitive GUI, and chose to publish it.
 - Tested every version in game and reported problems, with screenshots.
+- Drew the mod icon.
 
 **Claude (Anthropic's AI model, via Claude Code): all of the code and documentation.**
 
