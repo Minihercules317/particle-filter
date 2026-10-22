@@ -1,5 +1,7 @@
 # Particle Filter
 
+<img src="src/main/resources/particlefilter.png" alt="Particle Filter icon" width="128">
+
 A client-side NeoForge mod for finding out which particles are cluttering your screen and hiding exactly those: everywhere, only inside zones you define, or only for specific blocks' breaking and mining effects.
 
 Built for big modded bases where automation (AE2 growth accelerators, crystal farms, machines) fills the screen with particles, and turning particles down to "Minimal" would remove them everywhere else too.

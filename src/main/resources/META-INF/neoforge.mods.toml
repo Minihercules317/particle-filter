@@ -5,8 +5,10 @@ issueTrackerURL = "https://github.com/Minihercules317/particle-filter/issues"
 
 [[mods]]
 modId = "particlefilter"
-version = "1.0.0"
+version = "1.0.1"
 displayName = "Particle Filter"
+logoFile = "particlefilter.png"
+logoBlur = false
 authors = "Minihercules317 (idea, design, testing), Claude by Anthropic (code)"
 displayURL = "https://github.com/Minihercules317/particle-filter"
 credits = "Code written by Claude (Anthropic's AI model) via Claude Code. Idea, design decisions and testing by Minihercules317."
