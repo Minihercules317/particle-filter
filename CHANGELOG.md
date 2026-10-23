@@ -2,9 +2,9 @@
 
 All code in this project is written by Claude (Anthropic's AI model); see the README's "Who did what" section.
 
-## Unreleased
+## 1.0.2
 
-- In-game hints no longer assume particles come from a machine
+- In-game hints and the mod description now cover any source of unwanted particles, not just machines
 
 ## 1.0.1
 
