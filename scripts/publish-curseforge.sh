@@ -45,24 +45,27 @@ trap 'rm -f "$header"' EXIT
 chmod 600 "$header"
 printf 'X-Api-Token: %s\n' "$(<"$TOKEN_FILE")" >"$header"
 
+# Saves the response of GET $API/$1 to file $2; the version list is too big to pass around as an argument.
 api_get() {
-  local out status
-  out=$(mktemp)
-  status=$(curl -sS -o "$out" -w '%{http_code}' -H @"$header" "$API/$1")
+  local status
+  status=$(curl -sS -o "$2" -w '%{http_code}' -H @"$header" "$API/$1")
   if [[ $status != 200 ]]; then
     echo "GET $1 failed (HTTP $status); is the token valid?" >&2
-    rm -f "$out"
     exit 1
   fi
-  cat "$out"
-  rm -f "$out"
 }
+
+types_file=$(mktemp)
+versions_file=$(mktemp)
+trap 'rm -f "$header" "$types_file" "$versions_file"' EXIT
+api_get game/version-types "$types_file"
+api_get game/versions "$versions_file"
 
 # Resolve "type-slug:name" pairs to CurseForge's numeric game version ids.
 version_ids=$(python3 -I -c '
 import json, sys
-types = {t["slug"]: t["id"] for t in json.loads(sys.argv[1])}
-versions = json.loads(sys.argv[2])
+types = {t["slug"]: t["id"] for t in json.load(open(sys.argv[1]))}
+versions = json.load(open(sys.argv[2]))
 ids = []
 for wanted in sys.argv[3:]:
     slug, name = wanted.split(":", 1)
@@ -71,7 +74,7 @@ for wanted in sys.argv[3:]:
         sys.exit(f"Game version {wanted!r}: expected 1 match, found {len(match)}")
     ids.append(match[0])
 print(json.dumps(ids))
-' "$(api_get game/version-types)" "$(api_get game/versions)" "${GAME_VERSIONS[@]}")
+' "$types_file" "$versions_file" "${GAME_VERSIONS[@]}")
 
 metadata=$(python3 -I -c '
 import json, sys
