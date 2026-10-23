@@ -28,10 +28,10 @@ You don't need to know what a particle is called: a built-in scan finds it for y
 |---|---|
 | ![The Hidden page, grouping hidden particles by zone](docs/images/2-hidden.png) | ![The Zones page, listing each zone's size, position and how many particles it hides](docs/images/3-zones.png) |
 | **Hidden:** everything hidden, grouped by where it applies | **Zones:** each zone's size, position and hidden count |
-| ![The Scan page before a scan, explaining how to use it](docs/images/4-scan.png) | ![Zone outlines drawn over a machine floor in the world](docs/images/5-zone-outline.png) |
-| **Scan:** aim at the particles and press Scan to list them | **Zone outlines** can stay visible while you play |
+| ![Scan results at a growth accelerator: ae2:energy_fx, TerrainParticle, ae2:lightning_fx and minecraft:falling_nectar with how often each appeared](docs/images/4-scan.png) | ![Zone outlines drawn over a machine floor in the world](docs/images/5-zone-outline.png) |
+| **Scan:** lists every particle near what you're looking at, with counts | **Zone outlines** can stay visible while you play |
 
-Screenshots are from All the Mods 10: To the Sky, with Active rules set to *Zones only*.
+Screenshots are from All the Mods 10: To the Sky.
 
 ## Features
 
