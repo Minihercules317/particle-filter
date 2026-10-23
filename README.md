@@ -20,6 +20,19 @@ You don't need to know what a particle is called: a built-in scan finds it for y
 > [!IMPORTANT]
 > **AI disclosure: this mod's code was written by an AI.** All of the source code, build configuration and documentation were written by Claude, an AI model made by Anthropic, working in Claude Code. The project owner, Minihercules317, contributed the idea, the feature requests and the design decisions, tested it in game, and drew the icon. Minihercules317 did not write the code. See [Who did what](#who-did-what) for details.
 
+## Screenshots
+
+![Editing a zone in the side panel while its outline is highlighted in the world](docs/images/1-zone-editor.png)
+
+| | |
+|---|---|
+| ![The Hidden page, grouping hidden particles by zone](docs/images/2-hidden.png) | ![The Zones page, listing each zone's size, position and how many particles it hides](docs/images/3-zones.png) |
+| **Hidden:** everything hidden, grouped by where it applies | **Zones:** each zone's size, position and hidden count |
+| ![The Scan page before a scan, explaining how to use it](docs/images/4-scan.png) | ![Zone outlines drawn over a machine floor in the world](docs/images/5-zone-outline.png) |
+| **Scan:** aim at the particles and press Scan to list them | **Zone outlines** can stay visible while you play |
+
+Screenshots are from All the Mods 10: To the Sky, with Active rules set to *Zones only*.
+
 ## Features
 
 - **Scan:** look at where the particles are coming from (or just stand near them) and press Scan. For 5 seconds the mod records every particle spawned within 6 blocks, then lists them by particle ID (e.g. `minecraft:flame`, `ae2:energy_fx`) with how many appeared. Particles that mods spawn without a type are listed by class name.
