@@ -15,6 +15,8 @@ The usual fix for too many particles is setting Particles to *Minimal*, which re
 
 You don't need to know what a particle is called: a built-in scan finds it for you. It works with vanilla and modded particles.
 
+**Download:** [CurseForge](https://www.curseforge.com/minecraft/mc-mods/particle-filter) (installs with one click in the CurseForge app) or [GitHub Releases](https://github.com/Minihercules317/particle-filter/releases).
+
 > [!IMPORTANT]
 > **AI disclosure: this mod's code was written by an AI.** All of the source code, build configuration and documentation were written by Claude, an AI model made by Anthropic, working in Claude Code. The project owner, Minihercules317, contributed the idea, the feature requests and the design decisions, tested it in game, and drew the icon. Minihercules317 did not write the code. See [Who did what](#who-did-what) for details.
 
