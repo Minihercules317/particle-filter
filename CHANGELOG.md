@@ -6,6 +6,7 @@ All code in this project is written by Claude (Anthropic's AI model); see the RE
 
 - New menu design: a dark, flat window with a sidebar for the Scan, Hidden and Zones pages, switches instead of checkboxes, smooth scrolling, and hover tooltips with full particle IDs
 - New Active rules switch in the sidebar: apply All rules, Everywhere only (including block particles), Zones only, or None (show all). Your rules are kept; paused ones are marked on the Hidden page. Also on a new Cycle Active Rules keybind (unbound by default)
+- New Hold to Show All Particles keybind (unbound by default): every rule is paused while it's held, and your Active rules setting comes back when you let go
 - The zone editor is now a side panel, so the zone's outline stays visible in the world while you edit it
 - Scan shows its progress, and how often each particle appeared compared to the others
 - Hidden page groups entries by where they apply; press Enter in the ID box to hide a particle

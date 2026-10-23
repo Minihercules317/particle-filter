@@ -45,6 +45,8 @@ public final class FilterRules {
     }
 
     private static volatile Snapshot snapshot = Snapshot.EMPTY;
+    /** True while the Hold to Show All Particles key is held: every rule is paused without changing the saved mode. */
+    private static boolean showAll;
     private static String world;
     private static String dimension;
 
@@ -78,9 +80,20 @@ public final class FilterRules {
         }
     }
 
+    public static boolean isShowingAll() {
+        return showAll;
+    }
+
+    /** Pauses or resumes every rule; recompiles only when the state changes. */
+    public static void setShowAll(boolean show) {
+        if (show == showAll) return;
+        showAll = show;
+        rebuild();
+    }
+
     /** Recompiles the rules, leaving out the kinds that the current {@link FilterMode} switches off. */
     public static void rebuild() {
-        FilterMode mode = PfConfig.mode();
+        FilterMode mode = showAll ? FilterMode.NONE : PfConfig.mode();
         List<ZoneBox> zones = new ArrayList<>();
         if (mode.zones) {
             for (Zone zone : PfConfig.zonesHere()) {

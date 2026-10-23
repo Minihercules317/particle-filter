@@ -5,6 +5,7 @@
   "key.particlefilter.toggle_block": "Hide/Show Breaking Particles of Targeted Block",
   "key.particlefilter.toggle_outlines": "Always Show Zone Outlines",
   "key.particlefilter.cycle_mode": "Cycle Active Rules",
+  "key.particlefilter.show_all": "Hold to Show All Particles",
 
   "particlefilter.title": "Particle Filter",
   "particlefilter.close": "Close",
@@ -23,6 +24,7 @@
   "particlefilter.mode.none": "None (show all)",
   "particlefilter.mode.none.tooltip": "Nothing is hidden, so you can compare with and without your rules. Your rules are kept.",
   "particlefilter.mode.changed": "Active rules: %s",
+  "particlefilter.show_all.on": "Showing all particles while held",
   "particlefilter.paused": "Paused",
   "particlefilter.paused.tooltip": "Saved but not applied while Active rules is set to \"%s\"",
 

@@ -51,6 +51,7 @@ public final class ParticleFilter {
     private static final KeyMapping TOGGLE_BLOCK = key("toggle_block");
     private static final KeyMapping TOGGLE_OUTLINES = key("toggle_outlines");
     private static final KeyMapping CYCLE_MODE = key("cycle_mode");
+    private static final KeyMapping SHOW_ALL = key("show_all");
 
     /** Screens requested by commands open on the next tick; the closing chat screen would otherwise replace them. */
     private static Supplier<Screen> pendingScreen;
@@ -63,6 +64,7 @@ public final class ParticleFilter {
             event.register(TOGGLE_BLOCK);
             event.register(TOGGLE_OUTLINES);
             event.register(CYCLE_MODE);
+            event.register(SHOW_ALL);
         });
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> onClientTick());
         NeoForge.EVENT_BUS.addListener(RegisterClientCommandsEvent.class, ParticleFilter::registerCommands);
@@ -117,11 +119,29 @@ public final class ParticleFilter {
                 ? "particlefilter.outlines.on" : "particlefilter.outlines.off"), true);
         }
         while (TOGGLE_BLOCK.consumeClick()) toggleTargetedBlock(mc);
+        updateShowAll(mc);
         while (CYCLE_MODE.consumeClick()) {
             FilterMode mode = PfConfig.mode().next();
             PfConfig.setMode(mode);
             if (mc.player != null) mc.player.displayClientMessage(Component.translatable("particlefilter.mode.changed",
                 Component.translatable(mode.key()).withStyle(ChatFormatting.AQUA)), true);
+        }
+    }
+
+    /**
+     * Pauses every rule while Hold to Show All Particles is held. Opening a screen releases all keys, so this can't
+     * stay stuck on. The action bar message is refreshed while held, since it fades after a few seconds.
+     */
+    private static void updateShowAll(Minecraft mc) {
+        boolean held = SHOW_ALL.isDown();
+        boolean changed = held != FilterRules.isShowingAll();
+        FilterRules.setShowAll(held);
+        if (mc.player == null || mc.level == null) return;
+        if (held && (changed || mc.level.getGameTime() % 40 == 0)) {
+            mc.player.displayClientMessage(Component.translatable("particlefilter.show_all.on").withStyle(ChatFormatting.AQUA), true);
+        } else if (changed) {
+            mc.player.displayClientMessage(Component.translatable("particlefilter.mode.changed",
+                Component.translatable(PfConfig.mode().key()).withStyle(ChatFormatting.AQUA)), true);
         }
     }
 

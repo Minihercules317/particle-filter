@@ -40,7 +40,7 @@ Screenshots are from All the Mods 10: To the Sky.
 - **Zones** are boxes with a name, a position (center X/Z, bottom Y) and a size (width × height × length, 1-256 blocks). Edit them by typing or with −/+, or snap them to your position or crosshair; the outline updates live in the world. Zones belong to one server (or singleplayer world) and dimension.
 - **Block particles:** hide the breaking, mining and block-dust (sprinting/landing) particles of specific blocks, whole mods (`geore:*`), or block tags (`#c:ores`). A keybind toggles the block you're looking at.
 - **One list of everything hidden**, showing whether each entry is hidden everywhere, in which zone, or for block breaking, with one-click unhide.
-- **Active rules:** switch between applying all your rules, only the everywhere ones (including block particles), only zones, or none, from the menu or a keybind. Handy for comparing before and after; your rules are kept either way.
+- **Active rules:** switch between applying all your rules, only the everywhere ones (including block particles), only zones, or none, from the menu or a keybind. Handy for comparing before and after; your rules are kept either way. There's also a **Hold to Show All Particles** keybind that pauses every rule only while held.
 - Filtering happens at the particle engine, so it works however a mod spawns its particles, and hidden particles are never created (a small CPU saving rather than drawing them invisibly).
 
 ## Usage
@@ -61,7 +61,7 @@ Commands (client-side only; nothing is sent to the server):
 | `/particles hidden` | Opens the Hidden page |
 | `/particles zones` | Opens the Zones page |
 
-Keybinds (unbound by default, under Controls → Particle Filter): Open Particle Filter, Scan Particles at Crosshair, Hide/Show Breaking Particles of Targeted Block, Always Show Zone Outlines, Cycle Active Rules.
+Keybinds (unbound by default, under Controls → Particle Filter): Open Particle Filter, Scan Particles at Crosshair, Hide/Show Breaking Particles of Targeted Block, Always Show Zone Outlines, Cycle Active Rules, Hold to Show All Particles.
 
 Settings are stored in `config/particlefilter.json`.
 
