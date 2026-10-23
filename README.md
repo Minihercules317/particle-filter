@@ -22,6 +22,10 @@ You don't need to know what a particle is called: a built-in scan finds it for y
 
 ## Screenshots
 
+[![Before and after: a crystal farm with block-breaking debris, AE2 bubbles and sparks shown, then hidden by Particle Filter](docs/images/comparison.gif)](https://minihercules317.github.io/particle-filter/compare/)
+
+A crystal farm in All the Mods 10: To the Sky with all particles shown (left) and with its debris, bubbles and sparks hidden (right). Same spot, same moment in the farm's cycle; the blocks are untouched. **[Try the interactive comparison](https://minihercules317.github.io/particle-filter/compare/)**.
+
 ![Editing a zone in the side panel while its outline is highlighted in the world](docs/images/1-zone-editor.png)
 
 | | |
