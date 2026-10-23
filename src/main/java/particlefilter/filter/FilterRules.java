@@ -9,6 +9,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import particlefilter.ParticleFilter;
+import particlefilter.config.FilterMode;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
 
@@ -77,17 +78,21 @@ public final class FilterRules {
         }
     }
 
+    /** Recompiles the rules, leaving out the kinds that the current {@link FilterMode} switches off. */
     public static void rebuild() {
+        FilterMode mode = PfConfig.mode();
         List<ZoneBox> zones = new ArrayList<>();
-        for (Zone zone : PfConfig.zonesHere()) {
-            if (zone.particles.isEmpty()) continue;
-            zones.add(new ZoneBox(zone.minX(), zone.minY(), zone.minZ(),
-                zone.minX() + zone.width, zone.minY() + zone.height, zone.minZ() + zone.length, Set.copyOf(zone.particles)));
+        if (mode.zones) {
+            for (Zone zone : PfConfig.zonesHere()) {
+                if (zone.particles.isEmpty()) continue;
+                zones.add(new ZoneBox(zone.minX(), zone.minY(), zone.minZ(),
+                    zone.minX() + zone.width, zone.minY() + zone.height, zone.minZ() + zone.length, Set.copyOf(zone.particles)));
+            }
         }
         Set<ResourceLocation> ids = new HashSet<>();
         Set<String> namespaces = new HashSet<>();
         List<TagKey<Block>> tags = new ArrayList<>();
-        for (String raw : PfConfig.hiddenBlocks()) {
+        for (String raw : mode.global ? PfConfig.hiddenBlocks() : List.<String>of()) {
             String entry = raw.trim();
             if (entry.startsWith("#")) {
                 ResourceLocation tag = ResourceLocation.tryParse(entry.substring(1));
@@ -101,7 +106,8 @@ public final class FilterRules {
                 else ParticleFilter.LOGGER.warn("Ignoring invalid block id: {}", entry);
             }
         }
-        snapshot = new Snapshot(Set.copyOf(PfConfig.hiddenParticles()), List.copyOf(zones), Set.copyOf(ids), Set.copyOf(namespaces), List.copyOf(tags));
+        Set<String> particles = mode.global ? Set.copyOf(PfConfig.hiddenParticles()) : Set.of();
+        snapshot = new Snapshot(particles, List.copyOf(zones), Set.copyOf(ids), Set.copyOf(namespaces), List.copyOf(tags));
     }
 
     public static boolean hasParticleRules() {

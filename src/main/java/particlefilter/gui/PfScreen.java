@@ -1,13 +1,16 @@
 package particlefilter.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
+import particlefilter.gui.widget.FlatButton;
+import particlefilter.gui.widget.ScrollPanel;
+import particlefilter.gui.widget.TextField;
 import particlefilter.render.ZoneRenderer;
 
+import java.util.List;
 import java.util.function.IntConsumer;
 
 /**
@@ -16,12 +19,13 @@ import java.util.function.IntConsumer;
  */
 public abstract class PfScreen extends Screen {
 
-    protected static final int ROW_HEIGHT = 24;
-    protected static final int BUTTON_HEIGHT = 20;
-    protected static final int GRAY = 0xA0A0A0;
-    protected static final int WHITE = 0xFFFFFF;
-
     protected final Screen parent;
+    /** The scrolling list of the current page, if it has one. */
+    protected ScrollPanel panel;
+    /** Scroll position carried across rebuilds of the same page. */
+    protected double savedScroll;
+    /** Set by widgets inside the list; the rebuild then happens on the next tick, outside the click. */
+    private boolean refreshPending;
 
     protected PfScreen(Component title, Screen parent) {
         super(title);
@@ -44,44 +48,59 @@ public abstract class PfScreen extends Screen {
         ZoneRenderer.preview = null;
     }
 
+    /** Rebuilds the screen after a change, keeping the list scrolled where it was. */
+    protected void refresh() {
+        if (panel != null) savedScroll = panel.scrollAmount();
+        rebuildWidgets();
+    }
+
+    protected void refreshNextTick() {
+        refreshPending = true;
+    }
+
     @Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, 0x70000000);
-        graphics.fill(0, height - 34, width, height, 0xA0000000); // footer band, so the hotbar doesn't show through
+    public void tick() {
+        if (refreshPending) {
+            refreshPending = false;
+            refresh();
+        }
     }
 
-    /** Width of the centered content column. */
-    protected int contentWidth() {
-        return Math.min(420, width - 20);
+    protected ScrollPanel addPanel(int x, int y, int width, int height, int gap) {
+        panel = addRenderableWidget(new ScrollPanel(x, y, width, height, gap));
+        return panel;
     }
 
-    protected int contentLeft() {
-        return (width - contentWidth()) / 2;
+    /** Fills the panel and restores the scroll position saved before the rebuild. */
+    protected void setRows(List<ScrollPanel.Row> rows) {
+        panel.setRows(rows);
+        panel.setScrollAmount(savedScroll);
     }
 
-    protected Button button(Component label, int x, int y, int w, Button.OnPress onPress) {
-        return addRenderableWidget(Button.builder(label, onPress).bounds(x, y, w, BUTTON_HEIGHT).build());
+    protected FlatButton button(FlatButton.Style style, Component label, int x, int y, int width, int height, Runnable onPress) {
+        return addRenderableWidget(new FlatButton(style, label, x, y, width, height, onPress));
     }
 
-    protected Button button(Component label, Component tooltip, int x, int y, int w, Button.OnPress onPress) {
-        return addRenderableWidget(Button.builder(label, onPress).bounds(x, y, w, BUTTON_HEIGHT).tooltip(Tooltip.create(tooltip)).build());
+    /** A row-sized button not yet added anywhere, for placing inside a {@link ScrollPanel.Row}. */
+    protected FlatButton rowButton(FlatButton.Style style, Component label, int width, Runnable onPress) {
+        return new FlatButton(style, label, 0, 0, width, 16, onPress);
     }
+
+    public static final int SPINNER_WIDTH = 84;
 
     /**
-     * Number field between − and + buttons, 100 px wide in total. [onValue] receives every value typed or stepped
-     * that is within [min, max]; anything else is ignored until corrected.
+     * Adds a number field between − and + buttons to [row], [SPINNER_WIDTH] px wide in total. [onValue] receives
+     * every value typed or stepped that is within [min, max]; anything else is ignored until corrected.
      */
-    protected EditBox spinner(int x, int y, int value, int min, int max, Component tooltip, IntConsumer onValue) {
-        EditBox box = new EditBox(font, x + 22, y, 56, BUTTON_HEIGHT, tooltip);
+    protected void spinner(ScrollPanel.Row row, int x, int value, int min, int max, Component tooltip, IntConsumer onValue) {
+        TextField box = new TextField(font, 0, 0, SPINNER_WIDTH - 36, 16, tooltip).tooltip(tooltip);
         box.setMaxLength(9);
         box.setFilter(s -> s.matches(min < 0 ? "-?\\d*" : "\\d*"));
         box.setValue(Integer.toString(value));
         box.setResponder(s -> parse(s, min, max, onValue));
-        box.setTooltip(Tooltip.create(tooltip));
-        addRenderableWidget(box);
-        button(Component.literal("−"), x, y, 20, b -> step(box, -1, min, max));
-        button(Component.literal("+"), x + 80, y, 20, b -> step(box, 1, min, max));
-        return box;
+        row.add(new FlatButton(FlatButton.Style.SECONDARY, Component.literal("−"), 0, 0, 16, 16, () -> step(box, -1, min, max)), x);
+        row.add(box, x + 18);
+        row.add(new FlatButton(FlatButton.Style.SECONDARY, Component.literal("+"), 0, 0, 16, 16, () -> step(box, 1, min, max)), x + SPINNER_WIDTH - 16);
     }
 
     private static void parse(String text, int min, int max, IntConsumer onValue) {
@@ -94,26 +113,42 @@ public abstract class PfScreen extends Screen {
         }
     }
 
-    private static void step(EditBox box, int delta, int min, int max) {
+    private static void step(TextField box, int delta, int min, int max) {
         int current;
         try {
             current = Integer.parseInt(box.getValue());
         } catch (NumberFormatException e) {
             current = Math.max(min, 0);
         }
+        if (hasShiftDown()) delta *= 10;
         box.setValue(Integer.toString(Math.max(min, Math.min(max, current + delta))));
     }
 
-    /** Shortens [text] to [maxWidth] pixels, ending in "…" when cut. */
-    protected String fit(String text, int maxWidth) {
-        if (font.width(text) <= maxWidth) return text;
-        return font.plainSubstrByWidth(text, maxWidth - font.width("…")) + "…";
+    /** A section label row: uppercase faint text with an optional count. */
+    protected ScrollPanel.Row sectionRow(String label) {
+        return new ScrollPanel.Row(16, (g, x, y, w, h, hovered) -> Theme.text(g, font, label, x + 2, y + 6, Theme.TEXT_FAINT));
     }
 
-    protected void drawCenteredHint(GuiGraphics graphics, Component text, int y) {
-        for (var line : font.split(text, contentWidth() - 20)) {
-            graphics.drawCenteredString(font, line, width / 2, y, GRAY);
+    /** A row of dim text wrapped to the panel width, sized to fit. */
+    protected ScrollPanel.Row hintRow(Component text, int width) {
+        List<FormattedCharSequence> lines = font.split(text, width - 8);
+        return new ScrollPanel.Row(lines.size() * 11 + 6, (g, x, y, w, h, hovered) -> {
+            for (int i = 0; i < lines.size(); i++) g.drawString(font, lines.get(i), x + 4, y + 3 + i * 11, Theme.TEXT_DIM, false);
+        });
+    }
+
+    /** Centered empty-state message: a title line and a wrapped explanation. */
+    protected void drawEmptyState(GuiGraphics g, Component title, Component body, int centerX, int y, int width) {
+        Theme.centered(g, font, title.getString(), centerX, y, Theme.TEXT);
+        y += 16;
+        for (FormattedCharSequence line : font.split(body, Math.min(width, 260))) {
+            g.drawString(font, line, centerX - font.width(line) / 2, y, Theme.TEXT_DIM, false);
             y += 11;
         }
+    }
+
+    protected static <T extends AbstractWidget> T active(T widget, boolean active) {
+        widget.active = active;
+        return widget;
     }
 }

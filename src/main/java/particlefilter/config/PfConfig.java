@@ -33,6 +33,8 @@ public final class PfConfig {
         List<String> hiddenParticles = new ArrayList<>();
         List<String> hiddenBlocks = new ArrayList<>();
         List<Zone> zones = new ArrayList<>();
+        /** Added in 1.1.0; older files lack it and older versions ignore it. */
+        FilterMode mode = FilterMode.ALL;
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -50,6 +52,7 @@ public final class PfConfig {
                     if (loaded.hiddenParticles == null) loaded.hiddenParticles = new ArrayList<>();
                     if (loaded.hiddenBlocks == null) loaded.hiddenBlocks = new ArrayList<>();
                     if (loaded.zones == null) loaded.zones = new ArrayList<>();
+                    if (loaded.mode == null) loaded.mode = FilterMode.ALL; // missing or unknown value
                     loaded.zones.forEach(Zone::normalize);
                     data = loaded;
                 }
@@ -73,6 +76,17 @@ public final class PfConfig {
     public static void changed() {
         save();
         FilterRules.rebuild();
+    }
+
+    // ---- which rules apply ----
+
+    public static FilterMode mode() {
+        return data.mode;
+    }
+
+    public static void setMode(FilterMode mode) {
+        data.mode = mode;
+        changed();
     }
 
     // ---- particles hidden everywhere ----

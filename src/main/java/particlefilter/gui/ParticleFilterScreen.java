@@ -1,25 +1,30 @@
 package particlefilter.gui;
 
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Checkbox;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
+import particlefilter.config.FilterMode;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
+import particlefilter.gui.widget.FlatButton;
+import particlefilter.gui.widget.FlatButton.Style;
+import particlefilter.gui.widget.ScrollPanel.Row;
+import particlefilter.gui.widget.TextField;
+import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
 import particlefilter.scan.ParticleScan;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * The Particle Filter window, with three tabs:
- * - Scan: record which particles spawn around what you're looking at, and tick them off everywhere or in a zone
+ * The Particle Filter window: a sidebar with the pages and the Active rules switch, and the current page:
+ * - Scan: record which particles spawn around what you're looking at, and hide them everywhere or here
  * - Hidden: everything currently hidden and where, with a box to hide something by id
  * - Zones: the zones in this world, to edit, delete or create
  */
@@ -27,21 +32,26 @@ public class ParticleFilterScreen extends PfScreen {
 
     public enum Tab { SCAN, HIDDEN, ZONES }
 
-    private static final int TABS_Y = 6;
-    private static final int TOP = 32;
-    private static final int FOOTER_HEIGHT = 34;
+    private static final int SIDEBAR_WIDTH = 124;
+    private static final int PAD = 12;
+    private static final int ROW_HEIGHT = 22;
+    /** Width of each toggle column on the Scan page. */
+    private static final int COLUMN = 58;
 
     private static Tab lastTab = Tab.SCAN;
 
     private Tab tab;
-    private RowList list;
-    /** Scroll position carried across rebuilds of the same tab. */
-    private double listScroll;
-    private Button scanButton;
-    /** Set by callbacks of widgets inside list rows; the rebuild then happens on the next tick, outside the click. */
-    private boolean refreshPending;
+    // The window, and the page area right of the sidebar.
+    private int wx, wy, ww, wh;
+    private int cx, cw, bodyTop, bodyBottom;
+    /** Right edge of the page's header buttons, left of the close button. */
+    private int actionsRight;
+    private int modesTop;
+    private final Map<Tab, FlatButton> navButtons = new EnumMap<>(Tab.class);
+    private FlatButton scanButton;
+    private FlatButton editZoneButton;
     private int shownScanGeneration;
-    private EditBox idInput;
+    private TextField idInput;
     private String idInputText = "";
     /** Zone whose Delete button was pressed once and now waits for confirmation. */
     private Zone confirmingDelete;
@@ -54,31 +64,59 @@ public class ParticleFilterScreen extends PfScreen {
     @Override
     protected void init() {
         lastTab = tab;
-        addTabs();
+        ww = Math.min(width - 16, 560);
+        wh = Math.min(height - 16, 340);
+        wx = (width - ww) / 2;
+        wy = (height - wh) / 2;
+        cx = wx + SIDEBAR_WIDTH + PAD;
+        cw = ww - SIDEBAR_WIDTH - 2 * PAD;
+        bodyTop = wy + 46;
+        bodyBottom = wy + wh - PAD;
+        actionsRight = wx + ww - 30;
+        panel = null;
+        scanButton = null;
+        editZoneButton = null;
+        idInput = null;
+
+        initSidebar();
+        button(Style.GHOST, Component.literal("×"), wx + ww - 22, wy + 8, 14, 14, this::onClose)
+            .tooltip(Component.translatable("particlefilter.close"));
         switch (tab) {
             case SCAN -> initScan();
             case HIDDEN -> initHidden();
             case ZONES -> initZones();
         }
-        button(Component.translatable("gui.done"), contentLeft() + contentWidth() - 100, height - 28, 100, b -> onClose());
     }
 
-    private void addTabs() {
-        int w = (contentWidth() - 8) / 3;
-        Tab[] tabs = Tab.values();
-        for (int i = 0; i < tabs.length; i++) {
-            Tab t = tabs[i];
-            Button b = button(tabLabel(t), contentLeft() + i * (w + 4), TABS_Y, w, btn -> switchTo(t));
-            b.active = t != tab;
+    // ---------------------------------------------------------------- Sidebar
+
+    private void initSidebar() {
+        int x = wx + 8;
+        int w = SIDEBAR_WIDTH - 16;
+        int y = wy + 34;
+        navButtons.clear();
+        for (Tab t : Tab.values()) {
+            navButtons.put(t, button(Style.NAV, Component.translatable("particlefilter.tab." + t.name().toLowerCase(java.util.Locale.ROOT)),
+                x, y, w, 20, () -> switchTo(t)).selected(t == tab));
+            y += 22;
+        }
+
+        FilterMode[] modes = FilterMode.values();
+        modesTop = wy + wh - 8 - modes.length * 18;
+        int optionY = modesTop;
+        for (FilterMode mode : modes) {
+            button(Style.OPTION, Component.translatable(mode.key()), x, optionY, w, 16, () -> {
+                PfConfig.setMode(mode);
+                refresh();
+            }).selected(mode == PfConfig.mode()).tooltip(Component.translatable(mode.key() + ".tooltip"));
+            optionY += 18;
         }
     }
 
-    private Component tabLabel(Tab t) {
-        return switch (t) {
-            case SCAN -> Component.translatable("particlefilter.tab.scan");
-            case HIDDEN -> Component.translatable("particlefilter.tab.hidden", hiddenCount());
-            case ZONES -> Component.translatable("particlefilter.tab.zones", PfConfig.zonesHere().size());
-        };
+    private void updateBadges() {
+        navButtons.get(Tab.HIDDEN).badge(Integer.toString(hiddenCount()));
+        navButtons.get(Tab.ZONES).badge(Integer.toString(PfConfig.zonesHere().size()));
+        navButtons.get(Tab.SCAN).badge(ParticleScan.isRunning() ? ParticleScan.secondsLeft() + "s" : null);
     }
 
     private static int hiddenCount() {
@@ -89,56 +127,30 @@ public class ParticleFilterScreen extends PfScreen {
     private void switchTo(Tab t) {
         tab = t;
         confirmingDelete = null;
-        listScroll = 0;
+        savedScroll = 0;
         ZoneRenderer.highlighted = null;
         ZoneRenderer.preview = null;
         rebuildWidgets();
     }
 
-    /** Rebuilds the current tab after a change, keeping the list scrolled where it was. */
-    private void refresh() {
-        if (list != null) listScroll = list.getScrollAmount();
-        rebuildWidgets();
-    }
-
-    private void refreshNextTick() {
-        refreshPending = true;
-    }
-
-    private void setRows(List<RowList.Row> rows) {
-        list.setRows(rows);
-        list.setScrollAmount(listScroll);
-    }
-
-    private RowList addList(int top) {
-        list = new RowList(minecraft, width, height - FOOTER_HEIGHT - top, top, ROW_HEIGHT, contentWidth());
-        return addRenderableWidget(list);
-    }
-
     // ---------------------------------------------------------------- Scan
 
-    private int everywhereColumn() {
-        return contentWidth() - 118;
-    }
-
-    private int zoneColumn() {
-        return contentWidth() - 44;
-    }
-
     private void initScan() {
-        scanButton = button(scanLabel(), contentLeft(), TOP, 110, b -> {
+        scanButton = button(Style.PRIMARY, scanLabel(), actionsRight - 96, wy + 12, 96, 20, () -> {
             ParticleScan.start();
             refresh();
-        });
+        }).tooltip(Component.translatable("particlefilter.scan.button.tooltip", ParticleScan.RADIUS));
         scanButton.active = !ParticleScan.isRunning();
-        addList(TOP + 40);
+
+        addPanel(cx, bodyTop + 14, cw, bodyBottom - 24 - bodyTop - 14, 3);
         setRows(scanRows());
         shownScanGeneration = ParticleScan.generation();
 
-        Zone target = scanTargetZone();
-        Button edit = button(Component.translatable("particlefilter.scan.edit_zone"), contentLeft() + contentWidth() - 184, height - 28, 80,
-            b -> minecraft.setScreen(new ZoneEditScreen(this, scanTargetZone())));
-        edit.active = target != null;
+        editZoneButton = button(Style.SECONDARY, Component.translatable("particlefilter.scan.edit_zone"), cx + cw - 72, bodyBottom - 18, 72, 18,
+            () -> {
+                Zone zone = scanTargetZone();
+                if (zone != null) minecraft.setScreen(new ZoneEditScreen(this, zone));
+            });
     }
 
     private Component scanLabel() {
@@ -147,36 +159,44 @@ public class ParticleFilterScreen extends PfScreen {
             : Component.translatable("particlefilter.scan.button");
     }
 
-    private List<RowList.Row> scanRows() {
-        List<RowList.Row> rows = new ArrayList<>();
+    private int everywhereColumn() {
+        return panel.contentWidth() - 2 * COLUMN;
+    }
+
+    private int hereColumn() {
+        return panel.contentWidth() - COLUMN;
+    }
+
+    private List<Row> scanRows() {
+        List<Row> rows = new ArrayList<>();
         BlockPos target = ParticleScan.target();
+        int most = ParticleScan.results().stream().mapToInt(ParticleScan.Result::count).max().orElse(1);
+        int everywhereX = everywhereColumn();
         for (ParticleScan.Result result : ParticleScan.results()) {
             String particle = result.particle();
-            String name = fit(ParticleScan.displayName(particle), everywhereColumn() - 70);
-            int color = result.typed() ? 0x55FFFF : 0xFF77FF;
-            RowList.Row row = new RowList.Row((g, left, top, w, hovered) -> {
-                g.drawString(font, name, left + 4, top + 8, color);
-                String count = "×" + result.count();
-                g.drawString(font, count, left + everywhereColumn() - 16 - font.width(count), top + 8, GRAY);
-            });
+            String shownName = ParticleScan.displayName(particle);
+            String count = "×" + result.count();
+            String name = Theme.fit(font, shownName, everywhereX - 26 - font.width(count) - 8);
+            int color = result.typed() ? Theme.TYPED : Theme.UNTYPED;
+            float share = result.count() / (float) most;
+            Row row = new Row(ROW_HEIGHT, (g, x, y, w, h, hovered) -> {
+                Theme.rect(g, x, y, w, h, 3, hovered ? Theme.CARD_HOVER : Theme.CARD);
+                // How often it appeared compared to the most frequent particle.
+                g.fill(x + 19, y + h - 3, x + 19 + Math.max(2, Math.round((everywhereX - 27) * share)), y + h - 2, Theme.fade(color, 0.55f));
+                Theme.dot(g, x + 8, y + (h - 5) / 2, 5, color);
+                Theme.text(g, font, name, x + 19, y + (h - 8) / 2, Theme.TEXT);
+                Theme.text(g, font, count, x + everywhereX - 8 - font.width(count), y + (h - 8) / 2, Theme.TEXT_DIM);
+            }).tooltip(Component.translatable(result.typed() ? "particlefilter.particle.typed.tooltip" : "particlefilter.particle.untyped.tooltip", particle));
 
-            Checkbox everywhere = Checkbox.builder(Component.empty(), font)
-                .selected(PfConfig.isHiddenEverywhere(particle))
-                .onValueChange((cb, hidden) -> PfConfig.setHiddenEverywhere(particle, hidden))
-                .build();
-            everywhere.setTooltip(Tooltip.create(Component.translatable("particlefilter.scan.everywhere.tooltip", ParticleScan.displayName(particle))));
-            row.add(everywhere, everywhereColumn());
+            row.add(new Toggle(0, 0, PfConfig.isHiddenEverywhere(particle), Component.translatable("particlefilter.scan.col_everywhere"),
+                hidden -> PfConfig.setHiddenEverywhere(particle, hidden))
+                .tooltip(Component.translatable("particlefilter.scan.everywhere.tooltip", shownName)), everywhereX + (COLUMN - Toggle.WIDTH) / 2);
 
-            Checkbox inZone = Checkbox.builder(Component.empty(), font)
-                .selected(target != null && PfConfig.isHiddenInZoneAt(target, particle))
-                .onValueChange((cb, hidden) -> {
-                    PfConfig.setHiddenInZoneAt(target, particle, hidden);
-                    refreshNextTick(); // may have created the zone
-                })
-                .build();
-            inZone.setTooltip(Tooltip.create(Component.translatable("particlefilter.scan.zone.tooltip", ParticleScan.displayName(particle))));
-            inZone.active = target != null;
-            row.add(inZone, zoneColumn());
+            Toggle here = new Toggle(0, 0, target != null && PfConfig.isHiddenInZoneAt(target, particle), Component.translatable("particlefilter.scan.col_zone"),
+                hidden -> PfConfig.setHiddenInZoneAt(target, particle, hidden))
+                .tooltip(Component.translatable("particlefilter.scan.zone.tooltip", shownName));
+            here.active = target != null;
+            row.add(here, hereColumn() + (COLUMN - Toggle.WIDTH) / 2);
             rows.add(row);
         }
         return rows;
@@ -188,61 +208,72 @@ public class ParticleFilterScreen extends PfScreen {
     }
 
     private void renderScan(GuiGraphics g) {
-        int left = contentLeft();
-        // Status next to the Scan button.
         Component status;
         if (ParticleScan.isRunning()) status = Component.translatable("particlefilter.scan.status_running", ParticleScan.targetName(), ParticleScan.RADIUS);
         else if (ParticleScan.target() != null) status = Component.translatable(ParticleScan.results().size() == 1
             ? "particlefilter.scan.status_done_one" : "particlefilter.scan.status_done", ParticleScan.results().size(), ParticleScan.targetName());
         else status = Component.translatable("particlefilter.scan.status_idle");
-        g.drawString(font, fit(status.getString(), contentWidth() - 120), left + 118, TOP + 6, WHITE);
+        renderHeader(g, Component.translatable("particlefilter.scan.title"), status, 96);
 
-        if (list.isEmpty()) {
-            if (!ParticleScan.isRunning()) drawCenteredHint(g, Component.translatable(ParticleScan.target() == null
-                ? "particlefilter.scan.empty_first" : "particlefilter.scan.empty_none", ParticleScan.RADIUS), TOP + 60);
+        if (panel.isEmpty()) {
+            int centerY = (bodyTop + bodyBottom - 24) / 2 - 20;
+            if (ParticleScan.isRunning()) {
+                drawEmptyState(g, Component.translatable("particlefilter.scan.empty_running"),
+                    Component.translatable("particlefilter.scan.empty_running.body", ParticleScan.RADIUS), cx + cw / 2, centerY, cw);
+            } else if (ParticleScan.target() == null) {
+                drawEmptyState(g, Component.translatable("particlefilter.scan.empty_first"),
+                    Component.translatable("particlefilter.scan.empty_first.body", ParticleScan.RADIUS), cx + cw / 2, centerY, cw);
+            } else {
+                drawEmptyState(g, Component.translatable("particlefilter.scan.empty_none"),
+                    Component.translatable("particlefilter.scan.empty_none.body", ParticleScan.RADIUS), cx + cw / 2, centerY, cw);
+            }
         } else {
-            int headerY = TOP + 28;
-            g.drawString(font, Component.translatable("particlefilter.scan.col_particle"), left + 4, headerY, GRAY);
-            g.drawCenteredString(font, Component.translatable("particlefilter.scan.col_everywhere"), left + everywhereColumn() + 8, headerY, GRAY);
-            g.drawCenteredString(font, Component.translatable("particlefilter.scan.col_zone"), left + zoneColumn() + 8, headerY, GRAY);
+            int labelY = bodyTop + 2;
+            Theme.text(g, font, Theme.caps("particlefilter.scan.col_particle"), cx + 2, labelY, Theme.TEXT_FAINT);
+            Theme.centered(g, font, Theme.caps("particlefilter.scan.col_everywhere"), cx + everywhereColumn() + COLUMN / 2, labelY, Theme.TEXT_FAINT);
+            Theme.centered(g, font, Theme.caps("particlefilter.scan.col_zone"), cx + hereColumn() + COLUMN / 2, labelY, Theme.TEXT_FAINT);
         }
 
-        // Which zone "Hide in zone" uses, and preview of the one it would create.
+        // What "Here" refers to: the zone around the scanned spot, or the one that would be created (cyan preview).
         BlockPos target = ParticleScan.target();
         Zone zone = scanTargetZone();
         ZoneRenderer.highlighted = zone;
         ZoneRenderer.preview = null;
-        Component zoneText = null;
+        editZoneButton.active = zone != null;
+        Component here = null;
+        int color = Theme.ZONE;
         if (zone != null) {
-            zoneText = Component.translatable("particlefilter.scan.zone_existing", zone.name, zone.sizeText());
+            here = Component.translatable("particlefilter.scan.zone_existing", zone.name, zone.sizeText());
         } else if (target != null) {
             Zone wouldCreate = PfConfig.defaultZoneAround(target);
             if (wouldCreate != null) {
                 ZoneRenderer.preview = wouldCreate.box();
-                zoneText = Component.translatable("particlefilter.scan.zone_new", wouldCreate.sizeText());
+                here = Component.translatable("particlefilter.scan.zone_new", wouldCreate.sizeText());
+                color = Theme.NEW_ZONE;
             }
         }
-        if (zoneText != null) g.drawString(font, fit(zoneText.getString(), contentWidth() - 192), left, height - 22, zone != null ? 0xFFFF55 : 0x55FFFF);
+        if (here != null) {
+            int y = bodyBottom - 13;
+            Theme.dot(g, cx + 2, y + 1, 5, color);
+            Theme.text(g, font, Theme.fit(font, here.getString(), cw - 92), cx + 12, y, Theme.TEXT_DIM);
+        }
     }
 
     // ---------------------------------------------------------------- Hidden
 
-    private enum Scope { EVERYWHERE, ZONE, BLOCK }
-
     private void initHidden() {
-        int left = contentLeft();
-        idInput = new EditBox(font, left, TOP, contentWidth() - 204, BUTTON_HEIGHT, Component.translatable("particlefilter.hidden.input"));
+        int buttonWidth = 80;
+        idInput = addRenderableWidget(new TextField(font, cx, bodyTop, cw - 2 * buttonWidth - 8, 20, Component.translatable("particlefilter.hidden.input")));
         idInput.setMaxLength(256);
-        idInput.setHint(Component.translatable("particlefilter.hidden.input_hint").withStyle(ChatFormatting.DARK_GRAY));
+        idInput.setHint(Component.translatable("particlefilter.hidden.input_hint").withColor(Theme.TEXT_FAINT & 0xFFFFFF));
         idInput.setValue(idInputText);
         idInput.setResponder(s -> idInputText = s);
-        addRenderableWidget(idInput);
-        button(Component.translatable("particlefilter.hidden.add_particle"), Component.translatable("particlefilter.hidden.add_particle.tooltip"),
-            left + contentWidth() - 200, TOP, 98, b -> addTyped(false));
-        button(Component.translatable("particlefilter.hidden.add_block"), Component.translatable("particlefilter.hidden.add_block.tooltip"),
-            left + contentWidth() - 98, TOP, 98, b -> addTyped(true));
+        button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_particle"), cx + cw - 2 * buttonWidth - 4, bodyTop, buttonWidth, 20,
+            () -> addTyped(false)).tooltip(Component.translatable("particlefilter.hidden.add_particle.tooltip"));
+        button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_block"), cx + cw - buttonWidth, bodyTop, buttonWidth, 20,
+            () -> addTyped(true)).tooltip(Component.translatable("particlefilter.hidden.add_block.tooltip"));
 
-        addList(TOP + 40);
+        addPanel(cx, bodyTop + 28, cw, bodyBottom - bodyTop - 28, 2);
         setRows(hiddenRows());
     }
 
@@ -255,78 +286,127 @@ public class ParticleFilterScreen extends PfScreen {
         refresh();
     }
 
-    private List<RowList.Row> hiddenRows() {
-        List<RowList.Row> rows = new ArrayList<>();
-        PfConfig.hiddenParticles().forEach(p -> rows.add(hiddenRow(p, Scope.EVERYWHERE, null)));
-        for (Zone zone : PfConfig.zones()) zone.particles.forEach(p -> rows.add(hiddenRow(p, Scope.ZONE, zone)));
-        PfConfig.hiddenBlocks().forEach(b -> rows.add(hiddenRow(b, Scope.BLOCK, null)));
+    @Override
+    public boolean keyPressed(int key, int scanCode, int modifiers) {
+        if (idInput != null && idInput.isFocused() && (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER)) {
+            addTyped(false);
+            return true;
+        }
+        return super.keyPressed(key, scanCode, modifiers);
+    }
+
+    private List<Row> hiddenRows() {
+        List<Row> rows = new ArrayList<>();
+        FilterMode mode = PfConfig.mode();
+        Component pausedTip = Component.translatable("particlefilter.paused.tooltip", Component.translatable(mode.key()));
+
+        List<String> everywhere = PfConfig.hiddenParticles();
+        if (!everywhere.isEmpty()) {
+            rows.add(section(Theme.caps("particlefilter.hidden.section_everywhere", everywhere.size()), !mode.global, pausedTip, null));
+            for (String p : everywhere) {
+                rows.add(entry(ParticleScan.displayName(p), p, particleColor(p), !mode.global, null, () -> PfConfig.setHiddenEverywhere(p, false)));
+            }
+        }
+
+        List<Zone> zones = new ArrayList<>(PfConfig.zones());
+        zones.removeIf(z -> z.particles.isEmpty());
+        zones.sort(Comparator.comparing(z -> !PfConfig.isInCurrentWorld(z))); // this world's zones first
+        for (Zone zone : zones) {
+            boolean here = PfConfig.isInCurrentWorld(zone);
+            String label = Theme.caps(here ? "particlefilter.hidden.section_zone" : "particlefilter.hidden.section_zone_elsewhere")
+                + " · " + zone.name + " · " + zone.particles.size();
+            rows.add(section(label, !mode.zones, pausedTip, here ? zone : null));
+            for (String p : List.copyOf(zone.particles)) {
+                rows.add(entry(ParticleScan.displayName(p), p, particleColor(p), !mode.zones, here ? zone : null, () -> PfConfig.setHiddenInZone(zone, p, false)));
+            }
+        }
+
+        List<String> blocks = PfConfig.hiddenBlocks();
+        if (!blocks.isEmpty()) {
+            rows.add(section(Theme.caps("particlefilter.hidden.section_blocks", blocks.size()), !mode.global, pausedTip, null));
+            for (String b : blocks) {
+                rows.add(entry(b, null, Theme.BLOCK, !mode.global, null, () -> PfConfig.setBlockHidden(b, false)));
+            }
+        }
         return rows;
     }
 
-    private RowList.Row hiddenRow(String entry, Scope scope, Zone zone) {
-        int w = contentWidth();
-        String name = fit(scope == Scope.BLOCK ? entry : ParticleScan.displayName(entry), w / 2 - 20);
-        int nameColor = scope == Scope.BLOCK ? 0xFFFF77 : entry.contains(":") ? 0x55FFFF : 0xFF77FF;
-        String where = fit(switch (scope) {
-            case EVERYWHERE -> Component.translatable("particlefilter.hidden.where_everywhere").getString();
-            case BLOCK -> Component.translatable("particlefilter.hidden.where_block").getString();
-            case ZONE -> Component.translatable(PfConfig.isInCurrentWorld(zone)
-                ? "particlefilter.hidden.where_zone" : "particlefilter.hidden.where_zone_elsewhere", zone.name).getString();
-        }, w / 2 - 130);
-        int whereColor = scope == Scope.ZONE ? 0xFFAA00 : GRAY;
-        RowList.Row row = new RowList.Row((g, left, top, rw, hovered) -> {
-            g.drawString(font, name, left + 4, top + 8, nameColor);
-            g.drawString(font, where, left + w / 2, top + 8, whereColor);
-            if (hovered && zone != null && PfConfig.isInCurrentWorld(zone)) ZoneRenderer.highlighted = zone;
+    private static int particleColor(String particle) {
+        return particle.contains(":") ? Theme.TYPED : Theme.UNTYPED;
+    }
+
+    /** Section label; zone sections get an Edit button. */
+    private Row section(String label, boolean paused, Component pausedTip, Zone editable) {
+        String pausedText = Theme.caps("particlefilter.paused");
+        int maxLabel = panel.contentWidth() - 4 - (editable != null ? 44 : 0) - (paused ? font.width(pausedText) + 14 : 0);
+        String shown = Theme.fit(font, label, maxLabel);
+        int top = 8;
+        Row row = new Row(22, (g, x, y, w, h, hovered) -> {
+            Theme.text(g, font, shown, x + 2, y + top, editable != null ? Theme.ZONE : Theme.TEXT_FAINT);
+            if (paused) Theme.pill(g, font, pausedText, x + 8 + font.width(shown), y + top - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
+            if (hovered && editable != null) ZoneRenderer.highlighted = editable;
         });
-        if (scope == Scope.ZONE && PfConfig.isInCurrentWorld(zone)) {
-            row.add(Button.builder(Component.translatable("particlefilter.edit"), b -> minecraft.setScreen(new ZoneEditScreen(this, zone)))
-                .size(44, BUTTON_HEIGHT).build(), w - 116);
+        if (paused) row.tooltip(pausedTip);
+        if (editable != null) {
+            row.add(rowButton(Style.GHOST, Component.translatable("particlefilter.edit"), 40,
+                () -> minecraft.setScreen(new ZoneEditScreen(this, editable))), panel.contentWidth() - 40, 4);
         }
-        row.add(Button.builder(Component.translatable("particlefilter.unhide"), b -> {
-            switch (scope) {
-                case EVERYWHERE -> PfConfig.setHiddenEverywhere(entry, false);
-                case ZONE -> PfConfig.setHiddenInZone(zone, entry, false);
-                case BLOCK -> PfConfig.setBlockHidden(entry, false);
-            }
+        return row;
+    }
+
+    /** One hidden entry with an Unhide button. [id] is shown as a tooltip when it differs from [name]. */
+    private Row entry(String name, String id, int color, boolean paused, Zone zone, Runnable unhide) {
+        int w = panel.contentWidth();
+        String shown = Theme.fit(font, name, w - 80);
+        Row row = new Row(20, (g, x, y, rw, h, hovered) -> {
+            Theme.rect(g, x, y, rw, h, 3, hovered ? Theme.CARD_HOVER : Theme.CARD);
+            Theme.dot(g, x + 8, y + (h - 5) / 2, 5, paused ? Theme.fade(color, 0.35f) : color);
+            Theme.text(g, font, shown, x + 19, y + (h - 8) / 2, paused ? Theme.TEXT_FAINT : Theme.TEXT);
+            if (hovered && zone != null) ZoneRenderer.highlighted = zone;
+        });
+        if (id != null && !id.equals(name)) row.tooltip(Component.literal(id));
+        row.add(rowButton(Style.GHOST, Component.translatable("particlefilter.unhide"), 52, () -> {
+            unhide.run();
             refreshNextTick();
-        }).size(68, BUTTON_HEIGHT).build(), w - 70);
+        }), w - 54);
         return row;
     }
 
     private void renderHidden(GuiGraphics g) {
-        int left = contentLeft();
-        if (list.isEmpty()) {
-            drawCenteredHint(g, Component.translatable("particlefilter.hidden.empty"), TOP + 60);
-        } else {
-            g.drawString(font, Component.translatable("particlefilter.hidden.col_hidden"), left + 4, TOP + 28, GRAY);
-            g.drawString(font, Component.translatable("particlefilter.hidden.col_where"), left + contentWidth() / 2, TOP + 28, GRAY);
+        renderHeader(g, Component.translatable("particlefilter.hidden.title"), Component.translatable("particlefilter.hidden.subtitle"), 0);
+        if (panel.isEmpty()) {
+            drawEmptyState(g, Component.translatable("particlefilter.hidden.empty"), Component.translatable("particlefilter.hidden.empty.body"),
+                cx + cw / 2, (panel.getY() + bodyBottom) / 2 - 20, cw);
         }
     }
 
     // ---------------------------------------------------------------- Zones
 
     private void initZones() {
-        addList(TOP + 14);
-        List<RowList.Row> rows = new ArrayList<>();
-        int w = contentWidth();
+        button(Style.PRIMARY, Component.translatable("particlefilter.zones.new"), actionsRight - 96, wy + 12, 96, 20, () -> {
+            if (minecraft.player == null) return;
+            Zone zone = PfConfig.createZone(minecraft.player.blockPosition().above(PfConfig.NEW_ZONE_DEPTH_BELOW));
+            if (zone != null) minecraft.setScreen(new ZoneEditScreen(this, zone));
+        }).tooltip(Component.translatable("particlefilter.zones.new.tooltip"));
+
+        addPanel(cx, bodyTop, cw, bodyBottom - bodyTop - 26, 3);
+        List<Row> rows = new ArrayList<>();
+        int w = panel.contentWidth();
         for (Zone zone : PfConfig.zonesHere()) {
-            String name = fit(zone.name, 120);
-            String size = zone.sizeText();
-            String at = zone.x + ", " + zone.y + ", " + zone.z;
-            String count = Integer.toString(zone.particles.size());
-            RowList.Row row = new RowList.Row((g, left, top, rw, hovered) -> {
-                g.drawString(font, name, left + 4, top + 8, 0xFFAA00);
-                g.drawString(font, size, left + 128, top + 8, WHITE);
-                g.drawString(font, fit(at, w - 360), left + 192, top + 8, GRAY);
-                g.drawCenteredString(font, count, left + w - 136, top + 8, WHITE);
+            String name = Theme.fit(font, zone.name, w - 120);
+            Row row = new Row(32, (g, x, y, rw, h, hovered) -> {
+                Theme.rect(g, x, y, rw, h, 3, hovered ? Theme.CARD_HOVER : Theme.CARD);
+                Theme.rect(g, x, y + 6, 2, h - 12, 1, Theme.ZONE);
+                Theme.text(g, font, name, x + 10, y + 6, Theme.TEXT);
+                String details = Component.translatable("particlefilter.zones.details", zone.sizeText(), zone.x + ", " + zone.y + ", " + zone.z,
+                    zone.particles.size()).getString();
+                Theme.text(g, font, Theme.fit(font, details, rw - 120), x + 10, y + 18, Theme.TEXT_DIM);
                 if (hovered) ZoneRenderer.highlighted = zone;
             });
-            row.add(Button.builder(Component.translatable("particlefilter.edit"), b -> minecraft.setScreen(new ZoneEditScreen(this, zone)))
-                .size(44, BUTTON_HEIGHT).build(), w - 116);
+            row.add(rowButton(Style.SECONDARY, Component.translatable("particlefilter.edit"), 44,
+                () -> minecraft.setScreen(new ZoneEditScreen(this, zone))), w - 108);
             boolean confirming = zone == confirmingDelete;
-            row.add(Button.builder(Component.translatable(confirming ? "particlefilter.confirm" : "particlefilter.delete")
-                    .withStyle(confirming ? ChatFormatting.RED : ChatFormatting.RESET), b -> {
+            row.add(rowButton(Style.DANGER, Component.translatable(confirming ? "particlefilter.confirm" : "particlefilter.delete"), 56, () -> {
                 if (confirmingDelete == zone) {
                     PfConfig.deleteZone(zone);
                     confirmingDelete = null;
@@ -334,62 +414,66 @@ public class ParticleFilterScreen extends PfScreen {
                     confirmingDelete = zone;
                 }
                 refreshNextTick();
-            }).size(68, BUTTON_HEIGHT).build(), w - 70);
+            }).selected(confirming), w - 60);
             rows.add(row);
         }
         setRows(rows);
 
-        int left = contentLeft();
-        button(Component.translatable("particlefilter.zones.new"), Component.translatable("particlefilter.zones.new.tooltip"),
-            left, height - 28, 130, b -> {
-                if (minecraft.player == null) return;
-                Zone zone = PfConfig.createZone(minecraft.player.blockPosition().above(PfConfig.NEW_ZONE_DEPTH_BELOW));
-                if (zone != null) minecraft.setScreen(new ZoneEditScreen(this, zone));
-            });
-        Checkbox outlines = Checkbox.builder(Component.translatable("particlefilter.zones.always_show"), font)
-            .pos(left + 138, height - 28)
-            .selected(ZoneRenderer.alwaysShow)
-            .onValueChange((cb, on) -> ZoneRenderer.alwaysShow = on)
-            .build();
-        outlines.setTooltip(Tooltip.create(Component.translatable("particlefilter.zones.always_show.tooltip")));
-        addRenderableWidget(outlines);
+        addRenderableWidget(new Toggle(cx, bodyBottom - 16, ZoneRenderer.alwaysShow, Component.translatable("particlefilter.zones.always_show"),
+            on -> ZoneRenderer.alwaysShow = on)).tooltip(Component.translatable("particlefilter.zones.always_show.tooltip"));
     }
 
     private void renderZones(GuiGraphics g) {
-        int left = contentLeft();
-        if (list.isEmpty()) {
-            drawCenteredHint(g, Component.translatable("particlefilter.zones.empty"), TOP + 40);
-            return;
+        renderHeader(g, Component.translatable("particlefilter.zones.title"), Component.translatable("particlefilter.zones.subtitle"), 96);
+        if (panel.isEmpty()) {
+            drawEmptyState(g, Component.translatable("particlefilter.zones.empty"), Component.translatable("particlefilter.zones.empty.body"),
+                cx + cw / 2, (bodyTop + bodyBottom - 26) / 2 - 20, cw);
         }
-        int headerY = TOP + 2;
-        g.drawString(font, Component.translatable("particlefilter.zones.col_name"), left + 4, headerY, GRAY);
-        g.drawString(font, Component.translatable("particlefilter.zones.col_size"), left + 128, headerY, GRAY);
-        g.drawString(font, Component.translatable("particlefilter.zones.col_center"), left + 192, headerY, GRAY);
-        g.drawCenteredString(font, Component.translatable("particlefilter.zones.col_hides"), left + contentWidth() - 136, headerY, GRAY);
+        Theme.text(g, font, Theme.fit(font, Component.translatable("particlefilter.zones.always_show").getString(), cw - 32),
+            cx + Toggle.WIDTH + 8, bodyBottom - 13, Theme.TEXT_DIM);
     }
 
     // ----------------------------------------------------------------
 
+    /** Page title and subtitle; [actionsWidth] is kept free on the right for the page's buttons. */
+    private void renderHeader(GuiGraphics g, Component title, Component subtitle, int actionsWidth) {
+        int maxWidth = (actionsWidth > 0 ? actionsRight - actionsWidth : wx + ww - 30) - cx - 8;
+        Theme.text(g, font, Theme.fit(font, title.getString(), maxWidth), cx, wy + 12, Theme.TEXT);
+        Theme.text(g, font, Theme.fit(font, subtitle.getString(), maxWidth), cx, wy + 25, Theme.TEXT_DIM);
+        g.fill(cx, wy + 39, cx + cw, wy + 40, Theme.DIVIDER);
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        g.fill(0, 0, width, height, Theme.SCRIM);
+        Theme.rect(g, wx, wy, SIDEBAR_WIDTH, wh, 6, Theme.SIDEBAR, true, false);
+        Theme.rect(g, wx + SIDEBAR_WIDTH, wy, ww - SIDEBAR_WIDTH, wh, 6, Theme.WINDOW, false, true);
+    }
+
     @Override
     public void tick() {
-        if (refreshPending) {
-            refreshPending = false;
-            refresh();
-            return;
-        }
-        if (tab != Tab.SCAN) return;
+        super.tick();
+        if (tab != Tab.SCAN || scanButton == null) return;
         if (ParticleScan.generation() != shownScanGeneration) refresh(); // a scan finished: show its results
         else if (ParticleScan.isRunning()) scanButton.setMessage(scanLabel());
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         if (tab != Tab.SCAN) ZoneRenderer.highlighted = null; // rows set it again while hovered
-        super.render(graphics, mouseX, mouseY, partialTick);
+        updateBadges();
+        if (scanButton != null) scanButton.setProgress(ParticleScan.isRunning() ? ParticleScan.progress() : -1);
+        super.render(g, mouseX, mouseY, partialTick);
+
+        // Sidebar title and the Active rules label.
+        Theme.dot(g, wx + 12, wy + 14, 6, Theme.ACCENT);
+        Theme.text(g, font, title, wx + 23, wy + 13, Theme.TEXT);
+        Theme.text(g, font, Theme.caps("particlefilter.mode.title"), wx + 10, modesTop - 12, Theme.TEXT_FAINT);
+
         switch (tab) {
-            case SCAN -> renderScan(graphics);
-            case HIDDEN -> renderHidden(graphics);
-            case ZONES -> renderZones(graphics);
+            case SCAN -> renderScan(g);
+            case HIDDEN -> renderHidden(g);
+            case ZONES -> renderZones(g);
         }
     }
 }

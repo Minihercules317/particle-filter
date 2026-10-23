@@ -43,6 +43,11 @@ public final class ParticleScan {
         return (ticksLeft + 19) / 20;
     }
 
+    /** How far the running scan is, from 0 to 1. */
+    public static float progress() {
+        return isRunning() ? 1 - ticksLeft / (float) DURATION_TICKS : 0;
+    }
+
     public static List<Result> results() {
         return results;
     }
