@@ -1,6 +1,6 @@
 ---
 name: release
-description: Release a new version of Particle Filter end to end — changelog, version bump, build and test, commit, tag (CI publishes the GitHub release), verify the jar and SHA-256, upload to CurseForge, and review the CurseForge page. Use when the user says "release 1.2.0", "ship it", "publish a new version" or similar. Takes the version as its argument.
+description: Release a new version of Particle Filter end to end — changelog, version bump, build and test, commit, tag (CI publishes the GitHub release), verify the jars and SHA-256s, upload to CurseForge, and review the CurseForge page. Use when the user says "release 1.2.0", "ship it", "publish a new version" or similar. Takes the version as its argument.
 ---
 
 # Release workflow
@@ -18,26 +18,27 @@ Argument: the new version, e.g. `1.2.0` (no leading `v`). If it's missing, sugge
 - Show the section to the user and wait for an OK. CI and CurseForge both publish it word for word.
 
 ## 3. Version bump, build, test
-- Set `version = '<version>'` in `build.gradle`. The version lives there, not in `gradle.properties`.
-- `mise exec -- ./gradlew build` must pass.
-- Quick test: ask the user to drop `build/libs/particlefilter-<version>.jar` into their ATM10 instance (replacing the old jar) and check the changed features, or use a temporary self-test hook (see CLAUDE.md, and delete it after). Don't tag until the user confirms it works in game.
+- Set `mod.version = "<version>"` in `stonecutter.properties.toml`.
+- Check `stonecutter.gradle.kts` says `stonecutter active "1.21.1-neoforge"` (run `./gradlew "Reset active project"` if not).
+- `mise exec -- ./gradlew build buildAndCollect` must pass; it writes one jar per version and loader to `build/libs/<version>/`.
+- Quick test: ask the user to drop `particlefilter-neoforge-<version>+1.21.1.jar` into their ATM10 instance (replacing the old jar) and check the changed features. The ATM10 instance only covers NeoForge 1.21.1, so check the Forge 1.20.1 jar too: ask the user for a 1.20.1 Forge instance, or use a temporary self-test hook on `:1.20.1-forge:runClient` (see CLAUDE.md, and delete it after). Don't tag until the user confirms both work in game.
 
 ## 4. Commit, tag, push
-- Commit `CHANGELOG.md` and `build.gradle` as "Bump version to <version>" (repo-local noreply identity, plus the Co-Authored-By line).
+- Commit `CHANGELOG.md` and `stonecutter.properties.toml` as "Bump version to <version>" (repo-local noreply identity, plus the Co-Authored-By line).
 - `git tag v<version> && git push origin main v<version>`. Pushing a tag is public and can't be quietly undone, so confirm with the user first.
-- CI (`.github/workflows/release.yml`) checks that the tag matches `build.gradle`, builds the jar and creates the GitHub release. Its notes are the changelog section, the AI disclosure, install instructions and the SHA-256. Watch it with `gh run watch`.
+- CI (`.github/workflows/release.yml`) checks that the tag matches `mod.version`, builds every jar and creates the GitHub release. Its notes are the changelog section, the AI disclosure, which jar to install for each Minecraft version and loader, and each jar's SHA-256. Watch it with `gh run watch`.
 
 ## 5. Verify the release
-- `gh release view v<version>` shows `particlefilter-<version>.jar` and the notes include the AI disclosure.
-- Download the asset to the scratchpad and compare its `sha256sum` with the SHA-256 in the notes.
+- `gh release view v<version>` shows one jar per build (`particlefilter-<loader>-<version>+<mc>.jar`) and the notes include the AI disclosure.
+- Download the assets to the scratchpad and compare each `sha256sum` with the SHA-256s in the notes.
 - If the user wants extra notes (highlights, upgrade tips like the 1.1.0 release had), edit them with `gh release edit v<version> --notes-file ...`, and keep the disclosure and SHA-256.
 
 ## 6. CurseForge
-- If the `CURSEFORGE_TOKEN` repo secret is set (`gh secret list`), the release workflow's `curseforge` job already uploaded the jar. Check that job's log for the "Uploaded:" line, and **don't upload again**.
-- Otherwise: `scripts/publish-curseforge.sh --dry-run <version>`, show the output to the user, then run it without `--dry-run`. The script adds the AI disclosure to the changelog itself. It needs the CI jar or a local build of the same commit.
+- If the `CURSEFORGE_TOKEN` repo secret is set (`gh secret list`), the release workflow's `curseforge` job already uploaded the jars. Check that job's log for an "Uploaded" line per jar, and **don't upload again**.
+- Otherwise: `scripts/publish-curseforge.sh --dry-run <version>`, show the output to the user, then run it without `--dry-run`. The script adds the AI disclosure to the changelog itself. It uploads every jar in `build/libs/<version>/` as a separate CurseForge file with its own game versions, and needs the CI jars or a local build of the same commit.
 - CurseForge may review the file before it goes public.
 
 ## 7. Review the page
-- WebFetch https://www.curseforge.com/minecraft/mc-mods/particle-filter and the Files tab: the new file listed (or under review), the description current, and any new comments.
+- WebFetch https://www.curseforge.com/minecraft/mc-mods/particle-filter and the Files tab: the new files listed (or under review), the description current, and any new comments.
 - If the description should mention new features, update `~/Work/notes/curseforge-description.md` (GitHub links stay at the bottom) and show the user the change before anyone pastes it.
 - Report: release URL, SHA-256, CurseForge status, anything the user should do by hand.

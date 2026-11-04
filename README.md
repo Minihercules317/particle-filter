@@ -104,13 +104,13 @@ The features were first prototyped inside a fork of [Particle Core](https://gith
 
 ## Building
 
-Requires JDK 21.
+Requires JDK 21; Gradle downloads JDK 17 for the Forge 1.20.1 build itself. The build uses [Stonecutter](https://stonecutter.kikugie.dev/) to make a jar for each Minecraft version and loader from the same source.
 
 ```sh
-./gradlew build
+./gradlew build buildAndCollect
 ```
 
-The jar is written to `build/libs/`. `./gradlew runClient` starts a development client.
+The jars are written to `build/libs/<version>/`. `./gradlew :1.21.1-neoforge:runClient` (or `:1.20.1-forge:runClient`) starts a development client.
 
 ## License
 
