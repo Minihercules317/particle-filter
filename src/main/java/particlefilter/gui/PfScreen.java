@@ -32,6 +32,18 @@ public abstract class PfScreen extends Screen {
         this.parent = parent;
     }
 
+    //? if <=1.20.1 {
+    /*/^* Draws the background first, as {@link Screen#render} does itself in later versions; subclasses override it. ^/
+    @Override
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        renderBackground(g, mouseX, mouseY, partialTick);
+        super.render(g, mouseX, mouseY, partialTick);
+    }
+
+    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    }
+    *///?}
+
     @Override
     public boolean isPauseScreen() {
         return false;

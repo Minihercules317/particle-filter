@@ -2,13 +2,13 @@ package particlefilter.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
 import particlefilter.gui.PfScreen;
@@ -27,20 +27,19 @@ public final class ZoneRenderer {
 
     private ZoneRenderer() {}
 
-    public static void render(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+    /** Called by the loader after translucent blocks are drawn, with that stage's pose and camera. */
+    public static void render(PoseStack pose, Camera camera) {
         Minecraft mc = Minecraft.getInstance();
         if (!alwaysShow && !(mc.screen instanceof PfScreen)) return;
         var zones = PfConfig.zonesHere();
         AABB previewBox = mc.screen instanceof PfScreen ? preview : null;
         if (zones.isEmpty() && previewBox == null) return;
 
-        Vec3 camera = event.getCamera().getPosition();
-        PoseStack pose = event.getPoseStack();
+        Vec3 cameraPos = camera.getPosition();
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
         VertexConsumer lines = buffers.getBuffer(RenderType.lines());
         pose.pushPose();
-        pose.translate(-camera.x, -camera.y, -camera.z);
+        pose.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
         for (Zone zone : zones) {
             if (zone == highlighted) LevelRenderer.renderLineBox(pose, lines, zone.box(), 1.0f, 1.0f, 0.25f, 1.0f);
             else LevelRenderer.renderLineBox(pose, lines, zone.box(), 1.0f, 0.55f, 0.0f, 1.0f);

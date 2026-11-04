@@ -3,7 +3,6 @@ package particlefilter.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.core.BlockPos;
-import net.neoforged.fml.loading.FMLPaths;
 import particlefilter.ParticleFilter;
 import particlefilter.filter.FilterRules;
 
@@ -38,16 +37,17 @@ public final class PfConfig {
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path FILE = FMLPaths.CONFIGDIR.get().resolve("particlefilter.json");
+    private static Path file;
 
     private static Data data = new Data();
 
     private PfConfig() {}
 
-    public static void load() {
-        if (Files.exists(FILE)) {
+    public static void load(Path path) {
+        file = path;
+        if (Files.exists(file)) {
             try {
-                Data loaded = GSON.fromJson(Files.readString(FILE), Data.class);
+                Data loaded = GSON.fromJson(Files.readString(file), Data.class);
                 if (loaded != null) {
                     if (loaded.hiddenParticles == null) loaded.hiddenParticles = new ArrayList<>();
                     if (loaded.hiddenBlocks == null) loaded.hiddenBlocks = new ArrayList<>();
@@ -57,7 +57,7 @@ public final class PfConfig {
                     data = loaded;
                 }
             } catch (Exception e) {
-                ParticleFilter.LOGGER.error("Couldn't read {}; starting with an empty config", FILE, e);
+                ParticleFilter.LOGGER.error("Couldn't read {}; starting with an empty config", file, e);
             }
         }
         save(); // writes defaults on first run and upgrades older formats
@@ -66,9 +66,9 @@ public final class PfConfig {
 
     private static void save() {
         try {
-            Files.writeString(FILE, GSON.toJson(data));
+            Files.writeString(file, GSON.toJson(data));
         } catch (IOException e) {
-            ParticleFilter.LOGGER.error("Couldn't save {}", FILE, e);
+            ParticleFilter.LOGGER.error("Couldn't save {}", file, e);
         }
     }
 

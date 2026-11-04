@@ -10,12 +10,15 @@ import particlefilter.gui.Theme;
 public class TextField extends net.minecraft.client.gui.components.EditBox {
 
     private final Anim focus = new Anim(0);
+    //? if >1.20.1 {
     /** True while vanilla draws the text, so it skips its own frame but keeps the bordered text inset. */
     private boolean drawingText;
+    //?}
 
     public TextField(Font font, int x, int y, int width, int height, Component name) {
         super(font, x, y, width, height, name);
-        setTextShadow(false);
+        //? if >1.20.1
+        setTextShadow(false); // 1.20.1 always draws text box text with a shadow
         setTextColor(Theme.TEXT & 0xFFFFFF);
     }
 
@@ -25,16 +28,21 @@ public class TextField extends net.minecraft.client.gui.components.EditBox {
         return this;
     }
 
+    //? if >1.20.1 {
     @Override
     public boolean isBordered() {
         return !drawingText && super.isBordered();
     }
+    //?}
 
     @Override
     public void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         float f = focus.to(isFocused() ? 1 : 0, 16);
         int border = Theme.mix(isHovered() ? Theme.CONTROL_HOVER : Theme.CONTROL, Theme.ACCENT, f);
         Theme.outlined(g, getX(), getY(), getWidth(), getHeight(), 3, border, Theme.FIELD);
+        // Vanilla doesn't clip the hint, so a long one would run past the field.
+        g.enableScissor(getX() + 2, getY(), getX() + getWidth() - 2, getY() + getHeight());
+        //? if >1.20.1 {
         // Vanilla insets bordered text by 4 px but only reserves that space while it also draws its frame;
         // narrowing the box for the draw keeps long text inside the field.
         int width = getWidth();
@@ -46,5 +54,21 @@ public class TextField extends net.minecraft.client.gui.components.EditBox {
             setWidth(width);
             drawingText = false;
         }
+        //?} else {
+        /*// Vanilla draws its frame whenever the box is bordered, so draw the text unbordered at the bordered inset.
+        // Clicks still see a bordered box, which places the cursor right.
+        int x = getX(), y = getY(), width = getWidth();
+        setBordered(false);
+        setPosition(x + 4, y + (getHeight() - 8) / 2);
+        setWidth(width - 8);
+        try {
+            super.renderWidget(g, mouseX, mouseY, partialTick);
+        } finally {
+            setBordered(true);
+            setPosition(x, y);
+            setWidth(width);
+        }
+        *///?}
+        g.disableScissor();
     }
 }

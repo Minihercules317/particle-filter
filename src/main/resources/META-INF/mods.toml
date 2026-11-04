@@ -5,7 +5,7 @@ issueTrackerURL = "https://github.com/Minihercules317/particle-filter/issues"
 
 [[mods]]
 modId = "particlefilter"
-version = "1.1.0"
+version = "${version}"
 displayName = "Particle Filter"
 logoFile = "particlefilter.png"
 logoBlur = false
@@ -18,19 +18,20 @@ Too many particles, or particles hurting your FPS? Scan to find out exactly whic
 AI disclosure: this mod's code was written by an AI (Claude, by Anthropic). Minihercules317 contributed the idea, design decisions and testing, not the code.
 '''
 
+# NeoForge reads this; Forge 1.20.1 loads mixins from the jar manifest instead.
 [[mixins]]
 config = "particlefilter.mixins.json"
 
 [[dependencies.particlefilter]]
-modId = "neoforge"
-type = "required"
-versionRange = "[21.1.0,)"
+modId = "${loader}"
+${required}
+versionRange = "${loader_range}"
 ordering = "NONE"
 side = "CLIENT"
 
 [[dependencies.particlefilter]]
 modId = "minecraft"
-type = "required"
-versionRange = "[1.21.1,1.21.2)"
+${required}
+versionRange = "${mc_range}"
 ordering = "NONE"
 side = "CLIENT"

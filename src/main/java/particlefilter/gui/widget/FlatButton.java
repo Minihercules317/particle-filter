@@ -9,6 +9,7 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import particlefilter.gui.Theme;
 
+//? if >1.20.1
 import java.time.Duration;
 
 /** A flat, rounded button. The style decides its colors and whether the label is centered or left-aligned. */
@@ -29,7 +30,10 @@ public class FlatButton extends AbstractButton {
         OPTION
     }
 
+    //? if >1.20.1 {
     public static final Duration TOOLTIP_DELAY = Duration.ofMillis(350);
+    //?} else
+    //public static final int TOOLTIP_DELAY = 350;
 
     private final Style style;
     private final Runnable onPress;

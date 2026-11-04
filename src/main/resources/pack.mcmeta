@@ -1,0 +1,6 @@
+{
+  "pack": {
+    "description": "Particle Filter resources",
+    "pack_format": ${pack_format}
+  }
+}

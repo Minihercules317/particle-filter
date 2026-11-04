@@ -3,8 +3,8 @@ package particlefilter.gui.widget;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractContainerWidget;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -17,7 +17,7 @@ import java.util.List;
  * A smoothly scrolling column of rows. Each row paints itself and holds widgets placed relative to its corner.
  * Rows can differ in height. Content is clipped to the panel, and clicks outside the visible area are ignored.
  */
-public class ScrollPanel extends AbstractContainerWidget {
+public class ScrollPanel extends ContainerWidget {
 
     /** Paints a row's background and text. [hovered] is true while the mouse is over the visible row. */
     public interface Painter {
@@ -172,7 +172,7 @@ public class ScrollPanel extends AbstractContainerWidget {
         }
         if (row != null && row.tooltip != null && now - tooltipSince >= TOOLTIP_DELAY_MS
             && Minecraft.getInstance().screen != null) {
-            Minecraft.getInstance().screen.setTooltipForNextRenderPass(row.tooltip);
+            Minecraft.getInstance().screen.setTooltipForNextRenderPass(Tooltip.splitTooltip(Minecraft.getInstance(), row.tooltip));
         }
     }
 
@@ -214,8 +214,13 @@ public class ScrollPanel extends AbstractContainerWidget {
         setScrollAmount(fraction * max);
     }
 
+    //? if >1.20.1 {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    //?} else {
+    /*@Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+    *///?}
         if (!isMouseOver(mouseX, mouseY) || maxScroll() <= 0) return false;
         targetScroll = clampScroll(targetScroll - scrollY * 28);
         return true;

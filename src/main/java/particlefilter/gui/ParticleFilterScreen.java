@@ -265,7 +265,7 @@ public class ParticleFilterScreen extends PfScreen {
         int buttonWidth = 80;
         idInput = addRenderableWidget(new TextField(font, cx, bodyTop, cw - 2 * buttonWidth - 8, 20, Component.translatable("particlefilter.hidden.input")));
         idInput.setMaxLength(256);
-        idInput.setHint(Component.translatable("particlefilter.hidden.input_hint").withColor(Theme.TEXT_FAINT & 0xFFFFFF));
+        idInput.setHint(Component.translatable("particlefilter.hidden.input_hint").withStyle(s -> s.withColor(Theme.TEXT_FAINT & 0xFFFFFF)));
         idInput.setValue(idInputText);
         idInput.setResponder(s -> idInputText = s);
         button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_particle"), cx + cw - 2 * buttonWidth - 4, bodyTop, buttonWidth, 20,

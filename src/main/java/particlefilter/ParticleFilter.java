@@ -1,11 +1,13 @@
 package particlefilter;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -13,16 +15,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
-import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,11 +26,15 @@ import particlefilter.gui.ParticleFilterScreen.Tab;
 import particlefilter.render.ZoneRenderer;
 import particlefilter.scan.ParticleScan;
 
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/** Client-only entry point: config, commands, keybinds, and per-tick work. */
-@Mod(value = ParticleFilter.MOD_ID, dist = Dist.CLIENT)
+/**
+ * Client-only core: config, commands, keybinds, and per-tick work. The loader entry points in
+ * {@code particlefilter.loader} hook these into each mod loader's events.
+ */
 public final class ParticleFilter {
 
     public static final String MOD_ID = "particlefilter";
@@ -56,28 +52,26 @@ public final class ParticleFilter {
     /** Screens requested by commands open on the next tick; the closing chat screen would otherwise replace them. */
     private static Supplier<Screen> pendingScreen;
 
-    public ParticleFilter(IEventBus modBus, ModContainer container) {
-        PfConfig.load();
-        modBus.addListener(RegisterKeyMappingsEvent.class, event -> {
-            event.register(OPEN_MENU);
-            event.register(SCAN);
-            event.register(TOGGLE_BLOCK);
-            event.register(TOGGLE_OUTLINES);
-            event.register(CYCLE_MODE);
-            event.register(SHOW_ALL);
-        });
-        NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> onClientTick());
-        NeoForge.EVENT_BUS.addListener(RegisterClientCommandsEvent.class, ParticleFilter::registerCommands);
-        NeoForge.EVENT_BUS.addListener(RenderLevelStageEvent.class, ZoneRenderer::render);
-        container.registerExtensionPoint(IConfigScreenFactory.class, (mod, parent) -> new ParticleFilterScreen(parent, null));
+    /** Keybinds for the loader to register; all unbound by default. */
+    public static final List<KeyMapping> KEYS = List.of(OPEN_MENU, SCAN, TOGGLE_BLOCK, TOGGLE_OUTLINES, CYCLE_MODE, SHOW_ALL);
+
+    private ParticleFilter() {}
+
+    public static void init(Path configDir) {
+        PfConfig.load(configDir.resolve("particlefilter.json"));
+    }
+
+    /** The menu, opened from the loader's mod list. */
+    public static Screen configScreen(Screen parent) {
+        return new ParticleFilterScreen(parent, null);
     }
 
     private static KeyMapping key(String name) {
         return new KeyMapping("key.particlefilter." + name, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
     }
 
-    private static void registerCommands(RegisterClientCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal(COMMAND)
+    public static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal(COMMAND)
             .executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, null)))
             .then(Commands.literal("scan").executes(ctx -> openNextTick(ParticleFilter::scanAndOpen)))
             .then(Commands.literal("hidden").executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, Tab.HIDDEN))))
@@ -102,7 +96,7 @@ public final class ParticleFilter {
         return Optional.empty();
     }
 
-    private static void onClientTick() {
+    public static void onClientTick() {
         Minecraft mc = Minecraft.getInstance();
         FilterRules.tick();
         ParticleScan.tick();

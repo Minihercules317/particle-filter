@@ -1,0 +1,19 @@
+# Shared by every build; a [<loader>."<mc>"] section adds or overrides properties for one build.
+mod.id = "particlefilter"
+mod.version = "1.1.0"
+
+[neoforge."1.21.1"]
+java = 21
+deps.neoforge = "21.1.250"
+# Version ranges in the mod's metadata
+mod.loader_range = "[21.1.0,)"
+mod.mc_range = "[1.21.1,1.21.2)"
+# Resource pack format for pack.mcmeta
+mod.pack_format = 34
+
+[forge."1.20.1"]
+java = 17
+deps.forge = "1.20.1-47.4.28"
+mod.loader_range = "[47,)"
+mod.mc_range = "[1.20.1,1.20.2)"
+mod.pack_format = 15
