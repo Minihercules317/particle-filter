@@ -2,6 +2,10 @@
 
 All code in this project is written by Claude (Anthropic's AI model); see the README's "Who did what" section.
 
+## 1.2.0
+
+- Now also available for Minecraft 1.20.1 with Forge 47+. Each release has one jar per version and loader: `particlefilter-neoforge-<version>+1.21.1.jar` for NeoForge 1.21.1 and `particlefilter-forge-<version>+1.20.1.jar` for Forge 1.20.1. Both have the same features
+
 ## 1.1.0
 
 - New menu design: a dark, flat window with a sidebar for the Scan, Hidden and Zones pages, switches instead of checkboxes, smooth scrolling, and hover tooltips with full particle IDs

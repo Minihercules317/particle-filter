@@ -2,7 +2,7 @@
 
 <img src="src/main/resources/particlefilter.png" alt="Particle Filter icon" width="128">
 
-A client-side NeoForge mod for hiding exactly the particles you don't want: everywhere, only inside areas you choose, or only for specific blocks' breaking and mining effects. Everything else keeps its particles.
+A client-side Minecraft mod (NeoForge 1.21.1 and Forge 1.20.1) for hiding exactly the particles you don't want: everywhere, only inside areas you choose, or only for specific blocks' breaking and mining effects. Everything else keeps its particles.
 
 The usual fix for too many particles is setting Particles to *Minimal*, which removes almost all of them everywhere. Particle Filter is for when you only want *some* gone. Use it to:
 
@@ -71,8 +71,8 @@ Settings are stored in `config/particlefilter.json`.
 
 ## Compatibility
 
-- Minecraft 1.21.1, NeoForge 21.1+. Client-side only: install it on your client; servers don't need it.
-- Works alongside particle optimization mods such as Particle Core and Sodium.
+- Minecraft 1.21.1 with NeoForge 21.1+, or Minecraft 1.20.1 with Forge 47+. Download the jar for your version and loader. Client-side only: install it on your client; servers don't need it.
+- Works alongside particle optimization mods such as Particle Core and Sodium (tested on 1.21.1).
 
 ## Limitations
 
