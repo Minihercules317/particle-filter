@@ -113,7 +113,7 @@ per-block rules for Sodium Extra), there is no comparison for that case, and the
 | MangoHud in the CurseForge Flatpak | same | HUD known to work (Java wrapper). Logging untested. It is a different MangoHud build (Flatpak extension), so record its version. |
 | `nvidia-smi -lms` (via `sample_system.py`) | GPU util, clocks, power, temperature, P-state, throttle reasons | Works |
 | `sample_system.py` (/proc, /sys) | CPU % per game thread, the core each ran on, package temperature, P/E-core clocks, RSS | Works (pilot) |
-| pfbench harness | frame log aligned to phases, attempts/created/alive, tick times, GC | **Not built** (HARNESS.md) |
+| pfbench harness | frame log aligned to phases, attempts/created/alive, tick times, GC | **Built** (NeoForge 1.21.1, `harness/`); functional checks pass; no timing validated yet (phase 2b) |
 | JVM unified GC log (`-Xlog:gc*:file=…:time,uptime`) | GC pauses and frequency | Standard JVM feature; parser not written yet |
 | JFR (`jcmd`/`-XX:StartFlightRecording`) | CPU sampling, allocation profiling | Available (Temurin 21); diagnostic runs only |
 | spark (installed in ATM10 To the Sky) | sampling profiler in game | Available there; diagnostic runs only |
@@ -210,8 +210,8 @@ callback objects appear at all, and how much ticking and rendering time filtered
 | Phase | What | Automated? | Needs approval? |
 |---|---|---|---|
 | 0 | Code analysis, tools, pipeline pilot | done | n/a |
-| 1 | Build the pfbench harness (separate Gradle build in `benchmarks/harness/`), NeoForge 1.21.1 | code only | **approved; next task** |
-| 2a | Functional bring-up (allowed now, label as functional): it builds, launches, loads the world, spawns, counters are consistent (A: created = attempts; C: target created = 0, control unchanged), files are written and parse | mostly; screenshot check by eye | approved |
+| 1 | Build the pfbench harness (separate Gradle build in `benchmarks/harness/`), NeoForge 1.21.1 | code only | **done 2026-11-09** |
+| 2a | Functional bring-up (allowed now, label as functional): it builds, launches, loads the world, spawns, counters are consistent (A: created = attempts; C: target created = 0, control unchanged), files are written and parse | mostly; screenshot check by eye | **done 2026-11-09** for NeoForge 1.21.1 (`results/functional-2026-11-09`) |
 | 2b | Measurement validation: harness frame log vs MangoHud (means within 1%), hidden vs visible window throttling, fullscreen on DP-1 | yes | **blocked** until power limits are fixed (these compare timings) |
 | 3 | Calibration sweep in A: attempts/tick log-spaced 5 to 5,000; find where FPS drops, where live counts saturate, and when the scene is CPU-bound or GPU-bound. Fix the load levels | yes | **blocked** until power limits are fixed |
 | 4 | Variance study: config B, 5 launches × 6 windows (no pinning); also B0 vs B. Fix window length, warmup, repetitions | yes | **blocked** until power limits are fixed |

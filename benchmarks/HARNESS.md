@@ -1,14 +1,14 @@
-# pfbench harness: design (not built yet)
+# pfbench harness: design
 
 A separate, benchmark-only client mod that creates a known particle workload, controls the measurement
 phases, and logs frame times and particle counters. It is **not** part of Particle Filter: it lives in its
 own Gradle build under `benchmarks/harness/`, has its own mod id (`pfbench`), and is never included in
 release jars, CI release artifacts or CurseForge uploads. Particle Filter gets no benchmark code or hooks.
 
-Status: design only; nothing implemented yet. **Implementing it for NeoForge 1.21.1 is approved and is
-the next task** (see HANDOFF.md). Functional checks (builds, launches, spawns, counters add up, files parse)
-are allowed now and must be labelled functional. Any timing or performance measurement waits until the owner
-confirms the laptop's power-limit problems are fixed.
+Status: **built for NeoForge 1.21.1 and functionally validated** (2026-11-09): code and usage in
+[harness/README.md](harness/README.md), which also lists where the implementation deviates from this design and
+why; checks in [results/functional-2026-11-09](results/functional-2026-11-09/FUNCTIONAL.md). Any timing or
+performance measurement waits until the owner confirms the laptop's power-limit problems are fixed.
 
 ## Why a harness is needed
 

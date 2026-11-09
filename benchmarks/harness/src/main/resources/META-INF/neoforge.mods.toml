@@ -1,0 +1,39 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "pfbench"
+version = "${version}"
+displayName = "pfbench (Particle Filter benchmark harness)"
+authors = "Claude by Anthropic (code), Minihercules317 (design review)"
+credits = "Benchmark-only harness. Code written by Claude (Anthropic's AI model) via Claude Code."
+description = '''
+Benchmark-only harness for Particle Filter's synthetic benchmarks (benchmarks/HARNESS.md). Spawns a fixed particle
+workload, runs a scripted phase plan, and logs frame times and particle counters. Never shipped to players.
+'''
+
+[[mixins]]
+config = "pfbench.mixins.json"
+
+[[dependencies.pfbench]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1.0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.pfbench]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.21.2)"
+ordering = "NONE"
+side = "CLIENT"
+
+# Present in configurations B/C/D only; reached by reflection.
+[[dependencies.pfbench]]
+modId = "particlefilter"
+type = "optional"
+versionRange = "*"
+ordering = "NONE"
+side = "CLIENT"

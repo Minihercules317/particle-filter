@@ -1,0 +1,12 @@
+{
+  "label": "functional",
+  "note": "Functional checks of the harness. Not a performance result.",
+  "passed": false,
+  "checks": [
+    {
+      "check": "harness.json written",
+      "ok": false,
+      "detail": "missing: the harness didn't finish (see gradle.log)"
+    }
+  ]
+}

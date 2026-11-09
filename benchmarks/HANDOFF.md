@@ -6,12 +6,13 @@ Last updated 2026-11-09.
 ## Where things stand
 
 - Repo: `~/Work/particle-filter`, branch **`benchmarks/foundation`** (made from `main` at `bcba10f`; not
-  pushed, not merged). Foundation commit: **`fc2906f`** ("Add benchmark foundation: plan, analysis tools
-  and pipeline pilot"); this handoff file is in the commit after it (`git log --oneline main..`).
+  pushed, not merged). Commits so far (`git log --oneline main..`): foundation `fc2906f`, first handoff
+  `858f1bf`, then the NeoForge 1.21.1 harness with its functional bring-up (2026-11-09; this file was updated
+  in that commit).
 - Untracked `AGENTS.md` and `.agents/` in the repo root are unrelated and pre-existing: leave them alone
   and never stage them.
 - **No Particle Filter performance has been measured.** Nothing in `benchmarks/` may be quoted as a
-  performance result.
+  performance result. The harness has only passed functional checks at a 60 FPS cap.
 
 ### Done
 
@@ -23,6 +24,8 @@ Last updated 2026-11-09.
 | Analysis tools (stdlib Python): `frametimes.py`, `compare.py`, `schedule.py`, `collect_env.py`, `sample_system.py`, `make_pf_config.py`; `pilot_devclient.sh` | `tools/` | **25 unit tests pass**: `python3 -m unittest discover -s benchmarks/tools/tests -v` from the repo root |
 | Benchmark Particle Filter configs (B/C/D in one file; C-miss) | `configs/` | test checks zone geometry against the emitter plane |
 | Functional pipeline pilot (title screen, 60 FPS cap; **not a performance result**) | `results/pilot-2026-11-09/PILOT.md` | 3 launches × 30 s fully logged; reprocessing gives identical output; checks flag known faults |
+| **pfbench harness, NeoForge 1.21.1**: separate Gradle build, mod id `pfbench`; generator (typed, untyped, block dust, vanilla variants), counters, frame log, phase runner, Particle Filter mode switching by reflection, template void world, launcher `pfbench.py` (template / run / check) with a performance-run interlock | `harness/` (usage and deviations from HARNESS.md in `harness/README.md`) | compiles; functional bring-up below |
+| Functional bring-up of the harness (**functional, not a performance result**): 6 good launches covering A, B, C, D, C-miss and all four variants; every counter check passes (e.g. C/D target created = 0, A/B/C-miss created = attempts, alive = rate × 41); frames parse with `frametimes.py`; frustum checked by screenshot | `results/functional-2026-11-09/FUNCTIONAL.md` | `check.json` per launch; no timings analysed |
 
 ### Key findings to carry forward
 
@@ -43,6 +46,12 @@ Last updated 2026-11-09.
   `fps_only,background_alpha=0`). It creates the CSV at log start and `*_summary.csv` at log end. Its GPU columns are zero
   on this laptop (use `nvidia-smi`). The game window size varied between launches (tiled vs fullscreen;
   follows the Hyprland layout). The render thread ran on E-cores ~80% of the time at light load.
+- **Harness findings (2026-11-09):** NeoForge's early loading window can fail to hand over to the game window
+  when the window was moved to a hidden workspace during loading (the game then waits on an error dialog and
+  ignores SIGTERM). Every run directory now turns the early window off (`config/fml.toml`). In a hidden special
+  workspace the window is tiled to 2536×1390 whatever size is requested. The camera moved to y 102.38 so the
+  whole emitter plane is in view; S1 options gained `renderClouds` (the old `cloudStatus` key doesn't exist in
+  1.21.1), `fov`, `pauseOnLostFocus = false`, `onboardAccessibility = false`, master volume 0.
 - **Machine quirks:** dev game JVM is found by `net.neoforged.devlaunch.Main`. `pgrep -f` matches any shell whose
   command text contains the pattern (run probes from script files). Hyprland 0.56 dispatch is Lua:
   `hl.dsp.window.move({ workspace = "special:pfbench", window = "pid:N", follow = false })`. DP-1 is on the
@@ -66,25 +75,22 @@ Last updated 2026-11-09.
 - Changing CPU affinity (`taskset`, pinning, `sample_system.py --self-cpu`), firmware, GPU settings, or system power configuration.
 - Pushing, merging, or touching `main`. Installing system packages without asking.
 
-## Next task: build the pfbench harness (functional only)
+## Next tasks (all allowed now; none measures performance)
 
-Implement `HARNESS.md` for NeoForge 1.21.1 as a separate Gradle build in `benchmarks/harness/`:
+1. **Analysis glue** (before any campaign): split a launch's `frames.csv` by phase into per-phase
+   `summary.json` files (via `tools/frametimes.py`) and write `run.json` entries with the workload counters from
+   `ticks.csv` (`run.json["workload"]`), so `tools/compare.py` can read harness runs and reject pairs whose
+   workload differs. Test it with unit tests on synthetic CSVs, **not** on the functional runs' timings.
+2. **Launcher integration:** call `tools/collect_env.py` before/after and `tools/sample_system.py` during a launch
+   (never with `--self-cpu`); optional MangoHud wrapping. Validate only that files are written.
+3. **Forge 1.20.1 port** of the harness (separate build, e.g. `benchmarks/harness-forge/`, ModDevGradle legacyforge
+   with reobfuscation and a mixin refmap; `getFrameTimeNs` differs, see HARNESS.md Risks). Functional checks
+   as in `results/functional-2026-11-09`.
+4. **Sodium / Sodium Extra compatibility check**, isolated in its own run directory. Needs the owner's answer
+   on downloads (open questions).
 
-1. Gradle build mirroring `build.neoforge.gradle.kts` (ModDevGradle, NeoForge 21.1.250, Java 21 via mise),
-   **not** listed in the root `settings.gradle.kts`, so release builds and CI never include it.
-   Mod id `pfbench`. Particle Filter goes on the dev runtime classpath as an optional dependency for configs B/C/D.
-2. Generator (fixed seed, emitter grid, `pfbench:target` opaque / `pfbench:control` translucent with fixed
-   lifetimes, untyped and block-dust variants), counters (attempts, created at `createParticle` RETURN, alive
-   per render type), preallocated frame log (`frames.csv`: `t_ns,frame_ns,cpu_frame_ns,phase`), phase
-   script from `scenarios/S1-synthetic.toml`, Particle Filter mode switching via reflection
-   (`PfConfig.setMode`), `--quickPlaySingleplayer` launch, fresh copy of a template void world per launch.
-3. Functional checks only: it builds; launches; loads the world; with Particle Filter absent created == attempts;
-   in mode EVERYWHERE target created == 0 and control unchanged; outputs parse with `tools/frametimes.py`
-   (the `frame_ns` column is supported). Keep runs short, and **don't interpret or report timings**.
-4. Commit to `benchmarks/foundation` with a descriptive message, and update this file.
-
-Then: Forge 1.20.1 port of the harness; isolated Sodium/Sodium Extra compatibility check. Performance phases
-(PLAN.md §7, phases 2b-8) wait for the power-limit confirmation.
+Performance phases (PLAN.md §7, phases 2b-8) wait for the power-limit confirmation. `pfbench.py run` without
+`--functional` refuses to start unless `PFBENCH_PERFORMANCE_APPROVED=1` is set; set it only after the owner confirms.
 
 ## Open questions for the owner
 
@@ -97,25 +103,26 @@ Then: Forge 1.20.1 port of the harness; isolated Sodium/Sodium Extra compatibili
 ## Read these, in order
 
 1. `benchmarks/HANDOFF.md` (this file)
-2. `benchmarks/HARNESS.md` (what to build)
-3. `benchmarks/scenarios/S1-synthetic.toml` (parameters the harness reads)
-4. `benchmarks/PLAN.md` §2, §4 and §7 (configurations, metrics and controls, phases with gates)
-5. `benchmarks/IMPLEMENTATION.md` §1-2 (which hooks the counters must sit next to)
+2. `benchmarks/harness/README.md` (how the harness works, its outputs, deviations from the design, what's missing)
+3. `benchmarks/results/functional-2026-11-09/FUNCTIONAL.md` (what was checked and the one problem found)
+4. `benchmarks/HARNESS.md` and `benchmarks/scenarios/S1-synthetic.toml` (design, parameters)
+5. `benchmarks/PLAN.md` §2, §4 and §7 (configurations, metrics and controls, phases with gates)
 6. Repo `CLAUDE.md` (build commands, Stonecutter layout, commit rules: repo-local noreply identity, AI disclosure)
 
-Don't redo: code analysis, tool writing, the pipeline pilot, or MangoHud probing. They are finished and
-recorded. Don't rerun the pilot; that would be measurement.
+Don't redo: code analysis, tool writing, the pipeline pilot, MangoHud probing, or the harness bring-up. They
+are finished and recorded. Don't rerun the pilot, and don't analyse the functional runs' frame logs; that
+would be measurement.
 
 ## Prompt for the next session
 
 ```
 Continue the Particle Filter benchmark project in ~/Work/particle-filter on branch benchmarks/foundation.
 Read benchmarks/HANDOFF.md first and follow its owner decisions exactly, then read the files it lists.
-Your task: implement the isolated NeoForge 1.21.1 pfbench synthetic harness described in
-benchmarks/HARNESS.md as a separate Gradle build under benchmarks/harness/ (not part of the release
-build), and do only functional validation (it builds, launches, spawns, counters are consistent, outputs
-parse), labelled as functional. Do not run or report any performance measurements: the laptop's power-limit
-problems are unresolved until I say otherwise. Don't modify Particle Filter's production code, existing
-Minecraft installations or worlds, CPU affinity, or power/GPU settings. Leave AGENTS.md and .agents/ alone.
+The NeoForge 1.21.1 pfbench harness is built and functionally validated. Your task: the next tasks in
+HANDOFF.md, starting with the analysis glue (per-phase summaries and run.json from harness outputs, with unit
+tests on synthetic data). Functional validation only, labelled as functional. Do not run or report any
+performance measurements, and don't analyse the timings of existing runs: the laptop's power-limit problems
+are unresolved until I say otherwise. Don't modify Particle Filter's production code, existing Minecraft
+installations or worlds, CPU affinity, or power/GPU settings. Leave AGENTS.md and .agents/ alone.
 Commit finished work to benchmarks/foundation (don't push) and update benchmarks/HANDOFF.md before stopping.
 ```

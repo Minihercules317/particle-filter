@@ -1,0 +1,34 @@
+{
+  "run_id": "20261109T095221Z-C-B-D-typed-functional",
+  "label": "functional",
+  "started_utc": "20261109T095221Z",
+  "sequence": "C:moderate,B:moderate,D:moderate",
+  "variant": "typed",
+  "scenario_file": "S1-synthetic.toml",
+  "scenario_sha256": "f872ff3ce8f44ae75d509ddc4cab0e01ea2aca049f1b1509db1edd0f1fcdd7c1",
+  "template_sha256_tree": "9f9547b0f3f1c87809f5ed45dd1912f09408237cc9819798ad30b65fe9224b64",
+  "particlefilter": {
+    "jar": "particlefilter-neoforge-1.2.0+1.21.1.jar",
+    "sha256": "0806e94cd38daad4b3c77523914e13e1020272a7cae1dfc6ee86c9c2a5efba4e",
+    "config_kind": "synthetic",
+    "config_sha256": "60516c50c25b0e0faaebac42f93ba06bd8abfa61f00dfc3f3d9abed72afb6e52"
+  },
+  "hidden_window": true,
+  "window": {
+    "class": "Minecraft* 1.21.1",
+    "title": "Minecraft: NeoForge Loading...",
+    "size": [
+      2536,
+      1390
+    ],
+    "workspace": {
+      "id": -97,
+      "name": "special:pfbench"
+    },
+    "monitor": 1,
+    "floating": false,
+    "fullscreen": 0
+  },
+  "finished_utc": "20261109T095314Z",
+  "exited_by_itself": true
+}

@@ -1,0 +1,66 @@
+{
+  "created_utc": "20261109T095144Z",
+  "scenario": {
+    "id": "S1-synthetic",
+    "version": 1,
+    "sha256": "f872ff3ce8f44ae75d509ddc4cab0e01ea2aca049f1b1509db1edd0f1fcdd7c1"
+  },
+  "world": {
+    "level_name": "pfbench",
+    "time": 6000,
+    "preset": "minecraft:the_void",
+    "doDaylightCycle": false,
+    "doWeatherCycle": false,
+    "doMobSpawning": false,
+    "randomTickSpeed": 0
+  },
+  "seed": 20261109,
+  "sha256_tree": "9f9547b0f3f1c87809f5ed45dd1912f09408237cc9819798ad30b65fe9224b64",
+  "setup": {
+    "gamerules": {
+      "doDaylightCycle": false,
+      "doWeatherCycle": false,
+      "doMobSpawning": false,
+      "randomTickSpeed": 0
+    },
+    "level_name": "pfbench",
+    "day_time": 6000,
+    "raining": false,
+    "player_spectator": true,
+    "player_position": [
+      0.5,
+      102.38,
+      0.5
+    ],
+    "player_eye_y": 104.00000000476837,
+    "window_at_start": {
+      "width": 2536,
+      "height": 1390,
+      "fullscreen": false
+    },
+    "options": {
+      "renderDistance": 8,
+      "simulationDistance": 5,
+      "maxFps": 60,
+      "enableVsync": false,
+      "particles": "ALL",
+      "graphicsMode": "FANCY",
+      "fullscreen": false,
+      "ao": true,
+      "renderClouds": "OFF",
+      "fov": 70,
+      "guiScale": 0,
+      "pauseOnLostFocus": false,
+      "hideGui": true
+    }
+  },
+  "versions": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250",
+    "pfbench": "0.1.0",
+    "particlefilter": null,
+    "java": "21.0.12.1+1-LTS",
+    "java_vendor": "Eclipse Adoptium",
+    "os": "Linux 7.2.15-1-omarchy"
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "label": "functional",
+  "note": "Functional checks of the harness. Not a performance result.",
+  "passed": true,
+  "checks": [
+    {
+      "check": "harness finished without error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "frames.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "phases.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "world is the template (level name pfbench)",
+      "ok": true,
+      "detail": "pfbench"
+    },
+    {
+      "check": "player is a spectator at the camera position",
+      "ok": true,
+      "detail": "[0.5, 102.38, 0.5]"
+    },
+    {
+      "check": "Particles setting is All",
+      "ok": true,
+      "detail": "ALL"
+    },
+    {
+      "check": "no frame or tick rows dropped",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "Particle Filter installed as the configuration requires",
+      "ok": true,
+      "detail": "present=True"
+    },
+    {
+      "check": "mode switched: load-settle",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: 01-C-moderate-settle",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: 02-B-moderate-settle",
+      "ok": true,
+      "detail": "requested NONE, got NONE"
+    },
+    {
+      "check": "ticks logged: load-settle",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "ticks logged: warmup",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "ticks logged: 01-C-moderate-settle",
+      "ok": true,
+      "detail": "60 of 60"
+    },
+    {
+      "check": "01-C-moderate-settle: target created == 0",
+      "ok": true,
+      "detail": "attempts 3000, created 0"
+    },
+    {
+      "check": "01-C-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 1500, created 1500"
+    },
+    {
+      "check": "ticks logged: 01-C-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "01-C-moderate: target created == 0",
+      "ok": true,
+      "detail": "attempts 5000, created 0"
+    },
+    {
+      "check": "01-C-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "ticks logged: 02-B-moderate-settle",
+      "ok": true,
+      "detail": "60 of 60"
+    },
+    {
+      "check": "02-B-moderate-settle: target created == attempts",
+      "ok": true,
+      "detail": "attempts 3000, created 3000"
+    },
+    {
+      "check": "02-B-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 1500, created 1500"
+    },
+    {
+      "check": "ticks logged: 02-B-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "02-B-moderate: target created == attempts",
+      "ok": true,
+      "detail": "attempts 5000, created 5000"
+    },
+    {
+      "check": "02-B-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "frames.csv parses with tools/frametimes.py",
+      "ok": true,
+      "detail": "1552 rows, 0 skipped, format generic-ns"
+    },
+    {
+      "check": "every phase has frames",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

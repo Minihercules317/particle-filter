@@ -1,0 +1,133 @@
+{
+  "label": "functional",
+  "note": "Functional bring-up run: checks that the harness works. NOT a performance result; don\u0027t quote its timings.",
+  "run_id": "20261109T100504Z-C-B-D-untyped-functional",
+  "kind": "run",
+  "plan_file": "plan.json",
+  "plan_sha256": "379813fd5594c52dcfcc64f6ca41c39710c30d43746732fc64df2b696ca8348b",
+  "scenario": {
+    "id": "S1-synthetic",
+    "version": 1,
+    "sha256": "f872ff3ce8f44ae75d509ddc4cab0e01ea2aca049f1b1509db1edd0f1fcdd7c1"
+  },
+  "started_utc": "2026-11-09T10:05:17.069735678Z",
+  "finished_utc": "2026-11-09T10:05:58.066464145Z",
+  "ok": true,
+  "versions": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250",
+    "pfbench": "0.1.0",
+    "particlefilter": "1.2.0",
+    "java": "21.0.12.1+1-LTS",
+    "java_vendor": "Eclipse Adoptium",
+    "os": "Linux 7.2.15-1-omarchy"
+  },
+  "mods": [
+    "minecraft 1.21.1",
+    "particlefilter 1.2.0",
+    "pfbench 0.1.0",
+    "neoforge 21.1.250"
+  ],
+  "seed": 20261109,
+  "variant": "untyped",
+  "target_lifetime_ticks": 40,
+  "control_lifetime_ticks": 40,
+  "control_attempts_per_tick": 25.0,
+  "control_z_offset": 1.0,
+  "emitters": 256,
+  "setup": {
+    "particles_setting_found": "ALL",
+    "particlefilter_present": true,
+    "particlefilter_version": "1.2.0",
+    "particlefilter_mode_at_load": "EVERYWHERE",
+    "gamerules": {
+      "doDaylightCycle": false,
+      "doWeatherCycle": false,
+      "doMobSpawning": false,
+      "randomTickSpeed": 0
+    },
+    "level_name": "pfbench",
+    "day_time": 6000,
+    "raining": false,
+    "player_spectator": true,
+    "player_position": [
+      0.5,
+      102.38,
+      0.5
+    ],
+    "player_eye_y": 104.00000000476837,
+    "window_at_start": {
+      "width": 2536,
+      "height": 1390,
+      "fullscreen": false
+    },
+    "options": {
+      "renderDistance": 8,
+      "simulationDistance": 5,
+      "maxFps": 60,
+      "enableVsync": false,
+      "particles": "ALL",
+      "graphicsMode": "FANCY",
+      "fullscreen": false,
+      "ao": true,
+      "renderClouds": "OFF",
+      "fov": 70,
+      "guiScale": 0,
+      "pauseOnLostFocus": false,
+      "hideGui": true
+    }
+  },
+  "window_at_end": {
+    "width": 2536,
+    "height": 1390,
+    "fullscreen": false
+  },
+  "frames_logged": 2028,
+  "frames_dropped_capacity": 0,
+  "frame_capacity": 78000,
+  "ticks_logged": 680,
+  "ticks_dropped_capacity": 0,
+  "particlefilter_modes": [
+    {
+      "phase": "load-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup",
+      "mode_requested": null,
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "01-C-moderate-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "01-C-moderate",
+      "mode_requested": null,
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "02-B-moderate-settle",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "02-B-moderate",
+      "mode_requested": null,
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "03-D-moderate-settle",
+      "mode_requested": "ZONES",
+      "mode_after_start": "ZONES"
+    },
+    {
+      "phase": "03-D-moderate",
+      "mode_requested": null,
+      "mode_after_start": "ZONES"
+    }
+  ],
+  "notes": []
+}

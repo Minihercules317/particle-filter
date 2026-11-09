@@ -1,4 +1,5 @@
-# S1: controlled synthetic particle workload (draft; the pfbench harness that will read this is not built).
+# S1: controlled synthetic particle workload (draft). Read by benchmarks/harness/pfbench.py, which turns it into the
+# plan.json the pfbench harness executes.
 # Values marked "provisional" are replaced after the calibration sweep (PLAN.md §7, phase 3).
 # Any change after a campaign starts makes a new scenario version; campaigns record the hash of this file.
 
@@ -20,7 +21,7 @@ weather = "clear"
 fresh_copy_per_launch = true
 
 [camera]
-position = [0.5, 100.0, 0.5]
+position = [0.5, 102.38, 0.5]   # eye at y 104.0 (spectator eye height 1.62), the centre of the emitter plane
 yaw = 0.0          # facing +Z (south), toward the emitter plane
 pitch = 0.0
 gamemode = "spectator"
@@ -35,7 +36,11 @@ particles = 0      # All
 graphicsMode = 1   # Fancy
 fullscreen = true  # on DP-1 (NVIDIA-attached), 2560x1440@240
 ao = true
-cloudStatus = 0    # clouds off, so they don't add rendering cost
+renderClouds = "false"   # clouds off, so they don't add rendering cost
+fov = 70           # degrees (vertical); pfbench.py writes Minecraft's stored form
+pauseOnLostFocus = false       # an unfocused window must not open the pause menu (it would pause the world)
+onboardAccessibility = false   # skip the first-launch accessibility screen
+soundCategory_master = 0.0
 
 [emitters]
 plane_z = 14.0
@@ -54,6 +59,7 @@ type = "pfbench:control"
 lifetime_ticks = 40
 render_type = "PARTICLE_SHEET_TRANSLUCENT"   # separate 16,384 queue from the target
 attempts_per_tick = 25                        # constant at every level
+plane_z_offset = 1.0                          # one block behind the target plane, so the two never share a depth
 
 [levels]           # target attempts per tick (provisional)
 idle = 0
