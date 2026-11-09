@@ -19,8 +19,8 @@ Read this first. It is self-contained: it doesn't assume access to the conversat
 >   reconfigure unrelated processes (e.g. the animated wallpaper); record confounders and proceed; stop only for issues
 >   that would materially invalidate results. The gate text further down is historical.
 >
-> **Publication:** private server addresses were in commit `fc2906f` (PLAN.md, scenarios/R1-atm10-sky.md). The branch
-> history was rewritten locally to remove them; the unscrubbed history is kept on the local-only branch
+> **Publication:** private server addresses were in the branch's first commit (PLAN.md, scenarios/R1-atm10-sky.md). The branch
+> history was rewritten locally to remove them (old→new hashes: [HISTORY-REWRITE.md](HISTORY-REWRITE.md); this file's hashes are the new ones); the unscrubbed history is kept on the local-only branch
 > `benchmarks/foundation-prescrub` (never push it; exploratory launches' provenance points at its commits). Pilot logs
 > still contain the local home path `/home/mini` (low risk, left as raw data).
 
@@ -35,10 +35,10 @@ but edits and commits would collide.
 ## Where things stand
 
 - Repo: `~/Work/particle-filter`, branch **`benchmarks/foundation`** (made from `main` at `bcba10f`; not
-  pushed, not merged). Commits so far (`git log --oneline main..`): foundation `fc2906f`, first handoff
-  `858f1bf`, NeoForge 1.21.1 harness `85cb36f`, analysis pipeline + methodology safeguards + Sodium mod set
-  `fc67e49`, reduced-TPS policy handoff `615845d`, launcher system data + reduced-TPS implementation `bee31ca`,
-  Forge 1.20.1 port + functional record `dae5dda`, then reproducibility/reporting and this handoff
+  pushed, not merged). Commits so far (`git log --oneline main..`): foundation `10aa2a5`, first handoff
+  `01a1e0a`, NeoForge 1.21.1 harness `19e0b1c`, analysis pipeline + methodology safeguards + Sodium mod set
+  `a26c33d`, reduced-TPS policy handoff `97a5886`, launcher system data + reduced-TPS implementation `dd2656d`,
+  Forge 1.20.1 port + functional record `9b4f82e`, then reproducibility/reporting and this handoff
   (`git log --oneline main..`).
 - Untracked `AGENTS.md` and `.agents/` in the repo root are unrelated and pre-existing: leave them alone
   and never stage them.
