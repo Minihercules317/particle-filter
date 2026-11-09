@@ -220,7 +220,9 @@ FPS changes with resolution mean GPU-bound. Results are reported per label and n
   that sharing is what the within-launch vs separate-launch comparison in phase 4 should look for.
 - **Repetitions:** chosen from the Phase 4 variance study, not guessed. **Set 2026-11-09** from quiet launches (worst
   group: within-launch null-pair SD ≈ 0.7%, between-launch SD ≈ 0.7%): **12 blocks** for within-launch comparisons
-  (C, D, C-miss vs B: half-width ≈ ±0.45%) and **16 blocks** for install-level comparisons (B vs A, E vs C: ≈ ±0.5%). With σ_d = SD of the paired
+  (C, D vs B; D vs C: half-width ≈ ±0.45%) and **16 blocks** for comparisons that need separate launches (B vs A,
+  C-miss vs B, E vs C: ≈ ±0.5%). (Erratum 2026-11-09, after pre-registration: this line first listed C-miss under
+  12 blocks; C-miss has its own install state, and its pre-registration already uses 16. No campaign changed.) With σ_d = SD of the paired
   difference in mean frame time (% of reference) and h = the wanted 95% CI half-width,
   n ≈ (t₀.₉₇₅,ₙ₋₁ · σ_d / h)², iterated over n. Minimum 8 blocks per comparison regardless. For install-level
   comparisons, n counts **launches**, not windows.
