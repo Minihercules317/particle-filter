@@ -1,0 +1,46 @@
+PRE-REGISTRATION: pr-q7-sodium-neoforge
+Written 2026-11-09T19:15Z, before any launch of this campaign. Methodology commit: b70d260 (parent of the commit adding this file).
+Question: Q7 Sodium Extra vs Particle Filter hiding the same type (E vs C, Sodium in both)
+Scenario: benchmarks/scenarios/S1-synthetic.toml version 2, SHA-256 5a2b15d62ee16bd72ca5efcb98ec9abce07545dc19843fbae0893b56edf8e4bd
+
+Run (unattended, AC power, performance profile, PFBENCH_PERFORMANCE_APPROVED=1):
+  python3 benchmarks/harness/pfbench.py campaign --modset sodium --configs C,E --levels heavy --blocks 16 --seed 1108 --name pr-q7-sodium-neoforge
+Analysis:
+  python3 benchmarks/tools/publish_campaign.py archive benchmarks/results/pr-q7-sodium-neoforge benchmarks/harness/run/runs/pr-q7-sodium-neoforge-b*
+  python3 benchmarks/tools/publish_campaign.py report benchmarks/results/pr-q7-sodium-neoforge --reference C --margin-pct 1
+  (default metrics; primary outcome mean_frametime_ms; workload tolerance 2% per tick; verdicts from 95% Student-t
+   intervals of the mean paired difference; exclusions only by the automatic checks of PLAN.md section 5)
+Rules fixed in advance: every scheduled launch is run once, in the scheduled order; failed launches are kept in raw/
+and not replaced. If more than 25% of launches fail their checks, the campaign is reported as failed and repeated in
+full under a new name and seed with the reason recorded. No early stopping, no added blocks.
+
+---- campaign --dry-run output ----
+block 1: E:heavy  |  C:heavy
+block 2: C:heavy  |  E:heavy
+block 3: C:heavy  |  E:heavy
+block 4: E:heavy  |  C:heavy
+block 5: C:heavy  |  E:heavy
+block 6: E:heavy  |  C:heavy
+block 7: E:heavy  |  C:heavy
+block 8: C:heavy  |  E:heavy
+block 9: C:heavy  |  E:heavy
+block 10: E:heavy  |  C:heavy
+block 11: E:heavy  |  C:heavy
+block 12: C:heavy  |  E:heavy
+block 13: C:heavy  |  E:heavy
+block 14: E:heavy  |  C:heavy
+block 15: E:heavy  |  C:heavy
+block 16: C:heavy  |  E:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  1 entry: C:heavy
+  1 entry: E:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  C vs B (Q2-Q4 global filtering): not answerable: reference B isn't in this campaign
+  E vs C (Q7 Sodium Extra vs Particle Filter): pairable
+
+order balance (Williams design, seed 1108):
+  launches within a block: exact; positions per item C:heavy [8, 8]; E:heavy [8, 8]; each item directly after each other one 8-8 times
+
+32 launches, 1.63 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set sodium, variant typed.

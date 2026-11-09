@@ -1,0 +1,47 @@
+PRE-REGISTRATION: pr-q1-overhead-forge
+Written 2026-11-09T19:15Z, before any launch of this campaign. Methodology commit: b70d260 (parent of the commit adding this file).
+Question: Forge 1.20.1 replication of Q1 (B vs A)
+Scenario: benchmarks/scenarios/S1-synthetic.toml version 2, SHA-256 5a2b15d62ee16bd72ca5efcb98ec9abce07545dc19843fbae0893b56edf8e4bd
+
+Run (unattended, AC power, performance profile, PFBENCH_PERFORMANCE_APPROVED=1):
+  python3 benchmarks/harness/pfbench.py campaign --loader forge --configs A,B --levels idle,heavy --blocks 16 --seed 1109 --name pr-q1-overhead-forge
+Analysis:
+  python3 benchmarks/tools/publish_campaign.py archive benchmarks/results/pr-q1-overhead-forge benchmarks/harness/run/runs/pr-q1-overhead-forge-b*
+  python3 benchmarks/tools/publish_campaign.py report benchmarks/results/pr-q1-overhead-forge --reference A --margin-pct 1
+  (default metrics; primary outcome mean_frametime_ms; workload tolerance 2% per tick; verdicts from 95% Student-t
+   intervals of the mean paired difference; exclusions only by the automatic checks of PLAN.md section 5)
+Rules fixed in advance: every scheduled launch is run once, in the scheduled order; failed launches are kept in raw/
+and not replaced. If more than 25% of launches fail their checks, the campaign is reported as failed and repeated in
+full under a new name and seed with the reason recorded. No early stopping, no added blocks.
+
+---- campaign --dry-run output ----
+block 1: A:idle,A:heavy  |  B:heavy,B:idle
+block 2: B:idle,B:heavy  |  A:heavy,A:idle
+block 3: B:heavy,B:idle  |  A:heavy,A:idle
+block 4: A:idle,A:heavy  |  B:idle,B:heavy
+block 5: A:heavy,A:idle  |  B:idle,B:heavy
+block 6: B:heavy,B:idle  |  A:idle,A:heavy
+block 7: B:heavy,B:idle  |  A:heavy,A:idle
+block 8: A:idle,A:heavy  |  B:idle,B:heavy
+block 9: B:idle,B:heavy  |  A:idle,A:heavy
+block 10: A:heavy,A:idle  |  B:heavy,B:idle
+block 11: B:idle,B:heavy  |  A:idle,A:heavy
+block 12: A:heavy,A:idle  |  B:heavy,B:idle
+block 13: B:heavy,B:idle  |  A:idle,A:heavy
+block 14: A:heavy,A:idle  |  B:idle,B:heavy
+block 15: A:heavy,A:idle  |  B:heavy,B:idle
+block 16: B:idle,B:heavy  |  A:idle,A:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  2 entries: A:idle|A:heavy
+  2 entries: B:idle|B:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): pairable
+
+order balance (Williams design, seed 1109):
+  launches within a block: exact; positions per item A:idle|A:heavy [8, 8]; B:idle|B:heavy [8, 8]; each item directly after each other one 8-8 times
+  entries within launch A:idle|A:heavy: exact; positions per item A:idle [8, 8]; A:heavy [8, 8]; each item directly after each other one 8-8 times
+  entries within launch B:idle|B:heavy: exact; positions per item B:idle [8, 8]; B:heavy [8, 8]; each item directly after each other one 8-8 times
+
+32 launches, 2.03 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: forge (Minecraft 1.20.1), mod set vanilla, variant typed.

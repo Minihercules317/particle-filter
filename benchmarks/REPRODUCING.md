@@ -5,9 +5,9 @@ without Claude Code and without trusting anyone's summary. Everything here uses 
 the wrapper in the repository) and Python's standard library. How to judge what a check does and doesn't prove is
 in [AUDIT.md](AUDIT.md).
 
-> **Status (2026-11-09): no performance results exist.** The harness, launcher and analysis are built and pass
-> functional checks and unit tests. Performance campaigns wait for the owner's machine to be fixed (HANDOFF.md).
-> The commands below work today for functional runs and for checking the tools.
+> **Status (2026-11-09): no Particle Filter results exist yet.** The harness, launcher and analysis pass functional
+> checks and unit tests; an exploratory calibration and variance study fixed the method (scenario version 2), and the
+> official campaigns are pre-registered in [results/PREREGISTRATION.md](results/PREREGISTRATION.md).
 
 Nothing in this guide touches a Minecraft installation, launcher profile, world or system setting. Every game
 directory is created under `benchmarks/harness/run/` (gitignored). Gradle caches its downloads in `~/.gradle/`, as

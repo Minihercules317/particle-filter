@@ -1,0 +1,46 @@
+PRE-REGISTRATION: pr-q8-cmiss-neoforge
+Written 2026-11-09T19:15Z, before any launch of this campaign. Methodology commit: b70d260 (parent of the commit adding this file).
+Question: Q8 rules that never match (C-miss vs B) at 2,000 attempts/tick
+Scenario: benchmarks/scenarios/S1-synthetic.toml version 2, SHA-256 5a2b15d62ee16bd72ca5efcb98ec9abce07545dc19843fbae0893b56edf8e4bd
+
+Run (unattended, AC power, performance profile, PFBENCH_PERFORMANCE_APPROVED=1):
+  python3 benchmarks/harness/pfbench.py campaign --configs B,C-miss --levels extreme --blocks 16 --seed 1105 --name pr-q8-cmiss-neoforge
+Analysis:
+  python3 benchmarks/tools/publish_campaign.py archive benchmarks/results/pr-q8-cmiss-neoforge benchmarks/harness/run/runs/pr-q8-cmiss-neoforge-b*
+  python3 benchmarks/tools/publish_campaign.py report benchmarks/results/pr-q8-cmiss-neoforge --reference B --margin-pct 1
+  (default metrics; primary outcome mean_frametime_ms; workload tolerance 2% per tick; verdicts from 95% Student-t
+   intervals of the mean paired difference; exclusions only by the automatic checks of PLAN.md section 5)
+Rules fixed in advance: every scheduled launch is run once, in the scheduled order; failed launches are kept in raw/
+and not replaced. If more than 25% of launches fail their checks, the campaign is reported as failed and repeated in
+full under a new name and seed with the reason recorded. No early stopping, no added blocks.
+
+---- campaign --dry-run output ----
+block 1: C-miss:extreme  |  B:extreme
+block 2: B:extreme  |  C-miss:extreme
+block 3: C-miss:extreme  |  B:extreme
+block 4: B:extreme  |  C-miss:extreme
+block 5: B:extreme  |  C-miss:extreme
+block 6: C-miss:extreme  |  B:extreme
+block 7: C-miss:extreme  |  B:extreme
+block 8: B:extreme  |  C-miss:extreme
+block 9: C-miss:extreme  |  B:extreme
+block 10: B:extreme  |  C-miss:extreme
+block 11: C-miss:extreme  |  B:extreme
+block 12: B:extreme  |  C-miss:extreme
+block 13: C-miss:extreme  |  B:extreme
+block 14: B:extreme  |  C-miss:extreme
+block 15: B:extreme  |  C-miss:extreme
+block 16: C-miss:extreme  |  B:extreme
+
+launch groups (one launch each per block; entries share an install state):
+  1 entry: B:extreme
+  1 entry: C-miss:extreme
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): not answerable: reference A isn't in this campaign
+  C-miss vs B (Q8 rules that never match): pairable
+
+order balance (Williams design, seed 1105):
+  launches within a block: exact; positions per item B:extreme [8, 8]; C-miss:extreme [8, 8]; each item directly after each other one 8-8 times
+
+32 launches, 1.63 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set vanilla, variant typed.

@@ -1,0 +1,43 @@
+PRE-REGISTRATION: pr-q2q5-heavy-forge
+Written 2026-11-09T19:15Z, before any launch of this campaign. Methodology commit: b70d260 (parent of the commit adding this file).
+Question: Forge 1.20.1 replication of Q2-Q5 at 200 attempts/tick
+Scenario: benchmarks/scenarios/S1-synthetic.toml version 2, SHA-256 5a2b15d62ee16bd72ca5efcb98ec9abce07545dc19843fbae0893b56edf8e4bd
+
+Run (unattended, AC power, performance profile, PFBENCH_PERFORMANCE_APPROVED=1):
+  python3 benchmarks/harness/pfbench.py campaign --loader forge --configs C,B,D --levels heavy --blocks 12 --seed 1110 --name pr-q2q5-heavy-forge
+Analysis:
+  python3 benchmarks/tools/publish_campaign.py archive benchmarks/results/pr-q2q5-heavy-forge benchmarks/harness/run/runs/pr-q2q5-heavy-forge-b*
+  python3 benchmarks/tools/publish_campaign.py report benchmarks/results/pr-q2q5-heavy-forge --reference B --margin-pct 1
+  (default metrics; primary outcome mean_frametime_ms; workload tolerance 2% per tick; verdicts from 95% Student-t
+   intervals of the mean paired difference; exclusions only by the automatic checks of PLAN.md section 5)
+Rules fixed in advance: every scheduled launch is run once, in the scheduled order; failed launches are kept in raw/
+and not replaced. If more than 25% of launches fail their checks, the campaign is reported as failed and repeated in
+full under a new name and seed with the reason recorded. No early stopping, no added blocks.
+
+---- campaign --dry-run output ----
+block 1: C:heavy,D:heavy,B:heavy
+block 2: C:heavy,B:heavy,D:heavy
+block 3: D:heavy,B:heavy,C:heavy
+block 4: D:heavy,C:heavy,B:heavy
+block 5: B:heavy,C:heavy,D:heavy
+block 6: B:heavy,D:heavy,C:heavy
+block 7: B:heavy,D:heavy,C:heavy
+block 8: C:heavy,D:heavy,B:heavy
+block 9: B:heavy,C:heavy,D:heavy
+block 10: C:heavy,B:heavy,D:heavy
+block 11: D:heavy,B:heavy,C:heavy
+block 12: D:heavy,C:heavy,B:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  3 entries: C:heavy|B:heavy|D:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): not answerable: reference A isn't in this campaign
+  C vs B (Q2-Q4 global filtering): pairable
+  D vs B (Q3 zone filtering): pairable
+  D vs C (Q5 zones vs global): pairable
+
+order balance (Williams design, seed 1110):
+  entries within launch C:heavy|B:heavy|D:heavy: exact; positions per item C:heavy [4, 4, 4]; B:heavy [4, 4, 4]; D:heavy [4, 4, 4]; each item directly after each other one 4-4 times
+
+12 launches, 0.90 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: forge (Minecraft 1.20.1), mod set vanilla, variant typed.
