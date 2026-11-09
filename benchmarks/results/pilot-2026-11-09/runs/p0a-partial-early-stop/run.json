@@ -1,0 +1,31 @@
+{
+  "campaign": "pilot",
+  "config": "pilot-title-screen",
+  "block": 1,
+  "order": 1,
+  "scenario": "title screen (60 FPS menu cap), dev client NeoForge 1.21.1",
+  "started_utc": "2026-11-09T09:11:55Z",
+  "warmup_s": 60,
+  "duration_s": 30,
+  "window_hidden_in_special_workspace": true,
+  "window": {
+    "class": "Minecraft* 1.21.1",
+    "title": "Minecraft: NeoForge Loading...",
+    "xwayland": true,
+    "size": [
+      1261,
+      1390
+    ],
+    "workspace": {
+      "id": 14,
+      "name": "14"
+    },
+    "monitor": 1,
+    "floating": false,
+    "fullscreen": 0
+  },
+  "frame_log": "mangohud/java_2026-11-09_04-13-02.csv",
+  "notes": "pipeline pilot; not evidence about Particle Filter performance",
+  "exclude": true,
+  "exclude_reason": "pilot_devclient.sh bug: stopped the game when MangoHud created the CSV (log start) instead of when it wrote *_summary.csv (log end), truncating the log to ~6 s. Kept as raw evidence of the bug."
+}

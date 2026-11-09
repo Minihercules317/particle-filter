@@ -1,0 +1,2 @@
+gradle.log
+MANGOHUD_CONFIG=no_display,log_interval=0,autostart_log=5,log_duration=10 ; game ran ~60 s; no CSV was written (only gradle.log, not kept: it holds local paths)

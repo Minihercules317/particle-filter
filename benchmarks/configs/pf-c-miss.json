@@ -1,0 +1,17 @@
+{
+  "hiddenParticles": [
+    "pfbench:unused_0000",
+    "pfbench:unused_0001",
+    "pfbench:unused_0002",
+    "pfbench:unused_0003",
+    "pfbench:unused_0004",
+    "pfbench:unused_0005",
+    "pfbench:unused_0006",
+    "pfbench:unused_0007",
+    "pfbench:unused_0008",
+    "pfbench:unused_0009"
+  ],
+  "hiddenBlocks": [],
+  "zones": [],
+  "mode": "EVERYWHERE"
+}

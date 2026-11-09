@@ -1,0 +1,59 @@
+{
+  "aux_means_whole_log": {
+    "cpu_load": 4.430119039106145,
+    "cpu_power": 0.0,
+    "cpu_temp": 63.67094972067039,
+    "gpu_core_clock": 744.1340782122905,
+    "gpu_load": 0.0,
+    "gpu_mem_clock": 0.0,
+    "gpu_power": 0.0,
+    "gpu_temp": 0.0,
+    "gpu_vram_used": 0.0,
+    "process_rss": 0.0,
+    "ram_used": 17.40224988826816,
+    "swap_used": 0.0
+  },
+  "issues": [
+    {
+      "code": "frame_limited",
+      "level": "warning",
+      "message": "average 59.7 FPS is within 1% of the 60 FPS cap: the run measures the limiter, not CPU/GPU cost"
+    }
+  ],
+  "log_frames_total": 1790,
+  "metrics": {
+    "avg_fps": 59.6801599529643,
+    "duration_s": 29.9932172,
+    "frames": 1790,
+    "hitches_over_50ms": 0,
+    "low_0_1pct_fps": 52.294007368225635,
+    "low_1pct_fps": 54.209781010554636,
+    "max_frametime_ms": 19.1818,
+    "mean_frametime_ms": 16.755987262569832,
+    "median_frametime_ms": 16.7566,
+    "min_frametime_ms": 14.4097,
+    "p90_frametime_ms": 17.2054,
+    "p95_frametime_ms": 17.4359,
+    "p99_9_frametime_ms": 19.0635,
+    "p99_as_fps": 55.396137781273886,
+    "p99_frametime_ms": 18.0518,
+    "stdev_frametime_ms": 0.43566831629991837
+  },
+  "schema": 1,
+  "source": "p2-title-hidden//mangohud/java_2026-11-09_04-18-26.csv",
+  "source_format": "mangohud",
+  "system_info": {
+    "cpu": "Intel Core Ultra 9 275HX",
+    "cpuscheduler": "powersave",
+    "driver": "",
+    "gpu": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2",
+    "kernel": "7.2.15-1-omarchy",
+    "os": "Omarchy",
+    "ram": "32257812"
+  },
+  "usable": true,
+  "window": {
+    "duration_s": 30.0,
+    "skip_s": 0.0
+  }
+}

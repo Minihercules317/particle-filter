@@ -1,0 +1,27 @@
+{
+  "campaign": "s-overhead-2026-12-01",
+  "run_id": "s-overhead-2026-12-01-b01-1-A",
+  "config": "A",
+  "block": 1,
+  "order": 1,
+  "launch": 1,
+  "window": 1,
+  "scenario": "S1-synthetic",
+  "scenario_sha256": "<sha256 of the scenario file>",
+  "level": "heavy",
+  "variant": "typed",
+  "particle_filter": {"installed": false, "jar_sha256": null, "config_sha256": null, "mode": null},
+  "frame_log": "frames.csv",
+  "window_s": {"skip": 0, "duration": 30},
+  "workload": {
+    "spawn_attempts_per_s": 4000,
+    "control_particles_live_mean": 1000,
+    "target_created_per_s": 4000,
+    "target_live_mean": 8000
+  },
+  "bound": "cpu | gpu | mixed",
+  "started_utc": "2026-12-01T20:00:00Z",
+  "operator_notes": "",
+  "exclude": false,
+  "exclude_reason": ""
+}

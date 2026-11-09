@@ -1,0 +1,45 @@
+{
+  "campaign": "pilot",
+  "config": "pilot-title-screen",
+  "block": 3,
+  "order": 1,
+  "scenario": "title screen (60 FPS menu cap), dev client NeoForge 1.21.1",
+  "started_utc": "2026-11-09T09:27:25Z",
+  "warmup_s": 60,
+  "duration_s": 30,
+  "window_hidden_in_special_workspace": true,
+  "window": {
+    "class": "Minecraft* 1.21.1",
+    "title": "Minecraft: NeoForge Loading...",
+    "xwayland": true,
+    "size": [
+      1261,
+      1390
+    ],
+    "workspace": {
+      "id": 11,
+      "name": "11"
+    },
+    "monitor": 1,
+    "floating": false,
+    "fullscreen": 0
+  },
+  "window_after": {
+    "class": "Minecraft* 1.21.1",
+    "title": "Minecraft NeoForge* 1.21.1",
+    "xwayland": true,
+    "size": [
+      2536,
+      1390
+    ],
+    "workspace": {
+      "id": -97,
+      "name": "special:pfbench"
+    },
+    "monitor": 1,
+    "floating": false,
+    "fullscreen": 0
+  },
+  "frame_log": "mangohud/java_2026-11-09_04-28-32.csv",
+  "notes": "pipeline pilot; not evidence about Particle Filter performance"
+}
