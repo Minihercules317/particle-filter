@@ -1,19 +1,21 @@
 # Benchmark handoff
 
 Read this first. It is self-contained: it doesn't assume access to the conversation that produced it.
-Last updated 2026-11-09 (second session that day).
+Last updated 2026-11-09 (end of the second session that day; documentation-only handoff commit).
 
 ## Where things stand
 
 - Repo: `~/Work/particle-filter`, branch **`benchmarks/foundation`** (made from `main` at `bcba10f`; not
   pushed, not merged). Commits so far (`git log --oneline main..`): foundation `fc2906f`, first handoff
-  `858f1bf`, NeoForge 1.21.1 harness `85cb36f`, then the analysis pipeline, methodology safeguards and Sodium
-  mod set (2026-11-09; this file was updated in that commit).
+  `858f1bf`, NeoForge 1.21.1 harness `85cb36f`, analysis pipeline + methodology safeguards + Sodium mod set
+  `fc67e49`, then this handoff with the owner's reduced-TPS policy (documentation only).
 - Untracked `AGENTS.md` and `.agents/` in the repo root are unrelated and pre-existing: leave them alone
   and never stage them.
 - **No Particle Filter performance has been measured.** Nothing in `benchmarks/` may be quoted as a
   performance result. The harness and pipeline have only passed functional checks (60 FPS cap, 5 s phases) and
   unit tests on synthetic data.
+- **Actual performance testing remains blocked until the owner confirms the laptop's CPU/GPU power-limit problems
+  are resolved.** Not confirmed as of 2026-11-09.
 
 ### Done
 
@@ -65,6 +67,16 @@ Last updated 2026-11-09 (second session that day).
 
 ## Owner decisions (binding)
 
+**Reduced-TPS policy (decided 2026-11-09; recorded in PLAN.md §5 "Reduced-TPS runs"; not implemented yet)**
+- Retain valid runs where either configuration falls below 20 TPS; don't exclude them.
+- Normal 20-TPS comparisons are the **primary FPS dataset**; reduced-TPS comparisons are classified separately as
+  **saturation / stress-test results**. Never combine saturated and non-saturated measurements in one aggregate.
+- Report achieved TPS, FPS, frame-time distributions, particle requests per tick and particle requests per
+  real-world second.
+- Keep per-tick-normalized analysis where meaningful, but never as a substitute for real-time measurements.
+- Explicitly identify cases where filtering maintains 20 TPS while the baseline cannot.
+- Preserve raw measurements, including unfavourable results.
+
 **Approved**
 - Commit benchmark work to `benchmarks/foundation` (stage only `benchmarks/` files).
 - The isolated NeoForge 1.21.1 synthetic harness (`benchmarks/harness/`, its own Gradle build, its own mod id).
@@ -84,18 +96,42 @@ Last updated 2026-11-09 (second session that day).
 - Changing CPU affinity (`taskset`, pinning, `sample_system.py --self-cpu`), firmware, GPU settings, or system power configuration.
 - Pushing, merging, or touching `main`. Installing system packages without asking.
 
-## Next tasks (all allowed now; none measures performance)
+## Unresolved issues (known, not yet fixed)
 
-1. **Forge 1.20.1 port** of the harness (separate build, e.g. `benchmarks/harness-forge/`, ModDevGradle
+- **Reduced-TPS handling is documented but not implemented.** Today `compare.py` rejects pairs whose
+  `spawn_attempts_per_s` differ by > 2% (so a pair where one side drops below 20 TPS is excluded), and
+  `ingest_harness.py` only adds a `client_tick_rate_low` warning. Both contradict the policy above until task 1 is done.
+- `run.json["bound"]` is always `unlabelled`: the system sampler isn't integrated, so windows can't yet be labelled
+  CPU-/GPU-bound (PLAN.md §4; results must never pool the two).
+- Thresholds are provisional until the variance study (phase 4, blocked): `jit_activity` (5 ms of JIT per second of
+  window), tick-rate tolerance (2%), frame coverage (98%), and the warmup/settle/measure lengths in S1.
+- Window size differs between launches on the hidden workspace (2536×1390 vs 2560×1440). Compare excludes
+  mismatched pairs; performance runs are meant to be fullscreen on DP-1, which is still unverified (phase 2b, blocked).
+- Phase 2b checks (harness frame log vs MangoHud, hidden vs visible window, fullscreen on DP-1) compare timings and
+  stay blocked.
+- No GC-log parser yet (per-window GC comes from MXBeans). Forge 1.20.1 has no harness yet.
+
+## Next tasks (implementation, for the next session; none measures performance)
+
+1. **Implement the reduced-TPS policy** (PLAN.md §5, §2):
+   - `ingest_harness.py`: add `tps_class` (`"20tps"` or `"reduced"`, proposed threshold 19.6 achieved TPS) and
+     achieved TPS to every window's `run.json`; keep both per-tick and per-second request rates (already in
+     `workload`); make `client_tick_rate_low` informational, not a reason to exclude.
+   - `compare.py`: check workload equality **per tick** (`attempts_per_tick`, `control_particles_live_mean`), not
+     per second; put each pair into the primary dataset (both windows 20 TPS) or the saturation dataset (either
+     window reduced) and never aggregate across them; report achieved TPS for both sides, FPS, frame-time
+     distribution, requests per tick and per second; add a table of pairs where the filtered configuration held
+     20 TPS and the reference did not; keep every run (including unfavourable ones) in the run table.
+   - Unit tests on synthetic runs (`tools/tests/test_pipeline.py` has `make_run(..., slow_ticks=...)` for this).
+   - Update `harness/README.md` ("From a launch to compare.py") and `templates/run.json`.
+2. **Forge 1.20.1 port** of the harness (separate build, e.g. `benchmarks/harness-forge/`, ModDevGradle
    legacyforge with reobfuscation and a mixin refmap; Java 17; `getFrameTimeNs` differs, see HARNESS.md Risks;
    `LevelEvent.Save` and `ClientTickEvent` live in Forge's packages). Reuse `pfbench.py` by making the loader a
    parameter (game pattern, data version, Gradle project, Particle Filter jar name). Functional checks as in
-   `results/functional-2026-11-09-pipeline`. The owner asked for the five checks before the port; they are done.
-2. **Launcher integration:** `tools/collect_env.py` before/after and `tools/sample_system.py` during a launch
+   `results/functional-2026-11-09-pipeline`.
+3. **Launcher integration:** `tools/collect_env.py` before/after and `tools/sample_system.py` during a launch
    (never `--self-cpu`), optional MangoHud wrapping, the CPU-/GPU-bound label in `run.json["bound"]`, a GC-log
    parser. Validate only that files are written.
-3. **Owner decision needed before phase 3:** what to do when a configuration drops the client below 20 ticks per
-   second (PLAN.md §8, "Client tick rate under heavy load").
 
 Performance phases (PLAN.md §7, phases 2b-8) wait for the power-limit confirmation. `pfbench.py run`/`campaign`
 without `--functional` refuse to start unless `PFBENCH_PERFORMANCE_APPROVED=1` is set; set it only after the owner confirms.
@@ -103,8 +139,6 @@ without `--functional` refuse to start unless `PFBENCH_PERFORMANCE_APPROVED=1` i
 ## Open questions for the owner
 
 - When are the power-limit problems fixed? (This gates every performance phase.)
-- Client tick rate under heavy load: exclude such pairs (current behaviour) or compare per-tick workload and
-  report the tick rate as an outcome?
 - Is there an acceptable real-world route now that world copies and live-server runs are ruled out
   (e.g. a new test world built for benchmarking in a separate, new instance)?
 
@@ -128,8 +162,9 @@ that would be measurement.
 Continue the Particle Filter benchmark project in ~/Work/particle-filter on branch benchmarks/foundation.
 Read benchmarks/HANDOFF.md first and follow its owner decisions exactly, then read the files it lists.
 The NeoForge 1.21.1 pfbench harness, the analysis pipeline (ingest_harness.py -> compare.py) and the Sodium mod set
-are built and functionally validated. Your task: the next tasks in HANDOFF.md, starting with the Forge 1.20.1 port
-of the harness. Functional validation only, labelled as functional. Do not run or report any performance
+are built and functionally validated. Your task: the next tasks in HANDOFF.md, starting with implementing the
+reduced-TPS policy (PLAN.md section 5) in ingest_harness.py and compare.py with unit tests on synthetic data, then
+the Forge 1.20.1 port of the harness. Functional validation only, labelled as functional. Do not run or report any performance
 measurements, and don't analyse the timings of existing runs: the laptop's power-limit problems are unresolved
 until I say otherwise. Don't modify Particle Filter's production code, existing Minecraft installations or worlds,
 CPU affinity, or power/GPU settings. Leave AGENTS.md and .agents/ alone. Commit finished work to

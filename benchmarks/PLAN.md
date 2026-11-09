@@ -53,7 +53,10 @@ launch.
 
 **Equivalent workload rule:** compared configurations must receive the same *attempts* and keep the same
 *unfiltered* particles (the control type) alive. The harness logs both; `compare.py` rejects pairs that
-differ by more than 2%. If an alternative can't suppress exactly the same set (zones, untyped particles,
+differ by more than 2%. Since the owner's tick-rate decision (2026-11-09, §5 "Reduced-TPS runs"), this equality is
+judged **per tick** (attempts per tick, control particles alive). Attempts per real-world second are reported for
+every window but no longer reject a pair: a drop below 20 TPS is a result, not a workload mismatch. *(Not yet
+implemented: `compare.py` still checks `spawn_attempts_per_s`; see HANDOFF.md, next tasks.)* If an alternative can't suppress exactly the same set (zones, untyped particles,
 per-block rules for Sodium Extra), there is no comparison for that case, and the report says why.
 
 **Equal environment rule (added 2026-11-09):** paired runs must also share their environment: scenario hash,
@@ -213,6 +216,23 @@ FPS changes with resolution mean GPU-bound. Results are reported per label and n
   within ±m, and *inconclusive* otherwise. Inconclusive and negative results are published like the others.
 - **Primary outcomes:** mean frame time (all questions); p99 frame time and 1% low are secondary and
   descriptive. Only primary outcomes support claims, which limits the multiple-comparisons problem.
+- **Reduced-TPS runs (owner decision, 2026-11-09; documentation only, implementation pending).** Phases are
+  counted in client ticks, so a configuration that drops the client below 20 ticks per second (TPS) receives fewer
+  particle requests per real-world second. Rules:
+  1. **Keep** valid runs where either configuration of a pair falls below 20 TPS. They are not excluded.
+  2. **Two datasets, never mixed.** Pairs where both windows hold 20 TPS form the **primary FPS dataset**. Pairs
+     where either window falls below 20 TPS are classified separately as **saturation / stress-test results**.
+     Saturated and non-saturated measurements are never combined in one aggregate (mean, interval, verdict, chart).
+     Proposed threshold, to confirm when implementing: a window is reduced-TPS if its achieved client tick rate is
+     below 20 × 0.98 = 19.6 TPS (the tolerance `ingest_harness.py` already uses for `client_tick_rate_low`).
+  3. **Report for every window and pair:** achieved TPS, FPS, the frame-time distribution (mean, median, p95, p99,
+     p99.9, 1%/0.1% lows, hitches), particle requests per tick, and particle requests per real-world second.
+  4. **Per-tick-normalized analysis** (e.g. frame time per requested particle per tick) may be shown where
+     meaningful, next to the real-time measurements, never instead of them.
+  5. **Name the cases where filtering keeps 20 TPS while the baseline cannot** (e.g. C at 20 TPS, B below) as their
+     own finding, with both configurations' achieved TPS and FPS.
+  6. **Keep raw measurements, including unfavourable ones** (e.g. Particle Filter configurations that lose TPS or
+     FPS). Nothing is dropped for being inconvenient; exclusions follow the rules below only.
 - **Exclusions:** only by the automatic sanity checks or a reason written in `run.json` *before* looking at
   the comparison. Excluded runs stay in the raw data and are listed in every report.
 - **Never:** pooling CPU-bound and GPU-bound windows; comparing runs with different workloads; presenting
@@ -267,12 +287,11 @@ callback objects appear at all, and how much ticking and rendering time filtered
   created at log *start* and the `_summary.csv` at log end (a script that stops at the first file truncates the log,
   which happened in the pilot and was fixed).
 
-- **Client tick rate under heavy load (open question for the owner).** Phases are counted in ticks, so every
-  configuration gets the same attempts *per tick*. If a configuration makes the client fall below 20 ticks per
-  second, its attempts *per second* drop, `compare.py`'s workload check (2% on `spawn_attempts_per_s`) excludes the
-  pair, and `ingest_harness.py` flags `client_tick_rate_low`. That is conservative, but it would also exclude
-  exactly the loads where filtering keeps the game at 20 TPS and the baseline doesn't. Options: compare per-tick
-  workload and report the tick rate as an outcome of its own, or keep excluding. Decide before phase 3.
+- **Client tick rate under heavy load (resolved 2026-11-09).** Phases are counted in ticks, so a configuration that
+  drops the client below 20 TPS gets fewer particle requests per real-world second. The owner decided to keep such
+  runs as a separate saturation/stress-test dataset (§5, "Reduced-TPS runs"). The current code still excludes those
+  pairs (2% workload check on `spawn_attempts_per_s`) and only flags `client_tick_rate_low`; changing that is the
+  first implementation task in HANDOFF.md.
 
 ## 9. Reporting rules
 
