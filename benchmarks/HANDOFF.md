@@ -1,7 +1,22 @@
 # Benchmark handoff
 
 Read this first. It is self-contained: it doesn't assume access to the conversation that produced it.
-Last updated 2026-11-09 (fifth session that day: reproducibility and reporting readiness, the last preparation
+
+> **Update 2026-11-09, sixth session (read first).** The owner confirmed the CPU/GPU power-limit fix and lifted the
+> measurement gate, subject to hardware validation. Validation, a first calibration sweep and a first variance study
+> ran (all EXPLORATORY): **[results/calibration-2026-11-09/CALIBRATION.md](results/calibration-2026-11-09/CALIBRATION.md)**.
+> Summary: hardware passes for this workload (CPU 145 W sustained; GPU capped at 70 W but the game draws ≤ 58 W).
+> Fixed: a render-thread bug that made CPU-bound labels impossible, hidden-window geometry following the owner's
+> focus (`--hide --monitor`), a racy sampler check; added throttle counts and GPU power limit to the sampler; verdicts
+> now use a Student-t interval. **Open, in this order:** (1) head-to-head of the hidden workspace on eDP-2 vs DP-1
+> (eDP-2 was ~20× less noisy: null-pair SD 0.17% vs 3.8%), (2) freeze the measurement mode and levels in a new
+> scenario version, (3) pre-register, (4) scrub private server addresses from branch history before any push
+> (they're in commit `fc2906f`; removed from the working tree), (5) official campaigns. Owner's scope rule (2026-11-09):
+> keep environment checks brief, read-only and proportional; don't disable, kill or reconfigure unrelated
+> processes (e.g. the animated wallpaper); record confounders and proceed; stop only for issues that would
+> materially invalidate results. The gate text below is historical.
+
+Earlier update: 2026-11-09 (fifth session that day: reproducibility and reporting readiness, the last preparation
 phase before the hardware power-limit validation. Earlier sessions: launcher system data, reduced-TPS split, Forge
 1.20.1 harness and its functional record).
 
@@ -106,9 +121,9 @@ but edits and commits would collide.
 - Continue building and testing infrastructure (2026-11-09: analysis pipeline first, then the Forge 1.20.1 port).
 
 **Prohibited**
-- **No performance benchmarks, calibration sweeps, variance studies or performance results until the owner
-  explicitly confirms the laptop's CPU/GPU power-limit problems are resolved.** As of 2026-11-09 the owner has
-  **not** confirmed this. It includes timing comparisons that look like validation (harness vs MangoHud
+- ~~No performance runs until the power-limit fix is confirmed~~: **confirmed by the owner 2026-11-09 (sixth
+  session); calibration and variance studies are allowed. Official campaigns only after the methodology is
+  pre-registered, published and frozen, and the owner authorizes pushing.** It includes timing comparisons that look like validation (harness vs MangoHud
   agreement, hidden-window throttling).
 - Modifying Particle Filter's production code (`src/`, build files for the release jars).
 - Modifying existing Minecraft installations or worlds (CurseForge instances, their configs, saves).

@@ -438,8 +438,8 @@ def window(pid: int) -> dict | None:
     return None
 
 
-def hide_window(pid: int, log: Path) -> dict | None:
-    """Moves the game window to the hidden special workspace pfbench (functional runs only)."""
+def wait_for_window(pid: int) -> dict | None:
+    """The compositor's view of the game window once it has finished loading (None without hyprctl)."""
     info = None
     for _ in range(120):
         info = window(pid)
@@ -447,13 +447,25 @@ def hide_window(pid: int, log: Path) -> dict | None:
         if title.startswith("Minecraft") and "Loading" not in title and (info.get("size") or [0])[0] > 0:
             break
         time.sleep(1)
+    return info
+
+
+def hide_window(pid: int, log: Path, monitor: str | None = None) -> dict | None:
+    """Moves the game window to the hidden special workspace pfbench and, with `monitor`, pins that workspace to the
+    monitor. A special workspace belongs to whichever monitor had focus, and a fullscreen window takes that monitor's
+    size: seen 2026-11-09, launches made while the owner worked on the laptop panel ran at 2560x1600 instead of
+    2560x1440, so they could not be paired with the others."""
+    info = wait_for_window(pid)
     if not info:
         return None
     # Hyprland 0.56 dispatchers are Lua (benchmarks/HANDOFF.md, machine quirks).
-    cmd = f'hl.dsp.window.move({{ workspace = "special:pfbench", window = "pid:{pid}", follow = false }})'
+    cmds = [f'hl.dsp.window.move({{ workspace = "special:pfbench", window = "pid:{pid}", follow = false }})']
+    if monitor:
+        cmds.append(f'hl.dsp.workspace.move({{ workspace = "special:pfbench", monitor = "{monitor}" }})')
     with open(log, "a") as fh:
-        subprocess.run(["hyprctl", "dispatch", cmd], stdout=fh, stderr=subprocess.STDOUT)
-    time.sleep(1)
+        for cmd in cmds:
+            subprocess.run(["hyprctl", "dispatch", cmd], stdout=fh, stderr=subprocess.STDOUT)
+            time.sleep(1)
     return window(pid)
 
 
@@ -657,6 +669,7 @@ def launch_problem(entries: list[tuple[str, str]], variant: str, modset: str, lo
 
 
 def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str, functional: bool, hide: bool,
+               monitor: str | None = None,
                pf_jar_path: str | None = None, run_id: str | None = None, sodium_defaults: bool = False,
                campaign: dict | None = None, mangohud: bool = False, loader: str = "neoforge") -> tuple[int, Path]:
     if not functional and os.environ.get("PFBENCH_PERFORMANCE_APPROVED") != "1":
@@ -748,7 +761,7 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
               **install, "mods_dir": jars, "inputs_sha256": inputs,
               "render_environment": render_environment(game, modset),
               "jvm_args_requested": scenario.get("jvm", {}).get("args", ""),
-              "provenance": prov, "campaign": campaign, "hidden_window": hide,
+              "provenance": prov, "campaign": campaign, "hidden_window": hide, "hidden_window_monitor": monitor if hide else None,
               "mangohud": {"config": MANGOHUD_CONFIG, "dir": "mangohud",
                            "version": collect_env.run(["mangohud", "--version"])} if mangohud else None}
     gradle_args = [f"-Ppfbench.gameDir={game}", f"-Ppfbench.plan={plan_file}",
@@ -768,7 +781,8 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
         die(f"the game didn't start; see {out}/gradle.log")
     sampler = start_sampler(pid, out)
     launch["game_process"], java_exe = game_process(pid)
-    launch["window"] = hide_window(pid, out / "window.log") if hide else window(pid)
+    # Recorded once the window has loaded (before 2026-11-09 a visible run read it before the window existed: null).
+    launch["window"] = hide_window(pid, out / "window.log", monitor) if hide else wait_for_window(pid)
     finished = wait_for_exit(proc, total_s + 600)
     launch["finished_utc"] = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     launch["exited_by_itself"] = finished
@@ -785,7 +799,7 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
 
 def cmd_run(args: argparse.Namespace) -> int:
     code, _ = run_launch(scenario_path=Path(args.scenario), sequence=args.sequence, variant=args.variant,
-                         modset=args.modset, functional=args.functional, hide=args.hide, pf_jar_path=args.pf_jar,
+                         modset=args.modset, functional=args.functional, hide=args.hide, monitor=args.monitor, pf_jar_path=args.pf_jar,
                          run_id=args.run_id, sodium_defaults=args.sodium_defaults, mangohud=args.mangohud,
                          loader=args.loader)
     return code
@@ -979,7 +993,7 @@ def cmd_campaign(args: argparse.Namespace) -> int:
                 time.sleep(cooldown)
             run_id = f"{name}-b{b:02d}-l{li}-{sequence.replace(':', '_').replace(',', '-')}"
             code, out = run_launch(scenario_path=Path(args.scenario), sequence=sequence, variant=args.variant,
-                                   modset=args.modset, functional=args.functional, hide=args.hide, run_id=run_id,
+                                   modset=args.modset, functional=args.functional, hide=args.hide, monitor=args.monitor, run_id=run_id,
                                    campaign={"name": name, "block": b, "launch_in_block": li, "seed": args.seed},
                                    mangohud=args.mangohud, loader=args.loader)
             failures += code != 0
@@ -1202,7 +1216,10 @@ def check_system_data(run: Path, launch: dict, harness: dict, phases: list[dict]
             last = system_data.window_mono(harness, int(measures[-1]["start_t_ns"]), int(measures[-1]["end_t_ns"]))[1]
             interval = int(float(sampler["meta"].get("interval_s", 1.0)) * 1e9)
             mono = [r["mono_ns"] for r in sampler["system"]]
-            covered = min(mono) - interval <= first and max(mono) >= last
+            # One interval of slack at the end: the game quits right after its last phase, so the sampler's final
+            # row can land just before the end (seen: 20 ms). Ingest counts whole intervals only, so the last window
+            # loses at most one sample; a sampler that stopped early still fails.
+            covered = min(mono) - interval <= first and max(mono) >= last - interval
             record("sampler covers every measured phase", covered,
                    f"{sum(1 for m in mono if first <= m <= last)} samples inside the measured span")
             if sampler["meta"].get("gpu_query"):
@@ -1246,6 +1263,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--modset", default="vanilla", choices=list(MODSETS), help="rendering mods in every configuration")
     r.add_argument("--functional", action="store_true", help="short phases, 60 FPS cap, windowed: bring-up checks only")
     r.add_argument("--hide", action="store_true", help="move the game window to the hidden special workspace")
+    r.add_argument("--monitor", help="with --hide: pin the hidden workspace to this monitor (e.g. DP-1), so the "
+                                     "window size doesn't depend on which monitor had focus")
     r.add_argument("--mangohud", action="store_true", help="run under MangoHud and keep its per-frame log (raw data)")
     r.add_argument("--pf-jar", help="Particle Filter jar (default: the loader's jar of the repo's current version, see LOADERS)")
     r.add_argument("--run-id")
@@ -1263,6 +1282,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--name")
     c.add_argument("--functional", action="store_true")
     c.add_argument("--hide", action="store_true")
+    c.add_argument("--monitor", help="with --hide: pin the hidden workspace to this monitor (e.g. DP-1)")
     c.add_argument("--mangohud", action="store_true", help="every launch under MangoHud (all or none: the HUD renders)")
     c.add_argument("--dry-run", action="store_true",
                    help="print the launch order, pairability, balance and phase time; launch nothing")

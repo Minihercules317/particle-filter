@@ -5,7 +5,8 @@ Read-only and low-overhead: reads /proc and /sys once per interval and leaves GP
 `nvidia-smi -lms` process. Writes three CSVs into --out-dir:
 
   threads.csv  t_s, mono_ns, tid, name, cpu_pct, last_cpu  (threads above --min-thread-pct, plus named ones)
-  system.csv   t_s, mono_ns, cpu_busy_pct, pcore_mhz_mean, ecore_mhz_mean, pkg_temp_c, game_rss_mb
+  system.csv   t_s, mono_ns, cpu_busy_pct, pcore_mhz_mean, ecore_mhz_mean, pkg_temp_c, game_rss_mb,
+               core_throttle_count, package_throttle_count (cumulative kernel thermal-throttle counters; schema 2)
   gpu.csv      nvidia-smi output (timestamp, utilization, clocks, power, temperature, P-state, throttle reasons)
   meta.json    interval, P-/E-core lists, the GPU query, and (wall clock, CLOCK_MONOTONIC) pairs at start and end
 
@@ -40,7 +41,7 @@ CLK_TCK = os.sysconf("SC_CLK_TCK")
 # Always written when present, even when idle, so their absence is visible in the data.
 WATCHED_THREADS = ("Render thread", "Server thread", "Worker-Main", "Particle", "C2ME", "GC Thread", "G1 ")
 GPU_QUERY = ("timestamp,utilization.gpu,utilization.memory,clocks.gr,clocks.mem,power.draw,temperature.gpu,pstate,"
-             "clocks_event_reasons.active")
+             "clocks_event_reasons.active,enforced.power.limit")
 
 
 def clock_pair() -> dict:
@@ -115,6 +116,22 @@ def mean_mhz(cpus: list[int]) -> float | None:
     return round(sum(vals) / len(vals), 1) if vals else None
 
 
+def throttle_counts() -> tuple[int | None, int | None]:
+    """Cumulative thermal-throttle events: core counts summed over CPUs, and the package count (read from cpu0)."""
+    core = 0
+    paths = glob.glob("/sys/devices/system/cpu/cpu[0-9]*/thermal_throttle/core_throttle_count")
+    for path in paths:
+        try:
+            core += int(Path(path).read_text())
+        except (OSError, ValueError):
+            pass
+    try:
+        pkg = int(Path("/sys/devices/system/cpu/cpu0/thermal_throttle/package_throttle_count").read_text())
+    except (OSError, ValueError):
+        pkg = None
+    return (core if paths else None), pkg
+
+
 def package_temp_path() -> str | None:
     for hw in glob.glob("/sys/class/hwmon/hwmon*"):
         try:
@@ -168,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     pcores = read_cpu_list("/sys/devices/cpu_core/cpus")
     ecores = read_cpu_list("/sys/devices/cpu_atom/cpus")
     temp_path = package_temp_path()
-    meta = {"schema": 1, "pid": pid, "interval_s": args.interval, "min_thread_pct": args.min_thread_pct,
+    meta = {"schema": 2, "pid": pid, "interval_s": args.interval, "min_thread_pct": args.min_thread_pct,
             "performance_cpus": pcores, "efficiency_cpus": ecores, "clk_tck": CLK_TCK,
             "gpu_query": GPU_QUERY if gpu_proc else None, "package_temp_source": temp_path,
             "self_cpu": args.self_cpu, "clock_start": clock_pair(), "clock_end": None, "samples": 0}
@@ -181,7 +198,8 @@ def main(argv: list[str] | None = None) -> int:
     with open(args.out_dir / "threads.csv", "w", newline="") as tf, open(args.out_dir / "system.csv", "w", newline="") as sf:
         tw, sw = csv.writer(tf), csv.writer(sf)
         tw.writerow(["t_s", "mono_ns", "tid", "name", "cpu_pct", "last_cpu"])
-        sw.writerow(["t_s", "mono_ns", "cpu_busy_pct", "pcore_mhz_mean", "ecore_mhz_mean", "pkg_temp_c", "game_rss_mb"])
+        sw.writerow(["t_s", "mono_ns", "cpu_busy_pct", "pcore_mhz_mean", "ecore_mhz_mean", "pkg_temp_c", "game_rss_mb",
+                     "core_throttle_count", "package_throttle_count"])
         try:
             next_t = start + args.interval
             while True:
@@ -210,7 +228,9 @@ def main(argv: list[str] | None = None) -> int:
                         temp = int(Path(temp_path).read_text()) / 1000
                     except OSError:
                         pass
-                sw.writerow([t, mono, round(busy_pct, 1), mean_mhz(pcores), mean_mhz(ecores), temp, rss_mb(pid)])
+                core_thr, pkg_thr = throttle_counts()
+                sw.writerow([t, mono, round(busy_pct, 1), mean_mhz(pcores), mean_mhz(ecores), temp, rss_mb(pid),
+                             core_thr, pkg_thr])
                 meta["samples"] += 1
                 tf.flush()
                 sf.flush()

@@ -35,7 +35,8 @@ def nvidia_time(mono_ns: int) -> str:
 
 
 def write_sampler(directory: Path, seconds: int, render_pct, gpu_util, gpu_clock, *, gpu: bool = True,
-                  pcpus=(0, 1, 2, 3), render_cpu=lambda k: 1) -> None:
+                  pcpus=(0, 1, 2, 3), render_cpu=lambda k: 1, driver_threads: bool = False,
+                  throttle=None) -> None:
     """One sample per second for `seconds` s. render_pct/gpu_util/gpu_clock: value or function of the second k."""
     val = lambda v, k: v(k) if callable(v) else v  # noqa: E731
     directory.mkdir(parents=True)
@@ -46,11 +47,15 @@ def write_sampler(directory: Path, seconds: int, render_pct, gpu_util, gpu_clock
     (directory / "meta.json").write_text(json.dumps(meta))
     with open(directory / "system.csv", "w", newline="") as s, open(directory / "threads.csv", "w", newline="") as t:
         sw, tw = csv.writer(s), csv.writer(t)
-        sw.writerow(["t_s", "mono_ns", "cpu_busy_pct", "pcore_mhz_mean", "ecore_mhz_mean", "pkg_temp_c", "game_rss_mb"])
+        sw.writerow(["t_s", "mono_ns", "cpu_busy_pct", "pcore_mhz_mean", "ecore_mhz_mean", "pkg_temp_c", "game_rss_mb"]
+                    + (["core_throttle_count", "package_throttle_count"] if throttle else []))
         tw.writerow(["t_s", "mono_ns", "tid", "name", "cpu_pct", "last_cpu"])
         for k in range(1, seconds + 1):
             mono = SAMPLER_MONO_NS + k * 1_000_000_000
-            sw.writerow([k, mono, 20.0, 4000.0, 3000.0, 60 + k % 3, 4096])
+            sw.writerow([k, mono, 20.0, 4000.0, 3000.0, 60 + k % 3, 4096] + (list(throttle(k)) if throttle else []))
+            if driver_threads:   # NVIDIA driver workers inherit the name; they are created after the game's thread
+                tw.writerow([k, mono, 107, "Render thread", 30.0, 12])
+                tw.writerow([k, mono, 108, "Render thread", 0.0, 13])
             tw.writerow([k, mono, 101, "Render thread", val(render_pct, k), render_cpu(k)])
             tw.writerow([k, mono, 102, "Server thread", 10.0, 9])
     if gpu:
@@ -81,6 +86,33 @@ class AlignmentTests(TempDir):
         self.assertEqual(s["server_thread"]["on_performance_core_fraction"], 0.0)
         self.assertEqual(s["gpu"]["utilization_pct_mean"], 98)
         self.assertEqual(s["gpu"]["throttle_reasons_active"], [])
+
+    def test_render_thread_is_the_lowest_tid_of_that_name(self):
+        # Seen on the owner's machine (2026-11-09): three "Render thread" TIDs. Averaging them read ~38% for a thread
+        # that was ~80% busy, which would hide CPU-bound windows.
+        write_sampler(self.dir / "system", 40, 99.0, 60, 1800, driver_threads=True)
+        sampler = system_data.load_sampler(self.dir / "system")
+        start, end = system_data.window_mono({"clock": HARNESS_CLOCK}, 10_000_000_000, 20_000_000_000)
+        s = system_data.window_system(sampler, start, end)
+        self.assertEqual(s["render_thread"]["tid"], 101)
+        self.assertEqual(s["render_thread"]["cpu_pct_mean"], 99.0)
+        self.assertEqual(s["render_thread"]["same_name_threads"], 3)
+        self.assertEqual(s["render_thread"]["same_name_others_cpu_pct_sum_mean"], 30.0)
+        self.assertEqual(system_data.bound_label(s, True)[0], "cpu-bound")
+
+    def test_throttle_events_counted_inside_the_window(self):
+        write_sampler(self.dir / "system", 40, 50.0, 60, 1800, throttle=lambda k: (k * 2, 100 + (k >= 18)))
+        sampler = system_data.load_sampler(self.dir / "system")
+        start, end = system_data.window_mono({"clock": HARNESS_CLOCK}, 10_000_000_000, 20_000_000_000)
+        s = system_data.window_system(sampler, start, end)
+        self.assertEqual(s["core_throttle_events"], 20)     # rows at 15 (2*15) and 25 (2*25)
+        self.assertEqual(s["package_throttle_events"], 1)
+
+    def test_old_sampler_has_no_throttle_counts(self):
+        write_sampler(self.dir / "system", 40, 50.0, 60, 1800)
+        sampler = system_data.load_sampler(self.dir / "system")
+        start, end = system_data.window_mono({"clock": HARNESS_CLOCK}, 10_000_000_000, 20_000_000_000)
+        self.assertIsNone(system_data.window_system(sampler, start, end)["core_throttle_events"])
 
     def test_no_clock_no_window(self):
         self.assertIsNone(system_data.window_mono({}, 0, 1))

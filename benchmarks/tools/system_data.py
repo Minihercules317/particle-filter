@@ -42,7 +42,8 @@ MIN_SAMPLES = 3                 # fewer sampler intervals inside a window: unlab
 RENDER_THREAD = "Render thread"
 SERVER_THREAD = "Server thread"
 GPU_COLUMNS = ("timestamp", "utilization_gpu", "utilization_memory", "clock_gr_mhz", "clock_mem_mhz", "power_w",
-               "temp_c", "pstate", "throttle_reasons")   # sample_system.GPU_QUERY order
+               "temp_c", "pstate", "throttle_reasons", "power_limit_w")   # sample_system.GPU_QUERY order
+GPU_COLUMNS_REQUIRED = 9   # sampler schema 1 had no power_limit_w column
 NVIDIA_TIME = "%Y/%m/%d %H:%M:%S.%f"
 GC_PAUSE = re.compile(r"^\[[^\]]*\]\[(?P<uptime>\d+(?:\.\d+)?)s\]\[\w+\s*\]\[gc\s*\] GC\((?P<id>\d+)\) "
                       r"(?P<kind>Pause .*?)\s(?:\d+[KMG]->\d+[KMG]\(\d+[KMG]\)\s)?(?P<ms>\d+(?:\.\d+)?)ms$")
@@ -110,7 +111,7 @@ def load_gpu(path: Path, meta: dict) -> list[dict]:
         reader = csv.reader(fh)
         next(reader, None)   # header (names vary between driver versions; columns follow GPU_QUERY's order)
         for raw in reader:
-            if len(raw) < len(GPU_COLUMNS):
+            if len(raw) < GPU_COLUMNS_REQUIRED:
                 continue
             row = dict(zip(GPU_COLUMNS, (c.strip() for c in raw)))
             mono = convert(row["timestamp"])
@@ -119,7 +120,7 @@ def load_gpu(path: Path, meta: dict) -> list[dict]:
             rows.append({"mono_ns": mono, "utilization_gpu": _float(row["utilization_gpu"]),
                          "clock_gr_mhz": _float(row["clock_gr_mhz"]), "power_w": _float(row["power_w"]),
                          "temp_c": _float(row["temp_c"]), "pstate": row["pstate"],
-                         "throttle_reasons": row["throttle_reasons"]})
+                         "throttle_reasons": row["throttle_reasons"], "power_limit_w": _float(row.get("power_limit_w"))})
     return rows
 
 
@@ -144,11 +145,19 @@ def window_system(sampler: dict, start: int, end: int) -> dict:
     pcpus = set(sampler["meta"].get("performance_cpus") or [])
 
     def thread(name: str) -> dict:
-        rows = [r for r in thr_rows if r["name"] == name]
+        # Several threads can carry one name: the NVIDIA driver's worker threads inherit "Render thread" from the
+        # thread that created them (seen 2026-11-09: three TIDs, at ~80%, ~30% and 0%). The game's own thread is the
+        # first one created, i.e. the lowest TID; the others are reported apart and never averaged in.
+        tids = sorted({int(r["tid"]) for r in thr_rows if r["name"] == name})
+        rows = [r for r in thr_rows if r["name"] == name and tids and int(r["tid"]) == tids[0]]
         pct = [float(r["cpu_pct"]) for r in rows]
         on_p = [int(r["last_cpu"]) in pcpus for r in rows] if pcpus else []
-        return {"samples": len(rows), "cpu_pct_mean": _mean(pct), "cpu_pct_max": max(pct) if pct else None,
-                "on_performance_core_fraction": sum(on_p) / len(on_p) if on_p else None}
+        others = [float(r["cpu_pct"]) for r in thr_rows if r["name"] == name and int(r["tid"]) != tids[0]]
+        return {"samples": len(rows), "tid": tids[0] if tids else None, "cpu_pct_mean": _mean(pct),
+                "cpu_pct_max": max(pct) if pct else None,
+                "on_performance_core_fraction": sum(on_p) / len(on_p) if on_p else None,
+                "same_name_threads": len(tids),
+                "same_name_others_cpu_pct_sum_mean": (sum(others) / len(pct)) if others and pct else None}
 
     col = lambda rows, k: [v for v in (_float(r.get(k)) for r in rows) if v is not None]  # noqa: E731
     clocks = col(gpu_rows, "clock_gr_mhz")
@@ -165,15 +174,30 @@ def window_system(sampler: dict, start: int, end: int) -> dict:
         "pcore_mhz_mean": _mean(col(sys_rows, "pcore_mhz_mean")),
         "ecore_mhz_mean": _mean(col(sys_rows, "ecore_mhz_mean")),
         "pkg_temp_c_max": max(temps) if temps else None,
+        "pkg_temp_c_mean": _mean(temps),
+        # Thermal-throttle events (kernel counters, summed over CPUs) during the window: sampler schema 2+.
+        "core_throttle_events": _delta(sampler["system"], "core_throttle_count", start, end, interval_ns),
+        "package_throttle_events": _delta(sampler["system"], "package_throttle_count", start, end, interval_ns),
         "gpu": {"samples": len(gpu_rows), "utilization_pct_mean": _mean(util),
                 "clock_gr_mhz_min": min(clocks) if clocks else None,
                 "clock_gr_mhz_max": max(clocks) if clocks else None,
                 "clock_gr_mhz_median": statistics.median(clocks) if clocks else None,
                 "power_w_mean": _mean(col(gpu_rows, "power_w")),
+                "power_limit_w": sorted({v for v in col(gpu_rows, "power_limit_w")}) or None,
                 "temp_c_max": max(col(gpu_rows, "temp_c"), default=None),
                 "pstates": sorted({r["pstate"] for r in gpu_rows if r["pstate"]}),
                 "throttle_reasons_active": reasons},
     }
+
+
+def _delta(rows: list[dict], key: str, start: int, end: int, interval_ns: int) -> int | None:
+    """Increase of a cumulative counter column from the last row at or before `start` to the last row at or before
+    `end`. None when the column is absent (older sampler) or there is no row on both sides."""
+    before = [r for r in rows if r["mono_ns"] <= start and r.get(key) not in (None, "")]
+    upto = [r for r in rows if r["mono_ns"] <= end and r.get(key) not in (None, "")]
+    if not before or not upto:
+        return None
+    return int(upto[-1][key]) - int(before[-1][key])
 
 
 def _hex_nonzero(text: str) -> bool:

@@ -275,6 +275,20 @@ class CompareTests(TempDirTest):
         report = compare.compare(compare.load_runs(self.dir), "B", ["mean_frametime_ms"], 1.0, 2.0)
         self.assertEqual(report["strata"]["all"]["datasets"]["primary:unlabelled"]["results"]["C"]["metrics"]["mean_frametime_ms"]["verdict"], "inconclusive")
 
+    def test_t_quantiles_match_tables(self):
+        for df, q in ((1, 12.7062), (7, 2.3646), (11, 2.2010), (30, 2.0423), (200, 1.9719)):
+            self.assertAlmostEqual(compare.t_quantile(0.975, df), q, places=3)
+        self.assertAlmostEqual(compare.t_cdf(0.0, 5), 0.5, places=12)
+
+    def test_t_interval_is_wider_than_bootstrap_at_small_n(self):
+        values = [0.8, 1.4, -0.2, 0.9, 1.1, 0.3, 1.7, 0.6]
+        lo, hi = compare.t_mean_ci(values)
+        blo, bhi = compare.bootstrap_mean_ci(values)
+        m = sum(values) / len(values)
+        self.assertAlmostEqual((lo + hi) / 2, m, places=12)
+        self.assertGreater(hi - lo, bhi - blo)
+        self.assertTrue(math.isnan(compare.t_mean_ci([1.0])[0]))
+
     def test_bootstrap_ci_contains_mean_and_is_deterministic(self):
         values = [1.0, 2.0, 3.0, 4.0, 5.0]
         lo, hi = compare.bootstrap_mean_ci(values)

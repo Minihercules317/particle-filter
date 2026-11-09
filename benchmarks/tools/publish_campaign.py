@@ -241,7 +241,8 @@ def build_report(campaign: Path, args: dict) -> str:
          f"Full method: `benchmarks/PLAN.md` at the commit below; harness design `benchmarks/HARNESS.md`. "
          f"Reference configuration **{args['reference']}**, primary metric `{args['metrics'][0]}`, pre-registered "
          f"equivalence margin ±{args['margin_pct']:g}%, workload tolerance {args['workload_tolerance_pct']:g}% per tick, "
-         f"95% percentile bootstrap ({compare.BOOTSTRAP_RESAMPLES} resamples, seed {compare.BOOTSTRAP_SEED}).", "",
+         f"verdicts from 95% Student-t intervals of the mean paired difference, with 95% percentile-bootstrap intervals "
+         f"({compare.BOOTSTRAP_RESAMPLES} resamples, seed {compare.BOOTSTRAP_SEED}) shown alongside.", "",
          "| Item | Recorded value(s) |", "|---|---|",
          f"| Configurations | " + "; ".join(f"**{c}**: {CONFIG_MEANING.get(c, '?')}" for c in
                                             sorted({e['config'] for x in data for e in x['launch'].get('entries') or []}))

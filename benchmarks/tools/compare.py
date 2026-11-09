@@ -8,9 +8,12 @@ Standard library only. Expects the layout described in benchmarks/README.md:
 
 Runs are paired by their `block` (one block = every configuration measured once, in counterbalanced order).
 For each configuration against the reference configuration, the per-block difference of each metric is
-computed; the report gives the mean difference, its percentage, and a 95% percentile-bootstrap interval.
-A difference is only called a speed-up or slow-down when the whole interval lies outside the equivalence
-margin; otherwise the result is "equivalent" (interval inside the margin) or "inconclusive".
+computed; the report gives the mean difference, its percentage, a 95% Student-t interval of the mean paired
+difference (the basis of every verdict) and, for comparison, a 95% percentile-bootstrap interval. A difference is
+only called a speed-up or slow-down when the whole t-interval lies outside the equivalence margin; otherwise the
+result is "equivalent" (interval inside the margin) or "inconclusive". (Changed 2026-11-09, before any official
+campaign: with the planned 8-12 blocks a percentile bootstrap is too narrow, by roughly 10-15%, and would call
+differences too readily.)
 
 Runs whose summary is not usable, whose workload counters per client tick differ from their block partner by more
 than the tolerance, or whose environment (run.json "environment": scenario, harness build, rendering mods and their
@@ -39,6 +42,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import random
 import statistics
 import sys
@@ -93,6 +97,71 @@ def bootstrap_mean_ci(values: list[float], level: float = 0.95, resamples: int =
     lo_i = int((1 - level) / 2 * resamples)
     hi_i = int((1 + level) / 2 * resamples) - 1
     return means[lo_i], means[hi_i]
+
+
+def _betacf(a: float, b: float, x: float) -> float:
+    """Continued fraction of the regularized incomplete beta function (modified Lentz; Numerical Recipes 6.4)."""
+    tiny, qab, qap, qam = 1e-300, a + b, a + 1.0, a - 1.0
+    c, d = 1.0, 1.0 - qab * x / qap
+    d = 1.0 / (d if abs(d) > tiny else tiny)
+    h = d
+    for m in range(1, 300):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        d = 1.0 / (d if abs(d) > tiny else tiny)
+        c = 1.0 + aa / c
+        c = c if abs(c) > tiny else tiny
+        h *= d * c
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        d = 1.0 / (d if abs(d) > tiny else tiny)
+        c = 1.0 + aa / c
+        c = c if abs(c) > tiny else tiny
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < 1e-15:
+            break
+    return h
+
+
+def _betainc(a: float, b: float, x: float) -> float:
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    front = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log(1.0 - x))
+    if x < (a + 1.0) / (a + b + 2.0):
+        return front * _betacf(a, b, x) / a
+    return 1.0 - front * _betacf(b, a, 1.0 - x) / b
+
+
+def t_cdf(t: float, df: int) -> float:
+    """Student-t cumulative distribution (standard library only)."""
+    tail = 0.5 * _betainc(df / 2.0, 0.5, df / (df + t * t))
+    return 1.0 - tail if t >= 0 else tail
+
+
+def t_quantile(p: float, df: int) -> float:
+    """Inverse of t_cdf by bisection (accurate to ~1e-12)."""
+    lo, hi = -1e3, 1e3
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        if t_cdf(mid, df) < p:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def t_mean_ci(values: list[float], level: float = 0.95) -> tuple[float, float]:
+    """Student-t interval for the mean of paired differences: mean ± t(1-(1-level)/2, n-1) · sd/√n."""
+    n = len(values)
+    if n < 2:
+        return (float("nan"), float("nan"))
+    m = statistics.fmean(values)
+    half = t_quantile(1 - (1 - level) / 2, n - 1) * statistics.stdev(values) / math.sqrt(n)
+    return m - half, m + half
 
 
 def verdict(metric: str, ci_pct: tuple[float, float], margin_pct: float) -> str:
@@ -250,7 +319,8 @@ def _mean_or_none(values: list) -> float | None:
 
 def _stats(metric: str, diffs: list[float], refs: list[float], margin_pct: float) -> dict:
     ref_mean = statistics.fmean(refs)
-    lo, hi = bootstrap_mean_ci(diffs)
+    lo, hi = t_mean_ci(diffs)
+    blo, bhi = bootstrap_mean_ci(diffs)
     mean_d = statistics.fmean(diffs)
     pct = lambda v: v / ref_mean * 100 if ref_mean else float("nan")  # noqa: E731
     return {
@@ -258,8 +328,9 @@ def _stats(metric: str, diffs: list[float], refs: list[float], margin_pct: float
         "reference_mean": ref_mean,
         "mean_diff": mean_d,
         "mean_diff_pct": pct(mean_d),
-        "ci95_diff": [lo, hi],
+        "ci95_diff": [lo, hi],                     # Student-t: the verdict's basis
         "ci95_diff_pct": [pct(lo), pct(hi)],
+        "ci95_bootstrap_diff_pct": [pct(blo), pct(bhi)],
         "sd_diff": statistics.stdev(diffs) if len(diffs) > 1 else float("nan"),
         "verdict": "descriptive" if metric in DESCRIPTIVE else verdict(metric, (pct(lo), pct(hi)), margin_pct),
     }
@@ -354,8 +425,8 @@ def to_markdown(report: dict, runs: list[dict], campaign: Path) -> str:
         lines += [f"> These runs are labelled {', '.join(sorted(labels))}. They test the analysis pipeline and must "
                   "not be quoted as performance results.", ""]
     lines += [f"Reference configuration: **{ref}**. Equivalence margin ±{report['margin_pct']:g}%. "
-              f"Intervals are 95% percentile-bootstrap intervals of the mean paired difference "
-              f"({BOOTSTRAP_RESAMPLES} resamples, seed {BOOTSTRAP_SEED}). Runs are only compared within a stratum, and "
+              f"Verdicts use 95% Student-t intervals of the mean paired difference; 95% percentile-bootstrap intervals "
+              f"({BOOTSTRAP_RESAMPLES} resamples, seed {BOOTSTRAP_SEED}) are shown next to them. Runs are only compared within a stratum, and "
               "inside it within a dataset: pairs where both windows held 20 client ticks per second form the **primary "
               f"FPS dataset**; pairs where either window fell below {REDUCED_TPS_BELOW:g} TPS form the **saturation / "
               "stress-test dataset**. Pairs are also kept apart by CPU-/GPU-bound label (`differs`: the two windows had "
@@ -388,12 +459,14 @@ def _stratum_markdown(stratum: str, report: dict, ref: str) -> list[str]:
                       "requests per second are shown for that reason.", ""]
         for config, res in ds["results"].items():
             lines += [f"#### {config} vs {ref}", "", f"Paired blocks: {', '.join(res['blocks']) or 'none'}", "",
-                      "| Metric | Pairs | Reference mean | Mean diff | Diff % | 95% CI (%) | Verdict |",
-                      "|---|---|---|---|---|---|---|"]
+                      "| Metric | Pairs | Reference mean | Mean diff | Diff % | 95% t CI (%) | 95% bootstrap CI (%) | Verdict |",
+                      "|---|---|---|---|---|---|---|---|"]
             for m, r in res["metrics"].items():
                 lo, hi = r["ci95_diff_pct"]
+                blo, bhi = r["ci95_bootstrap_diff_pct"]
                 lines.append(f"| {m} | {r['pairs']} | {r['reference_mean']:.4g} | {r['mean_diff']:+.4g} | "
-                             f"{r['mean_diff_pct']:+.2f} | [{lo:+.2f}, {hi:+.2f}] | {r['verdict']} |")
+                             f"{r['mean_diff_pct']:+.2f} | [{lo:+.2f}, {hi:+.2f}] | [{blo:+.2f}, {bhi:+.2f}] | "
+                             f"{r['verdict']} |")
             lines.append("")
     if report["pairs"]:
         lines += [f"### Every pair ({stratum})", "",
