@@ -12,9 +12,11 @@ Read this first. It is self-contained: it doesn't assume access to the conversat
 >   16 blocks install-level, **campaigns run unattended** (desktop use shifted FPS ~10%).
 > - Tooling fixes: render-thread identification (CPU-bound labels were impossible), `--monitor`, window state for
 >   visible runs, sampler throttle counters + GPU power limit, racy coverage check, monitor-size check.
-> - **Next:** (1) the owner reviews and authorizes publishing; (2) push the scrubbed branch (see "Publication" below)
->   with the pre-registrations in `results/pr-*/PREREGISTRATION.txt`; (3) only then run the official campaigns,
->   unattended, exactly as pre-registered (`pfbench.py campaign` with the recorded arguments).
+> - **Published 2026-11-09** (owner-authorized): `benchmarks/foundation` pushed to GitHub at `398c8a6`, with the
+>   pre-registrations (`results/PREREGISTRATION.md`, `results/pr-*/PREREGISTRATION.txt`, commit `58b86d3`) publicly
+>   readable. **Next:** the official campaigns, run unattended in a window the owner arranges, exactly as
+>   pre-registered (`pfbench.py campaign` with the recorded arguments, one campaign at a time, from a clean checkout of
+>   this branch). Don't start them until the owner says so.
 > - Owner's scope rule (2026-11-09): keep environment checks brief, read-only and proportional; don't disable, kill or
 >   reconfigure unrelated processes (e.g. the animated wallpaper); record confounders and proceed; stop only for issues
 >   that would materially invalidate results. The gate text further down is historical.
