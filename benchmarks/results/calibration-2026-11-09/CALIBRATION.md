@@ -67,22 +67,40 @@ paired difference a within-launch comparison would see if the configurations wer
 | Hidden on DP-1 (NVIDIA-driven monitor), 2560×1440 | L1, L2 | **3.8%** | 2.6% | 0.9% | one window +8.8%, one +2.7% |
 | Hidden on eDP-2 (iGPU-driven panel), 2560×1600 | L3, L4, L5 | **0.17%** | 0.11% | 0.27% | no position effect (all positions within ±0.07%) |
 
-Interpretation (provisional, confounded with time and with what the owner was doing): when the hidden workspace is
-on DP-1, desktop activity on DP-1 (composited by the same NVIDIA GPU the game renders on) competes with a
-GPU-limited game. On eDP-2 the noise is ~20× lower. Window length (10/15/20/30 s) barely changes the SD, so 30 s
-windows are more than enough when the environment is quiet.
+Interpretation of this first group was confounded with time and with what the owner was doing; the head-to-head
+below replaced it.
 
-If the eDP-2 figures hold: a within-launch comparison (C vs B) reaches a ±0.15% half-width at the minimum 8 blocks;
-an install-level comparison (B vs A, SD of a launch pair ≈ 0.38%) reaches ±0.32% at 8 blocks, comfortably inside
-the ±1% margin. With DP-1-level noise (3.8%) even 12 blocks give only ±2.4%: Q1 could never reach "equivalent".
+### 4b. Head-to-head with the placement pinned (`--hide --monitor`, balanced order eDP-2, DP-1, DP-1, eDP-2, eDP-2, DP-1)
 
-## 5. Next steps
+| Group | Launches | FPS per launch | Null-pair SD | Between-launch SD |
+|---|---|---|---|---|
+| eDP-2, 2560×1600 | M1, M4, M5 | 1,484 / 1,361 / 1,363 | 1.38% | 4.9% (M1) |
+| DP-1, 2560×1440 | M2, M3, M6 | 1,452 / 1,473 / 1,462 | 0.67% | 0.72% |
 
-1. Confirm the monitor choice head-to-head: interleave hidden launches pinned to eDP-2 and to DP-1
-   (`--hide --monitor eDP-2` / `DP-1`), ≥3 each, B at 200/tick (`S1-variance.toml`). Check that the GL renderer is
-   still NVIDIA on eDP-2 (`harness.json` `gl` was empty in these launches; check where the renderer is recorded).
-2. Then fix the measurement mode in the scenario (window placement + resolution), bump the scenario version, set the
-   load levels from section 2 (e.g. moderate 100, heavy 200, saturating 410, extreme 2,000), re-tune the GPU-bound
-   threshold (92–95% at a GPU-limited plateau currently reads "mixed"), and finish the remaining phase-2b check
-   (harness frame log vs MangoHud: the visible sweeps have MangoHud logs).
-3. Pre-register, publish (see HANDOFF.md for the history scrub needed first), then run official campaigns.
+- **The monitor is not what matters; episodic background GPU contention is.** M1's first two windows ran at 1,640 FPS
+  with the GPU at 99.9%; from window 3 on it settled at ~1,405 FPS and ~92%, the level every other launch showed.
+  Something else on the NVIDIA GPU usually takes a slice (desktop compositing, the animated wallpaper, other GPU
+  clients) and was briefly absent. `nvidia-smi pmon` gives no per-process share on this driver, so the culprit isn't
+  identified, and per the owner's instruction nothing was changed.
+- **Quiet launches agree closely on either monitor:** on eDP-2, L3, L4, L5, M4 and M5 span 1,361-1,369 FPS (≈ 0.25%);
+  on DP-1 the spread was 0.72%. Position effects in quiet launches stay within ±0.4%: the warmup is adequate.
+- **Decisions (scenario version 2):** hidden window pinned to **eDP-2** (lowest spread among quiet launches, and the
+  monitor the owner isn't working on); **official campaigns run unattended**; GPU-bound threshold 90%;
+  **12 blocks** within-launch, **16 blocks** install-level (sized for σ ≈ 0.7%, half-widths ≈ ±0.45-0.5%, inside
+  the ±1% margin). If a campaign's variance turns out larger, its intervals widen honestly: the t-interval and the
+  counterbalanced order keep it unbiased, and an inconclusive verdict is reported as such.
+
+### 4c. Harness frame log vs MangoHud (phase 2b)
+
+Both visible sweeps ran under MangoHud 0.8.4 (`mangohud/`), an independent per-frame log of the same launches. Aligned
+at the end (MangoHud logs 528 and 1,496 extra start-up frames), the mean frame time per measured window agrees within
+**+0.08% to +0.32% in 20 of 22 windows** (MangoHud slightly higher: the tools time frames at different points); the
+two exceptions are the launches' edge windows (−0.76%, −1.26%), where the frame-count alignment is least certain.
+Per-frame values differ by ~0.35 ms on ~1 ms frames (different measurement points, same means). PLAN.md's criterion
+(means within 1%) passes; a constant bias of ~0.2% cancels in paired differences.
+
+## 5. Status after this session
+
+Done: display mode, load levels, phase lengths, block counts, bound threshold and verdict statistics are frozen in
+scenario version 2 and PLAN.md; every campaign design passes `campaign --dry-run`. The harness-vs-MangoHud check passed (4c).
+Not done: B0 and the Q6 configurations are not launchable (not needed for the pre-registered campaigns).

@@ -2,19 +2,27 @@
 
 Read this first. It is self-contained: it doesn't assume access to the conversation that produced it.
 
-> **Update 2026-11-09, sixth session (read first).** The owner confirmed the CPU/GPU power-limit fix and lifted the
-> measurement gate, subject to hardware validation. Validation, a first calibration sweep and a first variance study
-> ran (all EXPLORATORY): **[results/calibration-2026-11-09/CALIBRATION.md](results/calibration-2026-11-09/CALIBRATION.md)**.
-> Summary: hardware passes for this workload (CPU 145 W sustained; GPU capped at 70 W but the game draws ≤ 58 W).
-> Fixed: a render-thread bug that made CPU-bound labels impossible, hidden-window geometry following the owner's
-> focus (`--hide --monitor`), a racy sampler check; added throttle counts and GPU power limit to the sampler; verdicts
-> now use a Student-t interval. **Open, in this order:** (1) head-to-head of the hidden workspace on eDP-2 vs DP-1
-> (eDP-2 was ~20× less noisy: null-pair SD 0.17% vs 3.8%), (2) freeze the measurement mode and levels in a new
-> scenario version, (3) pre-register, (4) scrub private server addresses from branch history before any push
-> (they're in commit `fc2906f`; removed from the working tree), (5) official campaigns. Owner's scope rule (2026-11-09):
-> keep environment checks brief, read-only and proportional; don't disable, kill or reconfigure unrelated
-> processes (e.g. the animated wallpaper); record confounders and proceed; stop only for issues that would
-> materially invalidate results. The gate text below is historical.
+> **Update 2026-11-09, sixth/seventh session (read first).** The owner confirmed the CPU/GPU power-limit fix and
+> lifted the measurement gate, subject to hardware validation. Validation, calibration, the variance study and the
+> harness-vs-MangoHud check are done (all EXPLORATORY, configurations A and B only):
+> **[results/calibration-2026-11-09/CALIBRATION.md](results/calibration-2026-11-09/CALIBRATION.md)**.
+> - Hardware passes for this workload (CPU 145 W sustained; GPU capped at 70 W with Dynamic Boost off, game ≤ 58 W).
+> - Methodology frozen in **scenario S1 version 2** and PLAN.md: hidden window pinned to eDP-2 (`[display]`, enforced
+>   for performance runs), moderate level 100, GPU-bound threshold 90%, Student-t verdicts, 12 blocks within-launch /
+>   16 blocks install-level, **campaigns run unattended** (desktop use shifted FPS ~10%).
+> - Tooling fixes: render-thread identification (CPU-bound labels were impossible), `--monitor`, window state for
+>   visible runs, sampler throttle counters + GPU power limit, racy coverage check, monitor-size check.
+> - **Next:** (1) the owner reviews and authorizes publishing; (2) push the scrubbed branch (see "Publication" below)
+>   with the pre-registrations in `results/pr-*/PREREGISTRATION.txt`; (3) only then run the official campaigns,
+>   unattended, exactly as pre-registered (`pfbench.py campaign` with the recorded arguments).
+> - Owner's scope rule (2026-11-09): keep environment checks brief, read-only and proportional; don't disable, kill or
+>   reconfigure unrelated processes (e.g. the animated wallpaper); record confounders and proceed; stop only for issues
+>   that would materially invalidate results. The gate text further down is historical.
+>
+> **Publication:** private server addresses were in commit `fc2906f` (PLAN.md, scenarios/R1-atm10-sky.md). The branch
+> history was rewritten locally to remove them; the unscrubbed history is kept on the local-only branch
+> `benchmarks/foundation-prescrub` (never push it; exploratory launches' provenance points at its commits). Pilot logs
+> still contain the local home path `/home/mini` (low risk, left as raw data).
 
 Earlier update: 2026-11-09 (fifth session that day: reproducibility and reporting readiness, the last preparation
 phase before the hardware power-limit validation. Earlier sessions: launcher system data, reduced-TPS split, Forge

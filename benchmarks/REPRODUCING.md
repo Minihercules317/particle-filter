@@ -111,15 +111,18 @@ performance campaign that would produce unpairable data is refused. The dry runs
 
 | Question | Command (add `--seed N`; `--dry-run` first) | Reference |
 |---|---|---|
-| Q1 overhead, installed but inactive | `campaign --configs A,B --levels idle,moderate,heavy --blocks 12` | A |
+| Q1 overhead, installed but inactive | `campaign --configs A,B --levels idle,moderate,heavy --blocks 16` | A |
 | Q2-Q5 filtering, global vs zones | `campaign --configs C,B,D --levels heavy --blocks 12` (one campaign per level) | B |
-| Q8 rules that never match | `campaign --configs B,C-miss --levels extreme --blocks 8` | B |
-| Spawn paths | `--variant untyped` (C,B,D) and `--variant block_dust` (C,B) | B |
-| Q7 vs Sodium Extra | `campaign --modset sodium --configs C,E --levels heavy --blocks 8` | C |
+| Q8 rules that never match | `campaign --configs B,C-miss --levels extreme --blocks 16` | B |
+| Spawn paths | `--variant untyped` (C,B,D, 12 blocks) and `--variant block_dust` (C,B, 12 blocks) | B |
+| Q7 vs Sodium Extra | `campaign --modset sodium --configs C,E --levels heavy --blocks 16` | C |
 | Forge 1.20.1 replication | the Q1 and Q2-Q5 commands with `--loader forge` | as above |
 
-Block counts: at least 8 (PLAN.md §5) and a multiple of the Williams row count for exact balance (2 rows for two
-items, 6 for three), which the dry run checks. The final counts come from the variance study (phase 4).
+Block counts come from the variance study (PLAN.md §5, set 2026-11-09): 16 for comparisons that need separate
+launches (B vs A, C-miss vs B, E vs C), 12 for within-launch ones; each a multiple of the Williams row count (2 rows
+for two items, 6 for three), which the dry run checks. Performance runs follow the scenario's `[display]`: the
+window is hidden on a special workspace pinned to the named monitor (eDP-2 on the owner's machine; name your own).
+Run campaigns unattended: desktop use shifted frame rates ~10% in the variance study.
 
 Performance campaigns are interlocked: without `--functional` the launcher refuses unless
 `PFBENCH_PERFORMANCE_APPROVED=1` is set. On the owner's machine that waits for the power-limit fix. On another

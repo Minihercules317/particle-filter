@@ -1,13 +1,12 @@
 # Particle Filter benchmark plan
 
-Status (2026-11-09): **design + infrastructure + pipeline pilot**, committed on branch `benchmarks/foundation`.
-No Particle Filter performance has been measured. Every number below is a design parameter or a figure from
-the pipeline pilot, not a result.
+Status (2026-11-09): **design + infrastructure + exploratory calibration and variance study**, on branch
+`benchmarks/foundation`. No Particle Filter comparison has been measured. Every number below is a design parameter
+or an exploratory calibration figure, not a result.
 
-> **Gate: no performance runs yet.** The laptop has unresolved CPU/GPU power-limit problems. Until the
-> owner explicitly confirms they are fixed, run **no** benchmarks, calibration sweeps, variance studies
-> or other performance measurements. Only limited *functional* validation of the tools is allowed, and it
-> must be labelled as such (e.g. "functional check, not a performance result"). The owner's other
+> **Gate (updated 2026-11-09):** the owner confirmed the power-limit fix; hardware validation, calibration and the
+> variance study ran ([results/calibration-2026-11-09/CALIBRATION.md](results/calibration-2026-11-09/CALIBRATION.md)).
+> **Official campaigns wait until this methodology is pre-registered, published and frozen.** The owner's other
 > decisions are in [HANDOFF.md](HANDOFF.md).
 
 Read with [IMPLEMENTATION.md](IMPLEMENTATION.md) (how the mod works, what could cost time) and
@@ -166,8 +165,9 @@ limiter), > 3% FPS change between the first and last third of the window (drift)
 
 ### CPU-bound vs GPU-bound
 
-Each window is labelled from the sampler data: GPU-bound if NVIDIA utilization ≥ 95% at stable clocks;
-CPU-bound if the render thread is ≥ 95% busy and GPU utilization is lower. Otherwise it is labelled "mixed".
+Each window is labelled from the sampler data: GPU-bound if NVIDIA utilization ≥ 90% at stable clocks (95% until the
+calibration, whose GPU-limited plateau read 92-95%); CPU-bound if the render thread (the lowest TID of that name:
+NVIDIA driver threads share it) is ≥ 95% busy and GPU utilization is lower. Otherwise it is labelled "mixed".
 Implemented in `tools/system_data.py` (2026-11-09): means over the sampler intervals that lie wholly inside the
 window; "stable clocks" = graphics clock (max − min) / median ≤ 5%; "unlabelled" with fewer than 3 intervals, without
 clock alignment, or when the game doesn't render on the NVIDIA GPU. All four thresholds are provisional until
@@ -181,8 +181,8 @@ FPS changes with resolution mean GPU-bound. Results are reported per label and n
 
 | Variable | Setting | How it's enforced or recorded |
 |---|---|---|
-| Resolution / window | Fullscreen 2560×1440 on **DP-1** (wired to the NVIDIA GPU; the laptop panel eDP-2 is on the Intel iGPU, which adds a PRIME copy) | `options.txt` (`fullscreen:true`); window state recorded via `hyprctl`. The pilot caught the window opening **tiled 1261×1390 in one launch and fullscreen 2560×1440 in the next**, so it is checked every run |
-| Window visibility | Visible and focused for measured runs | Hidden special workspace was fine for the 60 FPS-capped pilot; whether hidden windows are throttled at uncapped FPS is **unverified**: Phase 2 tests it |
+| Resolution / window | **Hidden** fullscreen window on a special workspace **pinned to eDP-2** (2560×1600); scenario `[display]`, enforced by `pfbench.py` (since scenario version 2) | Window state from `hyprctl` once loaded; check: window size = the pinned monitor's size and unchanged within a launch. Calibration showed visible runs on a desktop in use are uncontrolled (window 1280×707 in one launch, a presentation-limited regime switching mid-launch in another) and that the hidden workspace otherwise follows the focused monitor |
+| Window visibility / desktop use | Hidden (above); **official campaigns run unattended** | Interactive use during the variance study shifted frame rates ~10% for minutes (other GPU clients); quiet launches agreed within ~0.3-0.7%. Background apps are left as they are (owner) and recorded |
 | Render / simulation distance | 8 / 5 (synthetic); as played (real world) | `options.txt`, recorded |
 | Graphics, AO, clouds, biome blend, entity distance | fixed per campaign | `options.txt` keys recorded by `collect_env.py` |
 | VSync / frame cap | VSync off, `maxFps` 260 (= unlimited) | recorded; the cap check catches mistakes. Menus are always capped at 60 (`Minecraft.getFramerateLimit`) |
@@ -218,13 +218,16 @@ FPS changes with resolution mean GPU-bound. Results are reported per label and n
   balanced only with an even number of configurations per launch (Williams first-order balance). JIT profiles are
   shared across configurations of a launch by design (the warmup trains them on all of them); a residual effect of
   that sharing is what the within-launch vs separate-launch comparison in phase 4 should look for.
-- **Repetitions:** chosen from the Phase 4 variance study, not guessed. With σ_d = SD of the paired
+- **Repetitions:** chosen from the Phase 4 variance study, not guessed. **Set 2026-11-09** from quiet launches (worst
+  group: within-launch null-pair SD ≈ 0.7%, between-launch SD ≈ 0.7%): **12 blocks** for within-launch comparisons
+  (C, D, C-miss vs B: half-width ≈ ±0.45%) and **16 blocks** for install-level comparisons (B vs A, E vs C: ≈ ±0.5%). With σ_d = SD of the paired
   difference in mean frame time (% of reference) and h = the wanted 95% CI half-width,
   n ≈ (t₀.₉₇₅,ₙ₋₁ · σ_d / h)², iterated over n. Minimum 8 blocks per comparison regardless. For install-level
   comparisons, n counts **launches**, not windows.
 - **Analysis (`tools/compare.py`):** per block, difference = metric(config) − metric(reference). Report the
-  mean difference, the difference in %, and a 95% percentile bootstrap CI (10,000 resamples, fixed seed),
-  plus every individual run in a table.
+  mean difference, the difference in %, a **95% Student-t interval** of the mean paired difference (the verdict's
+  basis since 2026-11-09: a percentile bootstrap is ~10-15% too narrow at 8-16 blocks) and, alongside, the 95%
+  percentile bootstrap (10,000 resamples, fixed seed), plus every individual run in a table.
 - **Verdicts, pre-registered:** margin m = **±1% of mean frame time** for Q1 ("no measurable overhead"). A
   difference is called *better/worse* only if the whole CI is beyond ±m, *equivalent* if the whole CI is
   within ±m, and *inconclusive* otherwise. Inconclusive and negative results are published like the others.
@@ -276,9 +279,9 @@ callback objects appear at all, and how much ticking and rendering time filtered
 | 0 | Code analysis, tools, pipeline pilot | done | n/a |
 | 1 | Build the pfbench harness (separate Gradle build in `benchmarks/harness/`), NeoForge 1.21.1 | code only | **done 2026-11-09** |
 | 2a | Functional bring-up (allowed now, label as functional): it builds, launches, loads the world, spawns, counters are consistent (A: created = attempts; C: target created = 0, control unchanged), files are written and parse | mostly; screenshot check by eye | **done 2026-11-09** for NeoForge 1.21.1 (`results/functional-2026-11-09`); analysis pipeline, carry-over, warmup, provenance and Sodium checks added the same day (`results/functional-2026-11-09-pipeline`) |
-| 2b | Measurement validation: harness frame log vs MangoHud (means within 1%), hidden vs visible window throttling, fullscreen on DP-1 | yes | **blocked** until power limits are fixed (these compare timings) |
-| 3 | Calibration sweep in A: attempts/tick log-spaced 5 to 5,000; find where FPS drops, where live counts saturate, and when the scene is CPU-bound or GPU-bound. Fix the load levels | yes | **blocked** until power limits are fixed |
-| 4 | Variance study: config B, 5 launches × 6 windows (no pinning); also B0 vs B. Fix window length, warmup, repetitions | yes | **blocked** until power limits are fixed |
+| 2b | Measurement validation: harness frame log vs MangoHud (means within 1%), hidden vs visible window, display mode | yes | **partly done 2026-11-09**: display mode decided (hidden, pinned to eDP-2; visible runs uncontrolled during desktop use). Harness vs MangoHud: **passed** (window means within +0.1 to +0.3%, CALIBRATION.md §4c) |
+| 3 | Calibration sweep in A: attempts/tick log-spaced 5 to 5,000; find where FPS drops, where live counts saturate, and when the scene is CPU-bound or GPU-bound. Fix the load levels | yes | **done 2026-11-09** (exploratory; levels set in scenario version 2) |
+| 4 | Variance study: config B, 5 launches × 6 windows (no pinning); also B0 vs B. Fix window length, warmup, repetitions | yes | **done 2026-11-09** (11 launches, exploratory; B0 not launchable, not run) |
 | 5 | Synthetic campaigns: S-overhead (A/B idle + loads), S-filter (B/C/**C-miss**/D × levels), S-scaling (zones, rules), untyped + block-dust variants. C-miss is a required scenario | yes | **blocked** until power limits are fixed, then the owner's go-ahead for long batches |
 | 6 | Comparator: investigating Sodium/Sodium Extra compatibility with the dev client and harness is **approved if kept isolated** (separate run directory, nothing in the play instances). Measuring A/B/C/E with Sodium in all is a performance run | yes | investigation **done 2026-11-09** (download approved by the owner; functional checks pass for A, C/B and E with Sodium); measurement **blocked** |
 | 7 | Real world (ATM10) | n/a | **on hold**: world copies and live-server runs declined; needs a new owner decision |

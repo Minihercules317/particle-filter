@@ -35,7 +35,8 @@ import statistics
 from datetime import datetime
 from pathlib import Path
 
-GPU_BOUND_UTIL_PCT = 95.0       # mean NVIDIA utilization at or above this: GPU-bound (with stable clocks)
+GPU_BOUND_UTIL_PCT = 90.0       # mean NVIDIA utilization at or above this: GPU-bound (with stable clocks). Was 95; the
+                                # calibration's GPU-limited plateau read 92-95% (other GPU clients share the meter)
 CPU_BOUND_RENDER_PCT = 95.0     # render thread at least this busy (percent of one CPU) and the GPU below the above
 CLOCK_STABLE_SPREAD = 0.05      # graphics clock (max - min) / median at or below this: clocks are stable
 MIN_SAMPLES = 3                 # fewer sampler intervals inside a window: unlabelled

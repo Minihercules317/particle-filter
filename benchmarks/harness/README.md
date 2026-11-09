@@ -157,9 +157,9 @@ rebuild anywhere is byte-identical), then `compare.py`, then the generated repor
 - **Reduced TPS** (PLAN.md §5): a window whose achieved client tick rate is below 19.6 is `tps_class: "reduced"`.
   It stays usable (`client_tick_rate_low` is informational). Phases are counted in ticks, so its requests per
   tick equal everyone else's while its requests per second are lower.
-- **Bound label** (PLAN.md §4, `tools/system_data.py`): `gpu-bound` if mean NVIDIA utilization ≥ 95% with the
-  graphics clock within 5% (max−min over median); `cpu-bound` if the render thread is ≥ 95% busy and the GPU below
-  95%; else `mixed`; `unlabelled` without aligned sampler data, with fewer than 3 sampler intervals in the window, or
+- **Bound label** (PLAN.md §4, `tools/system_data.py`): `gpu-bound` if mean NVIDIA utilization ≥ 90% with the
+  graphics clock within 5% (max−min over median); `cpu-bound` if the render thread (lowest TID named "Render thread";
+  NVIDIA driver threads inherit the name) is ≥ 95% busy and the GPU below 90%; else `mixed`; `unlabelled` without aligned sampler data, with fewer than 3 sampler intervals in the window, or
   when the game doesn't render on the NVIDIA GPU. Provisional thresholds (phase 4).
 - `compare.py` pairs windows whose workload **per tick** and environment match, then puts each pair into a dataset:
   `primary` (both windows at 20 TPS: the primary FPS dataset) or `saturation` (either below: stress-test results;

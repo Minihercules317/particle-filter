@@ -676,6 +676,13 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
         die("performance runs are blocked until the owner confirms the laptop's power-limit problems are fixed "
             "(benchmarks/HANDOFF.md). Use --functional for bring-up checks.")
     scenario, scenario_sha = load_scenario(scenario_path)
+    display = scenario.get("display") or {}
+    if display and not functional:
+        # A scenario's [display] fixes where performance runs render (scenario version 2+): a campaign can't forget it,
+        # and its hash pins it.
+        if (hide and not display.get("hide")) or (monitor and monitor != display.get("monitor")):
+            die(f"--hide/--monitor conflict with the scenario's [display] {display}; performance runs follow the scenario")
+        hide, monitor = bool(display.get("hide")), display.get("monitor")
     entries = parse_sequence(sequence, scenario["levels"])
     problem = launch_problem(entries, variant, modset, loader)
     if problem:
@@ -1041,6 +1048,15 @@ def check(run: Path) -> int:
            str(setup.get("options", {}).get("particles")))
     record("window size unchanged from first phase to quit", setup.get("window_at_start") == harness.get("window_at_end"),
            f"{setup.get('window_at_start')} -> {harness.get('window_at_end')}")
+    monitor = launch.get("hidden_window_monitor")
+    if monitor:
+        # The hidden window takes the size of the monitor its workspace is pinned to (pfbench.py --monitor / [display]).
+        env = json.loads((run / "env-before.json").read_text()) if (run / "env-before.json").exists() else {}
+        mon = next((m for m in (env.get("display") or {}).get("monitors") or [] if m.get("name") == monitor), None)
+        want = {"width": mon.get("width"), "height": mon.get("height")} if mon else None
+        got = {k: (setup.get("window_at_start") or {}).get(k) for k in ("width", "height")}
+        record(f"window has the size of the pinned monitor {monitor}", want is not None and got == want,
+               f"window {got}, monitor {want}")
     record("no frame or tick rows dropped", harness.get("frames_dropped_capacity") == 0 and harness.get("ticks_dropped_capacity") == 0)
 
     phases = read_csv(run / "phases.csv")

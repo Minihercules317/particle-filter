@@ -1,13 +1,14 @@
 # S1: controlled synthetic particle workload (draft). Read by benchmarks/harness/pfbench.py, which turns it into the
 # plan.json the pfbench harness executes.
-# Values marked "provisional" are replaced after the calibration sweep (PLAN.md §7, phase 3).
+# Version 2 (2026-11-09): frozen after the exploratory calibration and variance study
+# (results/calibration-2026-11-09/CALIBRATION.md): [display] added, moderate level 50 -> 100, phase lengths confirmed.
 # Any change after a campaign starts makes a new scenario version; campaigns record the hash of this file.
 
 [scenario]
 id = "S1-synthetic"
-version = 1
-minecraft = "1.21.1"
-loader = "neoforge-21.1.250"
+version = 2
+minecraft = "1.21.1"          # descriptive: the first target. Forge 1.20.1 launches use this file too;
+loader = "neoforge-21.1.250"  # the versions that ran are in each harness.json and are checked
 description = "Fixed-lifetime particles from a fixed emitter grid in front of a locked camera, in a void world."
 
 [world]
@@ -34,13 +35,23 @@ maxFps = 260       # 260 = unlimited
 enableVsync = false
 particles = 0      # All
 graphicsMode = 1   # Fancy
-fullscreen = true  # on DP-1 (NVIDIA-attached), 2560x1440@240
+fullscreen = true  # fills the monitor named in [display] (2560x1600 on the owner's eDP-2)
 ao = true
 renderClouds = "false"   # clouds off, so they don't add rendering cost
 fov = 70           # degrees (vertical); pfbench.py writes Minecraft's stored form
 pauseOnLostFocus = false       # an unfocused window must not open the pause menu (it would pause the world)
 onboardAccessibility = false   # skip the first-launch accessibility screen
 soundCategory_master = 0.0
+
+[display]          # where performance runs render (pfbench.py enforces it; functional runs ignore it)
+# Hidden on a special workspace pinned to one monitor: the window can't be covered, focused away or resized by
+# desktop use, and its size no longer follows whichever monitor had focus. eDP-2 is the owner's laptop panel (driven by
+# the Intel iGPU; the game still renders on the NVIDIA GPU, recorded in harness.json setup.gl). Other machines: name
+# your own monitor and record it; a different monitor changes this file's hash.
+hide = true
+monitor = "eDP-2"
+# Protocol (not enforceable here): official campaigns run unattended. Interactive desktop use during the variance
+# study shifted frame rates by ~10% for minutes at a time (other GPU clients); see CALIBRATION.md.
 
 [emitters]
 plane_z = 14.0
@@ -61,10 +72,11 @@ render_type = "PARTICLE_SHEET_TRANSLUCENT"   # separate 16,384 queue from the ta
 attempts_per_tick = 25                        # constant at every level
 plane_z_offset = 1.0                          # one block behind the target plane, so the two never share a depth
 
-[levels]           # target attempts per tick (provisional)
+[levels]           # target attempts per tick (calibrated 2026-11-09: GPU-limited and flat up to ~100, falls from 200,
+                   # live count capped at 16,384 from 410; CPU-bound from 410)
 idle = 0
 low = 10
-moderate = 50
+moderate = 100
 heavy = 200
 saturating = 410
 extreme = 2000
@@ -75,7 +87,8 @@ untyped = "pfbench.UntypedParticle constructed by the harness, ParticleEngine.ad
 block_dust = "minecraft:block with minecraft:stone via ClientLevel.addParticle"
 vanilla = "minecraft:end_rod via ClientLevel.addParticle (random lifetime; live counts logged)"
 
-[phases]           # seconds (provisional until the variance study)
+[phases]           # seconds (confirmed by the variance study: no position effect in quiet launches; 30 s windows clearly
+                   # less noisy than 10-20 s)
 settle_after_load = 20
 warmup_with_workload = 60
 settle_after_switch = 15      # >= longest particle life + 2 ticks (pfbench.py refuses shorter); also lets the JIT settle

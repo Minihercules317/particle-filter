@@ -25,6 +25,8 @@ import ingest_harness  # noqa: E402
 import pfbench  # noqa: E402
 
 SCENARIO_PATH = TOOLS.parent / "scenarios" / "S1-synthetic.toml"
+MODERATE = tomllib.loads(SCENARIO_PATH.read_text())["levels"]["moderate"]   # target attempts per tick
+CONTROL = tomllib.loads(SCENARIO_PATH.read_text())["particles"]["control"]["attempts_per_tick"]
 TICK_COLUMNS = ["tick", "t_ns", "phase", "attempts_target", "attempts_control", "created_target", "created_control",
                 "created_untyped", "created_block", "created_vanilla", "created_other", "alive_opaque",
                 "alive_translucent", "alive_terrain", "alive_total", "client_tick_ns", "server_tick_avg_ns", "gc_count",
@@ -322,7 +324,7 @@ class IngestTests(TempDir):
         self.assertAlmostEqual(w["B"]["_summary"]["metrics"]["mean_frametime_ms"], 5.0)
         for x in w.values():
             self.assertTrue(x["_summary"]["usable"], x["_summary"]["issues"])
-            self.assertAlmostEqual(x["workload"]["spawn_attempts_per_s"], 50 * 20)
+            self.assertAlmostEqual(x["workload"]["spawn_attempts_per_s"], MODERATE * 20)
             self.assertAlmostEqual(x["workload"]["control_particles_live_mean"], 25 * 41)
             self.assertEqual(x["particle_filter"]["jar_sha256"], PF_SHA)
             self.assertEqual(x["block"], 1)
@@ -330,8 +332,8 @@ class IngestTests(TempDir):
         self.assertEqual(w["C"]["position_in_launch"], 1)
         self.assertEqual(w["C"]["particle_filter"]["mode"], "EVERYWHERE")
         self.assertEqual(w["C"]["workload"]["target_live_mean"], 0)
-        self.assertEqual(w["B"]["workload"]["target_live_mean"], 50 * 41)
-        self.assertEqual(w["B"]["workload"]["target_created_per_s"], 50 * 20)
+        self.assertEqual(w["B"]["workload"]["target_live_mean"], MODERATE * 41)
+        self.assertEqual(w["B"]["workload"]["target_created_per_s"], MODERATE * 20)
 
     def test_warnings_for_jit_autosave_and_slow_ticks(self):
         run = make_run(self.dir / "r", "C:moderate,B:moderate",
@@ -458,10 +460,10 @@ class ReducedTpsTests(TempDir):
         low = [i for i in b["_summary"]["issues"] if i["code"] == "client_tick_rate_low"]
         self.assertEqual([i["level"] for i in low], ["info"])
         for x in (b, c):   # requests per tick are fixed by the plan; per second they follow the tick rate
-            self.assertAlmostEqual(x["workload"]["requests_per_tick"], 75)   # 50 target + 25 control
-            self.assertAlmostEqual(x["per_tick"]["requests_per_tick"], 75)
-        self.assertAlmostEqual(b["workload"]["requests_per_s"], 75 * 16)
-        self.assertAlmostEqual(c["workload"]["requests_per_s"], 75 * 20)
+            self.assertAlmostEqual(x["workload"]["requests_per_tick"], MODERATE + CONTROL)
+            self.assertAlmostEqual(x["per_tick"]["requests_per_tick"], MODERATE + CONTROL)
+        self.assertAlmostEqual(b["workload"]["requests_per_s"], (MODERATE + CONTROL) * 16)
+        self.assertAlmostEqual(c["workload"]["requests_per_s"], (MODERATE + CONTROL) * 20)
         self.assertAlmostEqual(b["per_tick"]["frames_per_tick"], 200 / 16)
         self.assertAlmostEqual(b["per_tick"]["wall_ms_per_tick"], 62.5)
 
@@ -479,7 +481,7 @@ class ReducedTpsTests(TempDir):
         self.assertNotIn("achieved_tps", prim["metrics"])
         self.assertAlmostEqual(sat["metrics"]["achieved_tps"]["mean_diff"], 4.0)
         self.assertEqual(sat["metrics"]["achieved_tps"]["verdict"], "better")
-        self.assertAlmostEqual(sat["metrics"]["requests_per_s"]["mean_diff"], 75 * 4)
+        self.assertAlmostEqual(sat["metrics"]["requests_per_s"]["mean_diff"], (MODERATE + CONTROL) * 4)
         self.assertEqual(sat["metrics"]["requests_per_s"]["verdict"], "descriptive")
         self.assertEqual([p["block"] for p in rep["held_20tps"]], ["2", "5"])
         self.assertEqual(rep["lost_20tps"], [])
