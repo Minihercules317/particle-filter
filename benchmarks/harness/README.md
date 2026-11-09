@@ -7,7 +7,8 @@ at the repository root), CI and CurseForge uploads never include. Particle Filte
 
 > **Status: built and functionally validated** ([results/functional-2026-11-09](../results/functional-2026-11-09/FUNCTIONAL.md),
 > [results/functional-2026-11-09-pipeline](../results/functional-2026-11-09-pipeline/FUNCTIONAL.md),
-> [results/functional-2026-11-09-sysdata](../results/functional-2026-11-09-sysdata/FUNCTIONAL.md)).
+> [results/functional-2026-11-09-sysdata](../results/functional-2026-11-09-sysdata/FUNCTIONAL.md),
+> [results/functional-2026-11-09-forge](../results/functional-2026-11-09-forge/FUNCTIONAL.md)).
 > **No performance runs yet:** they are blocked until the owner confirms the laptop's power-limit problems are
 > fixed. The launcher refuses a non-`--functional` run or campaign unless `PFBENCH_PERFORMANCE_APPROVED=1` is set,
 > which must only happen after that confirmation.
@@ -16,17 +17,21 @@ Written by Claude (AI), like the rest of the benchmark suite and the mod.
 
 ## Use
 
-From the repository root (Java comes from mise; Gradle runs offline from the cache the main build filled):
+From the repository root. Launches run Gradle `--offline`, so prepare the cache once (online) first. On the
+owner's machine Java comes from mise (`mise exec --`, used automatically when mise and the untracked `mise.toml`
+exist); anywhere else a JDK 21 on `PATH` is enough. Third-party setup: [REPRODUCING.md](../REPRODUCING.md).
 
 ```sh
-mise exec -- ./gradlew -p benchmarks/harness compileJava        # build only
+./gradlew -p benchmarks/harness prepareClientRun                 # once, online: harness, Minecraft, assets
 python3 benchmarks/harness/pfbench.py template --hide           # once: create the template void world
 python3 benchmarks/harness/pfbench.py run --functional --hide --sequence C:moderate,B:moderate,D:moderate
 python3 benchmarks/harness/pfbench.py run --functional --hide --mangohud --sequence B:moderate   # + MangoHud frame log
 python3 benchmarks/harness/pfbench.py check benchmarks/harness/run/runs/<run-id>
 python3 benchmarks/harness/pfbench.py campaign --configs C,B,D --levels heavy --blocks 6 --seed 1 --dry-run
-python3 benchmarks/tools/ingest_harness.py benchmarks/harness/run/runs/<run-id> --campaign benchmarks/results/<campaign>
-python3 benchmarks/tools/compare.py benchmarks/results/<campaign> --reference B
+python3 benchmarks/tools/publish_campaign.py archive benchmarks/results/<campaign> benchmarks/harness/run/runs/<campaign>-b*
+python3 benchmarks/tools/publish_campaign.py report benchmarks/results/<campaign> --reference B   # ingest + compare + report
+python3 benchmarks/tools/publish_campaign.py manifest benchmarks/results/<campaign>
+python3 benchmarks/tools/publish_campaign.py verify benchmarks/results/<campaign>
 ```
 
 - `--sequence` lists `CONFIG:LEVEL` entries ([PLAN.md §2](../PLAN.md) ids; levels from the scenario's `[levels]`).
@@ -46,12 +51,16 @@ python3 benchmarks/tools/compare.py benchmarks/results/<campaign> --reference B
   `functional`.
 - `--hide` moves the game window to the hidden Hyprland special workspace `pfbench` (functional runs).
 - Particle Filter's jar defaults to the repository's built NeoForge jar for the current `mod.version`
-  (`mise exec -- ./gradlew :1.21.1-neoforge:build buildAndCollect`); `--pf-jar` picks another.
+  (`./gradlew :1.21.1-neoforge:build buildAndCollect`); `--pf-jar` picks another.
 - `--mangohud` runs the launch under MangoHud 0.8.4 with the pilot's minimal HUD (`fps_only,background_alpha=0`;
   `no_display` would stop its logging) and keeps the per-frame log in `mangohud/` as raw data for the phase 2b
   cross-check. The HUD renders, so it is part of the environment: use it for every launch of a campaign or none
   (`campaign --mangohud` does that).
-- `campaign` runs several launches in a counterbalanced order (below). `--dry-run` prints the order only.
+- `campaign` runs several launches in a counterbalanced order (below). `--dry-run` launches nothing and prints the
+  order, the launch groups, which of PLAN.md's comparisons the design can pair (`pairable`, `not answerable`,
+  `IMPOSSIBLE`), the position and carry-over balance, and the scripted duration. Every launch's options are validated
+  before the first one starts, and a performance campaign with an impossible comparison is refused: one campaign per
+  question ([REPRODUCING.md §7](../REPRODUCING.md), [DRYRUN.md](../results/dryrun-2026-11-09/DRYRUN.md)).
 
 Everything a launch writes is under `benchmarks/harness/run/` (gitignored): the template in `run/template/`, one
 directory per launch in `run/runs/<run-id>/` with the game directory in `game/`, the downloaded rendering mods in
@@ -68,7 +77,7 @@ config (`harness/src/neoforge`, `harness-forge/src/main`). Both builds take the 
 `harness/gradle.properties`, and the Forge provenance hash covers the shared and the Forge-only sources.
 
 ```sh
-mise exec -- ./gradlew -p benchmarks/harness-forge compileJava
+./gradlew -p benchmarks/harness-forge prepareClientRun        # once, online
 python3 benchmarks/harness/pfbench.py template --loader forge --hide          # run/template-forge-1.20.1/
 python3 benchmarks/harness/pfbench.py run --loader forge --functional --hide --sequence C:moderate,B:moderate,D:moderate
 ```
@@ -129,7 +138,9 @@ python3 benchmarks/harness/pfbench.py run --loader forge --functional --hide --s
 ## From a launch to compare.py
 
 `tools/ingest_harness.py` writes one window per measured phase into a campaign directory:
-`results/<campaign>/runs/<launch-id>--<phase>/{run.json,summary.json}`.
+`results/<campaign>/runs/<launch-id>--<phase>/{run.json,summary.json}`. `tools/publish_campaign.py report` runs it on
+the archived launches in `results/<campaign>/raw/` (their paths are then written relative to the campaign, so a
+rebuild anywhere is byte-identical), then `compare.py`, then the generated report.
 
 - `summary.json` is `frametimes.py`'s summary of that phase's frames (all of them: the settle before it is a
   separate phase), plus window issues: `functional_check_failed` or `harness_error` (errors: unusable),
@@ -207,6 +218,8 @@ python3 benchmarks/harness/pfbench.py run --loader forge --functional --hide --s
   that paired runs must share.
 
 ## Not done yet
+
+- Configurations for rule- and zone-count scaling (Q6: C-rules-N, D-zones-N) and the B0 sanity check.
 
 - The bound label's thresholds and the sampler's own cost are unvalidated (they need performance runs: phases 2b/4).
 - Phase 2b checks (harness frame log vs MangoHud, hidden-window throttling, fullscreen on DP-1): they compare

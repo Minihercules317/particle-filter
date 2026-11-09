@@ -11,7 +11,8 @@ the pipeline pilot, not a result.
 > decisions are in [HANDOFF.md](HANDOFF.md).
 
 Read with [IMPLEMENTATION.md](IMPLEMENTATION.md) (how the mod works, what could cost time) and
-[HARNESS.md](HARNESS.md) (the synthetic workload tool still to be built).
+[HARNESS.md](HARNESS.md) (the synthetic workload tool, built in `harness/` and `harness-forge/`). How to reproduce
+and audit a campaign: [REPRODUCING.md](REPRODUCING.md), [AUDIT.md](AUDIT.md).
 
 ## 1. Questions and how each is answered
 
@@ -55,8 +56,8 @@ launch.
 *unfiltered* particles (the control type) alive. The harness logs both; `compare.py` rejects pairs that
 differ by more than 2%. Since the owner's tick-rate decision (2026-11-09, §5 "Reduced-TPS runs"), this equality is
 judged **per tick** (attempts per tick, control particles alive). Attempts per real-world second are reported for
-every window but no longer reject a pair: a drop below 20 TPS is a result, not a workload mismatch. *(Not yet
-implemented: `compare.py` still checks `spawn_attempts_per_s`; see HANDOFF.md, next tasks.)* If an alternative can't suppress exactly the same set (zones, untyped particles,
+every window but no longer reject a pair: a drop below 20 TPS is a result, not a workload mismatch (implemented in
+`compare.py`, 2026-11-09). If an alternative can't suppress exactly the same set (zones, untyped particles,
 per-block rules for Sodium Extra), there is no comparison for that case, and the report says why.
 
 **Equal environment rule (added 2026-11-09):** paired runs must also share their environment: scenario hash,
@@ -65,7 +66,9 @@ mods and their configs (`render_environment` hash, which leaves out only the fil
 size/fullscreen, load level, variant and **launch shape** (how many configurations the launch measured). Each run's
 `run.json["environment"]` carries these; `compare.py` excludes pairs that differ and lists why. The launch-shape key
 means B measured alongside C and D is never paired with A measured alone: their warmups and mode switches differ.
-For Q1 (B vs A), B runs alone, like A (`pfbench.py campaign --configs A,B` does this).
+For Q1 (B vs A), B runs alone, like A (`pfbench.py campaign --configs A,B` does this). In general one campaign answers
+one question: `campaign --dry-run` lists which comparisons a design can pair, and a performance campaign with an
+impossible comparison is refused (results/dryrun-2026-11-09/DRYRUN.md).
 
 ## 3. Environments
 
@@ -280,7 +283,7 @@ callback objects appear at all, and how much ticking and rendering time filtered
 | 6 | Comparator: investigating Sodium/Sodium Extra compatibility with the dev client and harness is **approved if kept isolated** (separate run directory, nothing in the play instances). Measuring A/B/C/E with Sodium in all is a performance run | yes | investigation **done 2026-11-09** (download approved by the owner; functional checks pass for A, C/B and E with Sodium); measurement **blocked** |
 | 7 | Real world (ATM10) | n/a | **on hold**: world copies and live-server runs declined; needs a new owner decision |
 | 8 | Forge 1.20.1 harness port; replication of S-overhead and S-filter (subset) | yes | port: no; measurement **blocked** |
-| 9 | Report: `results/<campaign>/report.md` from the tools; review; only then any public wording | partly | **yes** before publishing anything |
+| 9 | Report: `publish_campaign.py archive/report/manifest` (generated report from raw data), `report.md` interpretation, `verify`; review; only then any public wording | yes (tools built 2026-11-09) | **yes** before publishing anything |
 | 10 | Regression mode: a 10-minute subset (B vs A, C vs B at heavy) runnable before releases, compared to the stored baseline | yes | no |
 
 ## 8. Risks and limitations
@@ -310,14 +313,18 @@ callback objects appear at all, and how much ticking and rendering time filtered
 
 - **Client tick rate under heavy load (resolved 2026-11-09).** Phases are counted in ticks, so a configuration that
   drops the client below 20 TPS gets fewer particle requests per real-world second. The owner decided to keep such
-  runs as a separate saturation/stress-test dataset (§5, "Reduced-TPS runs"). The current code still excludes those
-  pairs (2% workload check on `spawn_attempts_per_s`) and only flags `client_tick_rate_low`; changing that is the
-  first implementation task in HANDOFF.md.
+  runs as a separate saturation/stress-test dataset (§5, "Reduced-TPS runs"), implemented the same day.
 
 ## 9. Reporting rules
 
 - Every published number links to its campaign directory with raw logs, env snapshots, `run.json` files and the
-  exact tool versions (git commit).
+  exact tool versions (git commit). The campaign directory is built by `tools/publish_campaign.py` (raw data, a
+  report generated from it, `SHA256SUMS`) and passes `publish_campaign.py verify`.
+- The design is pre-registered: the `campaign --dry-run` output and the analysis arguments are committed before the
+  first launch (AUDIT.md §4).
+- Numbers in hand-written text are copied from `comparison.md`, never retyped or recomputed by hand.
+- Synthetic primary (20 TPS), synthetic saturation (reduced TPS) and real-world results are labelled as such and
+  never combined.
 - State hardware, loader, Minecraft version, load level and CPU/GPU-bound label next to every figure.
 - Include equivalent and inconclusive results, and any configuration where Particle Filter was slower.
 - No marketing wording (README, CurseForge, homepage) until a campaign has been reviewed by the owner.

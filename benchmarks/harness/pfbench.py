@@ -123,7 +123,7 @@ LOADERS = {
         "minecraft": "1.21.1", "data_version": 3955, "gradle_dir": HARNESS, "template_dir": RUN_ROOT / "template",
         # Mojang names at runtime: the release jar itself runs in the dev client.
         "pf_jar": "build/libs/{v}/particlefilter-neoforge-{v}+1.21.1.jar", "pf_release_jar": None,
-        "pf_build": "mise exec -- ./gradlew :1.21.1-neoforge:build buildAndCollect",
+        "pf_build": "./gradlew :1.21.1-neoforge:build buildAndCollect",
         "modsets": ("vanilla", "sodium"),
         "sources": ((HARNESS, HARNESS_SOURCES),),
     },
@@ -136,7 +136,7 @@ LOADERS = {
         # reobfJar's own output (the dev jar's sibling); buildAndCollect copies it to build/libs/<v>/ for release.
         "pf_release_jar": "versions/1.20.1-forge/build/libs/particlefilter-forge-{v}+1.20.1.jar",
         "pf_collected_jar": "build/libs/{v}/particlefilter-forge-{v}+1.20.1.jar",
-        "pf_build": "mise exec -- ./gradlew :1.20.1-forge:build buildAndCollect",
+        "pf_build": "./gradlew :1.20.1-forge:build buildAndCollect",
         "modsets": ("vanilla",),   # no approved rendering mods for Forge 1.20.1
         "sources": ((HARNESS, ("src/main", "gradle.properties")), (FORGE_HARNESS, FORGE_SOURCES)),
     },
@@ -270,7 +270,8 @@ def pf_jar(loader: str = "neoforge") -> Path:
     version = props["mod"]["version"]
     jar = REPO / LOADERS[loader]["pf_jar"].format(v=version)
     if not jar.exists():
-        die(f"{jar} not found; build it with: {LOADERS[loader]['pf_build']}")
+        build = " ".join([*java_prefix(), LOADERS[loader]["pf_build"]])
+        die(f"{jar} not found; build it from the repository root with: {build}")
     return jar
 
 
@@ -341,9 +342,17 @@ def render_environment(game: Path, modset: str) -> dict:
 
 # ---- Gradle, window ----
 
+def java_prefix() -> list[str]:
+    """How Gradle gets its JVM. On the owner's machine Java comes from mise (`mise.toml`, untracked, not in the
+    repository); elsewhere `./gradlew` runs on whatever JDK 17+ is on PATH / JAVA_HOME. Either way the game JVM is
+    the Gradle toolchain (Java 21 for NeoForge, 17 for Forge), whose version and vendor harness.json records."""
+    return ["mise", "exec", "--"] if shutil.which("mise") and (REPO / "mise.toml").exists() else []
+
+
 def gradle(args: list[str], log: Path, mangohud_dir: Path | None = None, loader: str = "neoforge") -> subprocess.Popen:
     project = str(LOADERS[loader]["gradle_dir"].relative_to(REPO))
-    cmd = ["mise", "exec", "--", "./gradlew", "--offline", "--console=plain", "-p", project, "runClient", *args]
+    # --offline: a launch never downloads anything (REPRODUCING.md: prepare the Gradle cache once, online).
+    cmd = [*java_prefix(), "./gradlew", "--offline", "--console=plain", "-p", project, "runClient", *args]
     env = None
     if mangohud_dir is not None:
         cmd = ["mangohud", "--dlsym", *cmd]
@@ -627,6 +636,26 @@ def copy_inputs(game: Path, dest: Path) -> dict:
     return hashes
 
 
+def launch_problem(entries: list[tuple[str, str]], variant: str, modset: str, loader: str) -> str | None:
+    """Why this launch can't run with these options, or None. `campaign` checks every launch before the first starts."""
+    if variant not in VARIANTS:
+        return f"unknown variant {variant!r}"
+    if loader not in LOADERS:
+        return f"unknown loader {loader!r} (known: {', '.join(LOADERS)})"
+    if modset not in MODSETS:
+        return f"unknown modset {modset!r} (known: {', '.join(MODSETS)})"
+    if modset not in LOADERS[loader]["modsets"]:
+        return f"--modset {modset} isn't available for {loader} (available: {', '.join(LOADERS[loader]['modsets'])})"
+    se_hides = CONFIGS[entries[0][0]][2]
+    if variant == "block_dust" and any(c == "D" for c, _ in entries):
+        return "block_dust can't be filtered by zones (Particle Filter's block rules are global)"
+    if se_hides and modset != "sodium":
+        return "configuration E (Sodium Extra hides the target) needs --modset sodium"
+    if se_hides and variant not in E_VARIANTS:
+        return f"Sodium Extra can only hide typed particles by type id: E supports {', '.join(sorted(E_VARIANTS))}"
+    return None
+
+
 def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str, functional: bool, hide: bool,
                pf_jar_path: str | None = None, run_id: str | None = None, sodium_defaults: bool = False,
                campaign: dict | None = None, mangohud: bool = False, loader: str = "neoforge") -> tuple[int, Path]:
@@ -635,21 +664,10 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
             "(benchmarks/HANDOFF.md). Use --functional for bring-up checks.")
     scenario, scenario_sha = load_scenario(scenario_path)
     entries = parse_sequence(sequence, scenario["levels"])
-    if variant not in VARIANTS:
-        die(f"unknown variant {variant!r}")
-    if loader not in LOADERS:
-        die(f"unknown loader {loader!r} (known: {', '.join(LOADERS)})")
-    if modset not in MODSETS:
-        die(f"unknown modset {modset!r} (known: {', '.join(MODSETS)})")
-    if modset not in LOADERS[loader]["modsets"]:
-        die(f"--modset {modset} isn't available for {loader} (available: {', '.join(LOADERS[loader]['modsets'])})")
+    problem = launch_problem(entries, variant, modset, loader)
+    if problem:
+        die(problem)
     pf_kind, _, se_hides = CONFIGS[entries[0][0]]
-    if variant == "block_dust" and any(c == "D" for c, _ in entries):
-        die("block_dust can't be filtered by zones (Particle Filter's block rules are global)")
-    if se_hides and modset != "sodium":
-        die("configuration E (Sodium Extra hides the target) needs --modset sodium")
-    if se_hides and variant not in E_VARIANTS:
-        die(f"Sodium Extra can only hide typed particles by type id: E supports {', '.join(sorted(E_VARIANTS))}")
     if modset == "sodium" and not sodium_defaults and not all(
             (SODIUM_CONFIGS / f).exists() for f in ("sodium-options.json", "sodium-extra-options.json")):
         die(f"no Sodium config templates in {SODIUM_CONFIGS}; capture the mods' defaults once with --sodium-defaults")
@@ -775,14 +793,91 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 # ---- campaign ----
 
-def campaign_schedule(configs: list[str], levels: list[str], blocks: int, seed: int) -> list[list[list[tuple[str, str]]]]:
-    """blocks -> launches -> entries. Entries sharing an install state go into one launch, in Williams order
-    (tools/schedule.py); the launches of a block alternate in Williams order too. Seeds differ per group, and every
-    order is reproducible from `seed`."""
+# Comparisons PLAN.md section 1 needs: (configuration, reference, questions). A campaign can only answer one if
+# both configurations run in launches of the same shape (number of entries): the launch shape is part of the
+# environment compare.py pairs on, because warmup and mode switching differ between a configuration measured alone
+# and one measured alongside others.
+EXPECTED_COMPARISONS = [
+    ("B", "A", "Q1 overhead when installed but inactive"),
+    ("C", "B", "Q2-Q4 global filtering"),
+    ("D", "B", "Q3 zone filtering"),
+    ("D", "C", "Q5 zones vs global"),
+    ("C-miss", "B", "Q8 rules that never match"),
+    ("E", "C", "Q7 Sodium Extra vs Particle Filter"),
+]
+
+
+def launch_groups(configs: list[str], levels: list[str]) -> dict[tuple, list[tuple[str, str]]]:
+    """Entries that share an install state run in one launch: install state -> entries."""
     groups: dict[tuple, list[tuple[str, str]]] = {}
     for config in configs:
         for level in levels:
             groups.setdefault(install_state(config), []).append((config, level))
+    return groups
+
+
+def campaign_analysis(configs: list[str], levels: list[str], blocks: int, seed: int) -> dict:
+    """What a campaign design can answer, before anything runs: launch shapes, which configurations compare.py will
+    be able to pair, which of PLAN.md's comparisons are possible, missing or impossible, and how well the order is
+    balanced. Pure design arithmetic: reads no measurement."""
+    groups = launch_groups(configs, levels)
+    shape = {c: len(groups[install_state(c)]) for c in configs}
+    partners = {c: sorted(o for o in configs if o != c and shape[o] == shape[c]) for c in configs}
+    unpairable = [c for c in configs if not partners[c]] if len(configs) > 1 else []
+    comparisons = []
+    for cfg, ref, question in EXPECTED_COMPARISONS:
+        if cfg not in configs:
+            continue
+        if ref not in configs:
+            status = f"not answerable: reference {ref} isn't in this campaign"
+        elif shape[cfg] != shape[ref]:
+            status = (f"IMPOSSIBLE: {cfg} runs in launches of {shape[cfg]} entr{'y' if shape[cfg] == 1 else 'ies'}, "
+                      f"{ref} in launches of {shape[ref]}; compare.py will pair none of them")
+        else:
+            status = "pairable"
+        comparisons.append({"config": cfg, "reference": ref, "question": question, "status": status})
+
+    plan = campaign_schedule(configs, levels, blocks, seed)
+    labels = ["|".join(f"{c}:{lv}" for c, lv in g) for g in groups.values()]
+    balance = []
+
+    def tally(unit: str, orders: list[list[str]], items: list[str]) -> None:
+        rows = len(schedule.williams_rows(len(items)))
+        pos = {i: [0] * len(items) for i in items}
+        after: dict[tuple[str, str], int] = {}
+        for order in orders:
+            for k, item in enumerate(order):
+                pos[item][k] += 1
+                if k:
+                    after[(order[k - 1], item)] = after.get((order[k - 1], item), 0) + 1
+        pairs = [after.get((a, b), 0) for a in items for b in items if a != b]
+        balance.append({
+            "unit": unit, "items": items, "williams_rows": rows, "exact": blocks % rows == 0,
+            "positions": pos,
+            "positions_balanced": all(max(v) == min(v) for v in pos.values()),
+            "carry_over_min_max": (min(pairs), max(pairs)) if pairs else None,
+        })
+
+    label_of = dict(zip(groups, labels))
+    if len(labels) > 1:
+        orders = [[label_of[install_state(launch[0][0])] for launch in launches] for launches in plan]
+        tally("launches within a block", orders, labels)
+    for label, entries in zip(labels, groups.values()):
+        if len(entries) > 1:
+            items = [f"{c}:{lv}" for c, lv in entries]
+            orders = [[f"{c}:{lv}" for c, lv in launch] for launches in plan for launch in launches
+                      if set(launch) == set(entries)]
+            tally(f"entries within launch {label}", orders, items)
+    return {"groups": {label: [f"{c}:{lv}" for c, lv in g] for label, g in zip(labels, groups.values())},
+            "shape": shape, "partners": partners, "unpairable": unpairable, "comparisons": comparisons,
+            "balance": balance, "plan": plan}
+
+
+def campaign_schedule(configs: list[str], levels: list[str], blocks: int, seed: int) -> list[list[list[tuple[str, str]]]]:
+    """blocks -> launches -> entries. Entries sharing an install state go into one launch, in Williams order
+    (tools/schedule.py); the launches of a block alternate in Williams order too. Seeds differ per group, and every
+    order is reproducible from `seed`."""
+    groups = launch_groups(configs, levels)
     keys = list(groups)
     labels = ["|".join(f"{c}:{lv}" for c, lv in groups[k]) for k in keys]
     group_orders = schedule.make_schedule(labels, blocks, seed)
@@ -798,6 +893,42 @@ def campaign_schedule(configs: list[str], levels: list[str], blocks: int, seed: 
     return out
 
 
+def print_campaign_analysis(analysis: dict, scenario: dict, scenario_path: Path, args: argparse.Namespace,
+                            cooldown: float) -> None:
+    """The dry-run summary: pairability, balance and phase time. Design arithmetic only, no measurement."""
+    print("\nlaunch groups (one launch each per block; entries share an install state):")
+    for label, items in analysis["groups"].items():
+        print(f"  {len(items)} entr{'y' if len(items) == 1 else 'ies'}: {label}")
+    print("\ncomparisons PLAN.md needs, for the configurations in this campaign:")
+    for x in analysis["comparisons"] or [{"config": "-", "reference": "-", "question": "none", "status": "n/a"}]:
+        print(f"  {x['config']} vs {x['reference']} ({x['question']}): {x['status']}")
+    for c in analysis["unpairable"]:
+        print(f"  WARNING: {c} has no configuration with the same launch shape; its windows can't be paired at all")
+    print("\norder balance (Williams design, seed {}):".format(args.seed))
+    for bal in analysis["balance"]:
+        exact = "exact" if bal["exact"] else f"NOT exact: use a multiple of {bal['williams_rows']} blocks"
+        co = bal["carry_over_min_max"]
+        print(f"  {bal['unit']}: {exact}; positions per item "
+              + "; ".join(f"{k} {v}" for k, v in bal["positions"].items())
+              + (f"; each item directly after each other one {co[0]}-{co[1]} times" if co else ""))
+    if not analysis["balance"]:
+        print("  one configuration per launch and one launch per block: nothing to balance")
+    _, sha = load_scenario(scenario_path)
+    total_s = 0.0
+    launches = 0
+    for block in analysis["plan"]:
+        for launch in block:
+            p = build_plan(scenario, sha, launch, args.variant, args.functional, "dry-run", RUN_ROOT / "dry-run", {},
+                           args.loader)
+            total_s += sum(ph["ticks"] for ph in p["phases"]) / TICKS_PER_SECOND
+            launches += 1
+    total_s += cooldown * max(0, launches - 1)
+    print(f"\n{launches} launches, {total_s / 3600:.2f} h of scripted phases and cool-downs "
+          f"({'functional' if args.functional else 'performance'} timing, {cooldown:g} s cool-down; game start-up and "
+          "quit not included). Loader: " + f"{args.loader} (Minecraft {LOADERS[args.loader]['minecraft']}), "
+          f"mod set {args.modset}, variant {args.variant}.")
+
+
 def cmd_campaign(args: argparse.Namespace) -> int:
     scenario, _ = load_scenario(Path(args.scenario))
     configs = [c.strip() for c in args.configs.split(",") if c.strip()]
@@ -808,23 +939,36 @@ def cmd_campaign(args: argparse.Namespace) -> int:
     for lv in levels:
         if lv not in scenario["levels"]:
             die(f"unknown level {lv!r}")
-    if args.modset not in LOADERS[args.loader]["modsets"]:
-        die(f"--modset {args.modset} isn't available for {args.loader}")
-    plan = campaign_schedule(configs, levels, args.blocks, args.seed)
+    if len(set(configs)) != len(configs):
+        die("a configuration is listed twice")
+    analysis = campaign_analysis(configs, levels, args.blocks, args.seed)
+    plan = analysis["plan"]
+    for launches in plan:
+        for launch in launches:
+            problem = launch_problem(launch, args.variant, args.modset, args.loader)
+            if problem:
+                die(f"launch {','.join(f'{c}:{lv}' for c, lv in launch)}: {problem}")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     name = args.name or f"campaign-{stamp}"
     sheet = {"campaign": name, "seed": args.seed, "configs": configs, "levels": levels, "variant": args.variant,
              "modset": args.modset, "label": "functional" if args.functional else "performance",
              "mangohud": args.mangohud, "loader": args.loader,
              "blocks": [[",".join(f"{c}:{lv}" for c, lv in launch) for launch in launches] for launches in plan]}
+    cooldown = FUNCTIONAL_COOLDOWN_S if args.functional else scenario["phases"].get("cooldown_between_launches", 60)
     for b, launches in enumerate(sheet["blocks"], start=1):
         print(f"block {b}: " + "  |  ".join(launches))
+    print_campaign_analysis(analysis, scenario, Path(args.scenario), args, cooldown)
+    design_errors = [f"{c} can't be paired with any other configuration of this campaign" for c in analysis["unpairable"]]
+    design_errors += [f"{x['config']} vs {x['reference']}: {x['status']}" for x in analysis["comparisons"]
+                      if x["status"].startswith("IMPOSSIBLE")]
     if args.dry_run:
         return 0
+    if design_errors and not args.functional:
+        die("this campaign would measure configurations that compare.py can't pair; split it into one campaign per "
+            "question (REPRODUCING.md, \"Campaign designs\"):\n  " + "\n  ".join(design_errors))
     if not args.functional and os.environ.get("PFBENCH_PERFORMANCE_APPROVED") != "1":
         die("performance runs are blocked until the owner confirms the laptop's power-limit problems are fixed "
             "(benchmarks/HANDOFF.md). Use --functional or --dry-run.")
-    cooldown = FUNCTIONAL_COOLDOWN_S if args.functional else scenario["phases"].get("cooldown_between_launches", 60)
     sheet_dir = RUN_ROOT / "campaigns"
     sheet_dir.mkdir(parents=True, exist_ok=True)
     sheet["launches"] = []
@@ -1120,7 +1264,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--functional", action="store_true")
     c.add_argument("--hide", action="store_true")
     c.add_argument("--mangohud", action="store_true", help="every launch under MangoHud (all or none: the HUD renders)")
-    c.add_argument("--dry-run", action="store_true", help="print the launch order only")
+    c.add_argument("--dry-run", action="store_true",
+                   help="print the launch order, pairability, balance and phase time; launch nothing")
     k = sub.add_parser("check", help="functional checks of a finished run")
     k.add_argument("run_dir")
     args = p.parse_args(argv)

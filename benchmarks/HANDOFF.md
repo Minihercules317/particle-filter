@@ -1,8 +1,9 @@
 # Benchmark handoff
 
 Read this first. It is self-contained: it doesn't assume access to the conversation that produced it.
-Last updated 2026-11-09 (third and fourth sessions that day: launcher system data, reduced-TPS split, Forge 1.20.1
-harness; the fourth session wrote the Forge functional record and committed the port).
+Last updated 2026-11-09 (fifth session that day: reproducibility and reporting readiness, the last preparation
+phase before the hardware power-limit validation. Earlier sessions: launcher system data, reduced-TPS split, Forge
+1.20.1 harness and its functional record).
 
 **Before launching anything, check no other Claude session is working here** (`pgrep -af 'pfbench.py|devlaunch.Main'`,
 `git status`): on 2026-11-09 two sessions ran in this checkout at once; `pfbench.py` refuses to start a second client,
@@ -13,13 +14,14 @@ but edits and commits would collide.
 - Repo: `~/Work/particle-filter`, branch **`benchmarks/foundation`** (made from `main` at `bcba10f`; not
   pushed, not merged). Commits so far (`git log --oneline main..`): foundation `fc2906f`, first handoff
   `858f1bf`, NeoForge 1.21.1 harness `85cb36f`, analysis pipeline + methodology safeguards + Sodium mod set
-  `fc67e49`, reduced-TPS policy handoff `615845d`, launcher system data + reduced-TPS implementation `bee31ca`, then
-  the Forge 1.20.1 harness port and this handoff (see `git log --oneline main..`).
+  `fc67e49`, reduced-TPS policy handoff `615845d`, launcher system data + reduced-TPS implementation `bee31ca`,
+  Forge 1.20.1 port + functional record `dae5dda`, then reproducibility/reporting and this handoff
+  (`git log --oneline main..`).
 - Untracked `AGENTS.md` and `.agents/` in the repo root are unrelated and pre-existing: leave them alone
   and never stage them.
 - **No Particle Filter performance has been measured.** Nothing in `benchmarks/` may be quoted as a
   performance result. The harness and pipeline have only passed functional checks (60 FPS cap, 5 s phases) and
-  unit tests on synthetic data (78 tests).
+  unit tests on synthetic data (94 tests).
 - **Actual performance testing remains blocked until the owner confirms the laptop's CPU/GPU power-limit problems
   are resolved.** Not confirmed as of 2026-11-09.
 
@@ -30,7 +32,7 @@ but edits and commits would collide.
 | Code analysis: Particle Filter's interception, rule evaluation, cost per path, Forge vs NeoForge, confounders, Sodium Extra equivalence | `IMPLEMENTATION.md` | reading the source and the decompiled Minecraft/Sodium Extra code (file:line refs inside) |
 | Methodology: questions Q1-Q8, configurations, metric definitions, controls, statistics, phases, risks | `PLAN.md` | n/a (design) |
 | Synthetic harness design | `HARNESS.md`, `scenarios/S1-synthetic.toml` | n/a (design) |
-| Analysis tools (stdlib Python): `frametimes.py`, `compare.py`, `schedule.py`, `collect_env.py`, `sample_system.py`, `make_pf_config.py`, `ingest_harness.py`; `pilot_devclient.sh` | `tools/` | **78 unit tests pass** (all suites): `python3 -m unittest discover -s benchmarks/tools/tests -v` from the repo root |
+| Analysis tools (stdlib Python): `frametimes.py`, `compare.py`, `schedule.py`, `collect_env.py`, `sample_system.py`, `make_pf_config.py`, `ingest_harness.py`; `pilot_devclient.sh` | `tools/` | **94 unit tests pass** (all suites): `python3 -m unittest discover -s benchmarks/tools/tests -v` from the repo root |
 | Functional pipeline pilot (title screen; **not a performance result**) | `results/pilot-2026-11-09/PILOT.md` | 3 launches × 30 s fully logged |
 | **pfbench harness 0.2.0, NeoForge 1.21.1** (separate Gradle build, mod id `pfbench`): generator (4 variants), counters, frame log, phase runner, mode switching by reflection, template world, launcher `pfbench.py` (template / run / campaign / check) with the performance interlock | `harness/` (`harness/README.md`) | functional bring-ups below |
 | First functional bring-up (harness 0.1.0) | `results/functional-2026-11-09/FUNCTIONAL.md` | `check.json` per launch |
@@ -39,7 +41,10 @@ but edits and commits would collide.
 | **Sodium 0.8.13 + Sodium Extra 0.9.5** downloaded (owner-approved) into `harness/run/downloads/`, compatibility verified, `--modset sodium`, configuration E | `results/functional-2026-11-09-pipeline/SODIUM.md`, `configs/sodium/` | functional checks pass for A, C/B and E (typed and vanilla) with Sodium |
 | **Launcher system data** (task 3 of the previous handoff): `collect_env.py` before/after every launch, `sample_system.py` on the game JVM (never `--self-cpu`), clock alignment (`harness.json["clock"]`, sampler `mono_ns`), GC-log parser, CPU-/GPU-bound label, power state in the pairing environment, optional `--mangohud` | `harness/pfbench.py`, `tools/system_data.py`, `tools/sample_system.py` | unit tests (`test_system_data.py`); `results/functional-2026-11-09-sysdata/FUNCTIONAL.md` (files written and aligned; no timings read) |
 | **Reduced-TPS policy implemented** (task 1): `tps_class` (< 19.6 = reduced), achieved TPS, requests per tick and per second, per-tick view; `compare.py` pairs on per-tick workload, keeps primary/saturation datasets × bound label apart, lists every pair and the held/lost-20-TPS pairs | `tools/ingest_harness.py` (run.json schema 2), `tools/compare.py`, PLAN.md §5 | unit tests on synthetic runs with slowed ticks (`ReducedTpsTests`, `CompareTests`) |
-| **Forge 1.20.1 harness** (task 2): `harness-forge/` (legacyforge, Java 17, refmap) compiling the shared `harness/src/main`; per-loader `Platform`; `pfbench.py --loader forge` (own template, named-mappings Particle Filter jar, vanilla modset only) | `harness-forge/`, `harness/README.md` "Forge 1.20.1" | `results/functional-2026-11-09-forge/FUNCTIONAL.md`; unit tests (`LoaderTests`) |
+| **Forge 1.20.1 harness** (task 2; accepted by the owner as complete): `harness-forge/` (legacyforge, Java 17, refmap) compiling the shared `harness/src/main`; per-loader `Platform`; `pfbench.py --loader forge` (own template, named-mappings Particle Filter jar, vanilla modset only) | `harness-forge/`, `harness/README.md` "Forge 1.20.1" | `results/functional-2026-11-09-forge/FUNCTIONAL.md`; unit tests (`LoaderTests`) |
+| **Reproducibility audit**: third-party guide (requirements, exact commands for both loaders, supported configurations, campaign designs, analysis rebuild, the owner machine's local assumptions); `pfbench.py` no longer needs mise (`java_prefix()`); ingest writes campaign-relative paths | `REPRODUCING.md`; `harness/pfbench.py`, `tools/ingest_harness.py` | documented prepare commands run with a plain JDK 21 for both harnesses; **clean checkout of tag v1.2.0 rebuilt byte-identical jars** (release SHA-256s and the Forge named jar `613c58b6…`); `GradleCommandTests` |
+| **Campaign dry run + design checks**: `campaign` validates every launch first, `--dry-run` prints pairability per PLAN.md comparison, balance, carry-over, scripted time; performance campaigns with an impossible comparison are refused. Found: combined designs (A,B,C,D,C-miss; A,B,C,E with Sodium) would have produced **zero** pairs for Q1, Q8 and Q7 | `harness/pfbench.py` (`campaign_analysis`), `results/dryrun-2026-11-09/DRYRUN.md` (+ `dry-runs.txt`) | `CampaignAnalysisTests` cross-check the dry-run verdicts against `compare.py` on synthetic launches laid out as scheduled |
+| **Publication and auditability**: `publish_campaign.py` (archive raw launches byte for byte, rebuild `runs/` + `comparison.*` + `report.generated.md` from raw only, `SHA256SUMS`, `verify` = hashes + byte-identical rebuild); report templates (`report.md` interpretation, `limitations.md`); audit guide (evidence map, what hashes/logs/checks can't prove, pre-registration, single-machine limits, replication, discrepancy reports) | `tools/publish_campaign.py`, `templates/`, `AUDIT.md`, README "Data layout", PLAN.md §9 | `PublishTests` (round trip from another location, edited raw data and hand-edited results caught, labels/loaders never mixed, world/jars left out but hashed); end to end on a 2-launch functional campaign (`functional-publish-test`, not archived in the repo) |
 
 ### Key findings to carry forward
 
@@ -76,7 +81,7 @@ but edits and commits would collide.
 
 ## Owner decisions (binding)
 
-**Reduced-TPS policy (decided 2026-11-09; recorded in PLAN.md §5 "Reduced-TPS runs"; not implemented yet)**
+**Reduced-TPS policy (decided 2026-11-09; recorded in PLAN.md §5 "Reduced-TPS runs"; implemented 2026-11-09)**
 - Retain valid runs where either configuration falls below 20 TPS; don't exclude them.
 - Normal 20-TPS comparisons are the **primary FPS dataset**; reduced-TPS comparisons are classified separately as
   **saturation / stress-test results**. Never combine saturated and non-saturated measurements in one aggregate.
@@ -85,6 +90,12 @@ but edits and commits would collide.
 - Keep per-tick-normalized analysis where meaningful, but never as a substitute for real-time measurements.
 - Explicitly identify cases where filtering maintains 20 TPS while the baseline cannot.
 - Preserve raw measurements, including unfavourable results.
+
+**Reproducibility and reporting phase (2026-11-09)**
+- The Forge 1.20.1 port and analysis integration are accepted as complete; don't repeat them.
+- This was the final preparation phase before the hardware power-limit validation. After it, **stop**: the actual
+  campaign resumes only after the owner confirms the power-limit fix.
+- Avoid unnecessary new tooling or dependencies (everything stays Python standard library + the existing Gradle builds).
 
 **Approved**
 - Commit benchmark work to `benchmarks/foundation` (stage only `benchmarks/` files).
@@ -104,12 +115,14 @@ but edits and commits would collide.
 - Copying ATM10 server worlds or benchmarking against the live server (real-world scenario R1 is on hold).
 - Changing CPU affinity (`taskset`, pinning, `sample_system.py --self-cpu`), firmware, GPU settings, or system power configuration.
 - Pushing, merging, or touching `main`. Installing system packages without asking.
+- Installing a separate production Forge environment (not yet; next-task 3 below needs the owner's approval).
 
 ## Unresolved issues (known, not yet fixed)
 
 - Thresholds are provisional until the variance study (phase 4, blocked): `jit_activity` (5 ms of JIT per second of
   window), tick-rate tolerance (2%, which also sets the 19.6 TPS reduced-TPS line), frame coverage (98%), the bound
-  label (95% GPU utilization, 95% render thread, 5% clock spread, 3 samples), and the warmup/settle/measure lengths in S1.
+  label (95% GPU utilization, 95% render thread, 5% clock spread, 3 samples), the warmup/settle/measure lengths in S1,
+  and the block counts in DRYRUN.md.
 - The sampler's own cost (1 s interval, one Python process + `nvidia-smi -lms`) is unmeasured; it runs in every
   configuration equally. MangoHud under the launcher writes its frame CSV but no `_summary.csv` (the game quits first).
 - Both harnesses measure the ModDevGradle dev runtime, not a production install. On Forge 1.20.1 this means Particle
@@ -119,54 +132,67 @@ but edits and commits would collide.
   mismatched pairs; performance runs are meant to be fullscreen on DP-1, which is still unverified (phase 2b, blocked).
 - Phase 2b checks (harness frame log vs MangoHud, hidden vs visible window, fullscreen on DP-1) compare timings and
   stay blocked.
+- **Not launchable yet:** Q6 rule/zone-count configurations (C-rules-N, D-zones-N) and the B0 sanity check (PLAN.md
+  §2). `make_pf_config.py` can generate their configs; `pfbench.py CONFIGS` has no entries for them.
+- **Not recorded:** fan state and ambient temperature; background load, display and power state only before/after each
+  launch (AUDIT.md §2 "Gaps").
+- `scenarios/S1-synthetic.toml` says `minecraft = "1.21.1"`, `loader = "neoforge-21.1.250"` although Forge launches use
+  it too (the fields are descriptive; real versions are in `harness.json` and checked). Left unchanged to keep the
+  scenario hash; fix it with a version bump before the first performance campaign if wanted.
+- Byte-identical rebuild of the Particle Filter jars was shown on this machine with Temurin 21.0.12 only.
+- `raw/` of a full campaign may be large (frame logs at uncapped FPS); publishing it as a release archive with
+  `SHA256SUMS` in git is documented but untried.
 
-## Next tasks (for the next session; none measures performance)
+## Next tasks (none measures performance)
 
-The infrastructure tasks of the previous handoff are done. What remains is either blocked on the owner or small:
+Preparation is complete. **Stop here until the owner confirms the power-limit fix.** Then, in order:
 
-1. **Wait for the owner's power-limit confirmation.** Then, in order (PLAN.md §7): phase 2b (harness frame log vs
-   MangoHud, hidden vs visible window, fullscreen on DP-1; the sampler's own cost), phase 3 calibration, phase 4
-   variance study (fixes the provisional thresholds above and the block counts), then the campaigns.
-   `PFBENCH_PERFORMANCE_APPROVED=1` only after that confirmation.
-2. Optional, not blocked: a performance-plan dry run per loader (`campaign ... --dry-run`) to review the full launch
-   order and duration with the owner; reporting templates (`templates/report.md`) for the two datasets.
-3. Optional: a production-Forge route (installed Forge 1.20.1 in an isolated directory, reobfuscated harness) if the
-   owner wants the release jar itself measured on Forge. Needs the owner's approval (new install).
-
-Performance phases (PLAN.md §7, phases 2b-8) wait for the power-limit confirmation. `pfbench.py run`/`campaign`
-without `--functional` refuse to start unless `PFBENCH_PERFORMANCE_APPROVED=1` is set; set it only after the owner confirms.
+1. Phase 2b (PLAN.md §7): harness frame log vs MangoHud, hidden vs visible window, fullscreen on DP-1, the sampler's
+   own cost. Then phase 3 calibration and phase 4 variance study (they fix the provisional thresholds, phase lengths
+   and block counts). `PFBENCH_PERFORMANCE_APPROVED=1` only after the confirmation.
+2. Before each performance campaign: pre-register it (AUDIT.md §4: commit the `--dry-run` output and analysis
+   arguments as `results/<campaign>/PREREGISTRATION.txt`), run it with `pfbench.py campaign`, then
+   `publish_campaign.py archive/report/manifest/verify`. One campaign per question (DRYRUN.md).
+3. Optional, needs approval: a production-Forge route (isolated Forge 1.20.1 install, reobfuscated harness) to measure
+   the Forge release jar itself; Q6/B0 configurations in `pfbench.py` (small, not blocked, but not requested).
 
 ## Open questions for the owner
 
 - When are the power-limit problems fixed? (This gates every performance phase.)
 - Is there an acceptable real-world route now that world copies and live-server runs are ruled out
   (e.g. a new test world built for benchmarking in a separate, new instance)?
+- How should discrepancy reports from third parties be handled publicly (AUDIT.md §7 leaves this to you)?
+- Where should a campaign's `raw/` data be published: in git, or as a release archive pinned by `SHA256SUMS`?
+  The benchmark branch also has to be published for anyone to reproduce from its commits.
 
 ## Read these, in order
 
 1. `benchmarks/HANDOFF.md` (this file)
-2. `benchmarks/harness/README.md` (how the harness and pipeline work, the safeguards table, deviations, what's missing)
-3. `benchmarks/results/functional-2026-11-09-sysdata/FUNCTIONAL.md`, `functional-2026-11-09-forge/FUNCTIONAL.md`,
+2. `benchmarks/REPRODUCING.md` and `benchmarks/AUDIT.md` (how a third party builds, runs, rebuilds and checks; what
+   the evidence can't prove), `benchmarks/results/dryrun-2026-11-09/DRYRUN.md` (campaign designs)
+3. `benchmarks/harness/README.md` (how the harness and pipeline work, the safeguards table, deviations, what's missing)
+4. `benchmarks/results/functional-2026-11-09-sysdata/FUNCTIONAL.md`, `functional-2026-11-09-forge/FUNCTIONAL.md`,
    `functional-2026-11-09-pipeline/FUNCTIONAL.md` and `SODIUM.md`
-4. `benchmarks/results/functional-2026-11-09/FUNCTIONAL.md` (first bring-up)
-5. `benchmarks/HARNESS.md` and `benchmarks/scenarios/S1-synthetic.toml` (design, parameters)
-6. `benchmarks/PLAN.md` §2, §4, §5, §7 and §8 (configurations, controls, statistics, phases, risks)
-7. Repo `CLAUDE.md` (build commands, Stonecutter layout, commit rules: repo-local noreply identity, AI disclosure)
+5. `benchmarks/results/functional-2026-11-09/FUNCTIONAL.md` (first bring-up)
+6. `benchmarks/HARNESS.md` and `benchmarks/scenarios/S1-synthetic.toml` (design, parameters)
+7. `benchmarks/PLAN.md` §2, §4, §5, §7, §8 and §9 (configurations, controls, statistics, phases, risks, reporting)
+8. Repo `CLAUDE.md` (build commands, Stonecutter layout, commit rules: repo-local noreply identity, AI disclosure)
 
 Don't redo: code analysis, tool writing, the pipeline pilot, MangoHud probing, the harness bring-up, the Sodium
-compatibility check, the Forge port and its functional validation. They are finished and recorded. Don't analyse the functional runs' frame logs or JIT/GC numbers;
-that would be measurement.
+compatibility check, the Forge port and its functional validation, the reproducibility audit, the campaign dry run,
+the publication tools and templates. They are finished and recorded. Don't analyse the functional runs' frame logs or
+JIT/GC numbers; that would be measurement.
 
 ## Prompt for the next session
 
 ```
 Continue the Particle Filter benchmark project in ~/Work/particle-filter on branch benchmarks/foundation.
 Read benchmarks/HANDOFF.md first and follow its owner decisions exactly, then read the files it lists.
-The pfbench harness (NeoForge 1.21.1 and Forge 1.20.1), the launcher's system data (environment snapshots, sampler,
-GC log, bound label), the analysis pipeline with the reduced-TPS split (ingest_harness.py -> compare.py) and the
-Sodium mod set are built and functionally validated. [If I have confirmed the power-limit fix: start phase 2b as
-PLAN.md section 7 describes. Otherwise: only the unblocked items under "Next tasks".] Functional validation only,
-labelled as functional, unless I have confirmed the fix. Don't modify Particle Filter's production code, existing
-Minecraft installations or worlds, CPU affinity, or power/GPU settings. Leave AGENTS.md and .agents/ alone. Commit
-finished work to benchmarks/foundation (don't push) and update benchmarks/HANDOFF.md before stopping.
+Infrastructure, reproducibility and reporting tools are complete: the pfbench harness (NeoForge 1.21.1, Forge 1.20.1),
+launcher system data, the analysis pipeline with the reduced-TPS split, campaign design checks (campaign --dry-run)
+and publication (tools/publish_campaign.py archive/report/manifest/verify). [If I have confirmed the power-limit fix:
+start phase 2b as PLAN.md section 7 describes, pre-registering each campaign as AUDIT.md section 4 says. Otherwise:
+stop; there is nothing unblocked left.] Don't modify Particle Filter's production code, existing Minecraft
+installations or worlds, CPU affinity, or power/GPU settings. Leave AGENTS.md and .agents/ alone. Commit finished work
+to benchmarks/foundation (don't push) and update benchmarks/HANDOFF.md before stopping.
 ```

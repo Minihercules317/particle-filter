@@ -252,6 +252,15 @@ def environment(plan: dict, launch: dict, harness: dict, level: str, power_state
     }
 
 
+def shown_path(run: Path, campaign: Path) -> str:
+    """How outputs name the launch directory: relative to the campaign when the launch is archived inside it
+    (publish_campaign.py, raw/<run-id>), so outputs regenerated anywhere are byte-identical; else with ~ for home."""
+    run_abs, camp_abs = run.resolve(), campaign.resolve()
+    if run_abs.is_relative_to(camp_abs):
+        return run_abs.relative_to(camp_abs).as_posix()
+    return str(run).replace(str(Path.home()), "~")
+
+
 def ingest_run(run: Path, campaign: Path, block: int | None, allow_functional: bool, force: bool) -> list[Path]:
     plan, launch = load_json(run / "plan.json"), load_json(run / "launch.json")
     harness, check = load_json(run / "harness.json"), load_json(run / "check.json")
@@ -294,7 +303,7 @@ def ingest_run(run: Path, campaign: Path, block: int | None, allow_functional: b
         nominal_s = int(p["ticks"]) / TICKS_PER_SECOND
         log = window_frames(frames, name)
         frames_s = sum(log.frametimes_ms) / 1000
-        summary = frametimes.summarize_log(log, f"{(run / 'frames.csv')}#{name}", cap_fps=caps)
+        summary = frametimes.summarize_log(log, f"{shown_path(run, campaign)}/frames.csv#{name}", cap_fps=caps)
         wl = workload(rows, variant, duration_s)
         diag = diagnostics(rows, frames, name, deltas(ticks, name))
         start_ns, end_ns = int(p["start_t_ns"]), int(p["end_t_ns"])
@@ -357,7 +366,7 @@ def ingest_run(run: Path, campaign: Path, block: int | None, allow_functional: b
             "environment": environment(plan, launch, harness, level, sysdata["power_before"]),
             "provenance": {
                 **(launch.get("provenance") or {}),
-                "launch_dir": str(run).replace(str(Path.home()), "~"),
+                "launch_dir": shown_path(run, campaign),
                 "plan_sha256": harness.get("plan_sha256"),
                 "mods_dir": launch.get("mods_dir"),
                 "mods_loaded": harness.get("mods"),

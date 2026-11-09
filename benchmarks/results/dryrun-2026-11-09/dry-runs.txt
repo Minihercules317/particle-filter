@@ -1,0 +1,266 @@
+$ pfbench.py campaign --configs A,B --levels idle,moderate,heavy --blocks 12 --seed 1 --dry-run
+block 1: B:idle,B:moderate,B:heavy  |  A:heavy,A:idle,A:moderate
+block 2: A:heavy,A:moderate,A:idle  |  B:heavy,B:idle,B:moderate
+block 3: B:heavy,B:moderate,B:idle  |  A:moderate,A:heavy,A:idle
+block 4: A:idle,A:heavy,A:moderate  |  B:moderate,B:idle,B:heavy
+block 5: A:moderate,A:idle,A:heavy  |  B:idle,B:heavy,B:moderate
+block 6: B:moderate,B:heavy,B:idle  |  A:idle,A:moderate,A:heavy
+block 7: B:moderate,B:heavy,B:idle  |  A:moderate,A:heavy,A:idle
+block 8: A:idle,A:moderate,A:heavy  |  B:heavy,B:moderate,B:idle
+block 9: A:heavy,A:moderate,A:idle  |  B:heavy,B:idle,B:moderate
+block 10: B:idle,B:moderate,B:heavy  |  A:idle,A:heavy,A:moderate
+block 11: A:heavy,A:idle,A:moderate  |  B:idle,B:heavy,B:moderate
+block 12: B:moderate,B:idle,B:heavy  |  A:moderate,A:idle,A:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  3 entries: A:idle|A:moderate|A:heavy
+  3 entries: B:idle|B:moderate|B:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): pairable
+
+order balance (Williams design, seed 1):
+  launches within a block: exact; positions per item A:idle|A:moderate|A:heavy [6, 6]; B:idle|B:moderate|B:heavy [6, 6]; each item directly after each other one 6-6 times
+  entries within launch A:idle|A:moderate|A:heavy: exact; positions per item A:idle [4, 4, 4]; A:moderate [4, 4, 4]; A:heavy [4, 4, 4]; each item directly after each other one 4-4 times
+  entries within launch B:idle|B:moderate|B:heavy: exact; positions per item B:idle [4, 4, 4]; B:moderate [4, 4, 4]; B:heavy [4, 4, 4]; each item directly after each other one 4-4 times
+
+24 launches, 1.82 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set vanilla, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --configs C,B,D --levels heavy --blocks 12 --seed 1 --dry-run
+block 1: D:heavy,C:heavy,B:heavy
+block 2: D:heavy,B:heavy,C:heavy
+block 3: B:heavy,D:heavy,C:heavy
+block 4: C:heavy,D:heavy,B:heavy
+block 5: B:heavy,C:heavy,D:heavy
+block 6: C:heavy,B:heavy,D:heavy
+block 7: B:heavy,D:heavy,C:heavy
+block 8: C:heavy,B:heavy,D:heavy
+block 9: D:heavy,B:heavy,C:heavy
+block 10: C:heavy,D:heavy,B:heavy
+block 11: D:heavy,C:heavy,B:heavy
+block 12: B:heavy,C:heavy,D:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  3 entries: C:heavy|B:heavy|D:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): not answerable: reference A isn't in this campaign
+  C vs B (Q2-Q4 global filtering): pairable
+  D vs B (Q3 zone filtering): pairable
+  D vs C (Q5 zones vs global): pairable
+
+order balance (Williams design, seed 1):
+  entries within launch C:heavy|B:heavy|D:heavy: exact; positions per item C:heavy [4, 4, 4]; B:heavy [4, 4, 4]; D:heavy [4, 4, 4]; each item directly after each other one 4-4 times
+
+12 launches, 0.90 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set vanilla, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --configs B,C-miss --levels extreme --blocks 8 --seed 1 --dry-run
+block 1: C-miss:extreme  |  B:extreme
+block 2: B:extreme  |  C-miss:extreme
+block 3: C-miss:extreme  |  B:extreme
+block 4: B:extreme  |  C-miss:extreme
+block 5: B:extreme  |  C-miss:extreme
+block 6: C-miss:extreme  |  B:extreme
+block 7: C-miss:extreme  |  B:extreme
+block 8: B:extreme  |  C-miss:extreme
+
+launch groups (one launch each per block; entries share an install state):
+  1 entry: B:extreme
+  1 entry: C-miss:extreme
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): not answerable: reference A isn't in this campaign
+  C-miss vs B (Q8 rules that never match): pairable
+
+order balance (Williams design, seed 1):
+  launches within a block: exact; positions per item B:extreme [4, 4]; C-miss:extreme [4, 4]; each item directly after each other one 4-4 times
+
+16 launches, 0.81 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set vanilla, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --configs C,B,D --variant untyped --levels heavy --blocks 12 --seed 1 --dry-run
+block 1: D:heavy,C:heavy,B:heavy
+block 2: D:heavy,B:heavy,C:heavy
+block 3: B:heavy,D:heavy,C:heavy
+block 4: C:heavy,D:heavy,B:heavy
+block 5: B:heavy,C:heavy,D:heavy
+block 6: C:heavy,B:heavy,D:heavy
+block 7: B:heavy,D:heavy,C:heavy
+block 8: C:heavy,B:heavy,D:heavy
+block 9: D:heavy,B:heavy,C:heavy
+block 10: C:heavy,D:heavy,B:heavy
+block 11: D:heavy,C:heavy,B:heavy
+block 12: B:heavy,C:heavy,D:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  3 entries: C:heavy|B:heavy|D:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): not answerable: reference A isn't in this campaign
+  C vs B (Q2-Q4 global filtering): pairable
+  D vs B (Q3 zone filtering): pairable
+  D vs C (Q5 zones vs global): pairable
+
+order balance (Williams design, seed 1):
+  entries within launch C:heavy|B:heavy|D:heavy: exact; positions per item C:heavy [4, 4, 4]; B:heavy [4, 4, 4]; D:heavy [4, 4, 4]; each item directly after each other one 4-4 times
+
+12 launches, 0.90 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set vanilla, variant untyped.
+(exit 0)
+
+$ pfbench.py campaign --configs C,B --variant block_dust --levels heavy --blocks 8 --seed 1 --dry-run
+block 1: B:heavy,C:heavy
+block 2: C:heavy,B:heavy
+block 3: B:heavy,C:heavy
+block 4: C:heavy,B:heavy
+block 5: B:heavy,C:heavy
+block 6: C:heavy,B:heavy
+block 7: C:heavy,B:heavy
+block 8: B:heavy,C:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  2 entries: C:heavy|B:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): not answerable: reference A isn't in this campaign
+  C vs B (Q2-Q4 global filtering): pairable
+
+order balance (Williams design, seed 1):
+  entries within launch C:heavy|B:heavy: exact; positions per item C:heavy [4, 4]; B:heavy [4, 4]; each item directly after each other one 4-4 times
+
+8 launches, 0.49 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set vanilla, variant block_dust.
+(exit 0)
+
+$ pfbench.py campaign --configs C,E --modset sodium --levels heavy --blocks 8 --seed 1 --dry-run
+block 1: E:heavy  |  C:heavy
+block 2: C:heavy  |  E:heavy
+block 3: E:heavy  |  C:heavy
+block 4: C:heavy  |  E:heavy
+block 5: C:heavy  |  E:heavy
+block 6: E:heavy  |  C:heavy
+block 7: E:heavy  |  C:heavy
+block 8: C:heavy  |  E:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  1 entry: C:heavy
+  1 entry: E:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  C vs B (Q2-Q4 global filtering): not answerable: reference B isn't in this campaign
+  E vs C (Q7 Sodium Extra vs Particle Filter): pairable
+
+order balance (Williams design, seed 1):
+  launches within a block: exact; positions per item C:heavy [4, 4]; E:heavy [4, 4]; each item directly after each other one 4-4 times
+
+16 launches, 0.81 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set sodium, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --loader forge --configs A,B --levels idle,heavy --blocks 8 --seed 1 --dry-run
+block 1: B:heavy,B:idle  |  A:heavy,A:idle
+block 2: A:idle,A:heavy  |  B:idle,B:heavy
+block 3: B:heavy,B:idle  |  A:heavy,A:idle
+block 4: A:idle,A:heavy  |  B:idle,B:heavy
+block 5: A:heavy,A:idle  |  B:idle,B:heavy
+block 6: B:heavy,B:idle  |  A:idle,A:heavy
+block 7: B:idle,B:heavy  |  A:idle,A:heavy
+block 8: A:heavy,A:idle  |  B:heavy,B:idle
+
+launch groups (one launch each per block; entries share an install state):
+  2 entries: A:idle|A:heavy
+  2 entries: B:idle|B:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): pairable
+
+order balance (Williams design, seed 1):
+  launches within a block: exact; positions per item A:idle|A:heavy [4, 4]; B:idle|B:heavy [4, 4]; each item directly after each other one 4-4 times
+  entries within launch A:idle|A:heavy: exact; positions per item A:idle [4, 4]; A:heavy [4, 4]; each item directly after each other one 4-4 times
+  entries within launch B:idle|B:heavy: exact; positions per item B:idle [4, 4]; B:heavy [4, 4]; each item directly after each other one 4-4 times
+
+16 launches, 1.01 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: forge (Minecraft 1.20.1), mod set vanilla, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --loader forge --configs C,B,D --levels heavy --blocks 12 --seed 1 --dry-run
+block 1: D:heavy,C:heavy,B:heavy
+block 2: D:heavy,B:heavy,C:heavy
+block 3: B:heavy,D:heavy,C:heavy
+block 4: C:heavy,D:heavy,B:heavy
+block 5: B:heavy,C:heavy,D:heavy
+block 6: C:heavy,B:heavy,D:heavy
+block 7: B:heavy,D:heavy,C:heavy
+block 8: C:heavy,B:heavy,D:heavy
+block 9: D:heavy,B:heavy,C:heavy
+block 10: C:heavy,D:heavy,B:heavy
+block 11: D:heavy,C:heavy,B:heavy
+block 12: B:heavy,C:heavy,D:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  3 entries: C:heavy|B:heavy|D:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): not answerable: reference A isn't in this campaign
+  C vs B (Q2-Q4 global filtering): pairable
+  D vs B (Q3 zone filtering): pairable
+  D vs C (Q5 zones vs global): pairable
+
+order balance (Williams design, seed 1):
+  entries within launch C:heavy|B:heavy|D:heavy: exact; positions per item C:heavy [4, 4, 4]; B:heavy [4, 4, 4]; D:heavy [4, 4, 4]; each item directly after each other one 4-4 times
+
+12 launches, 0.90 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: forge (Minecraft 1.20.1), mod set vanilla, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --configs A,B,C,D,C-miss --levels heavy --blocks 6 --seed 1 --dry-run
+block 1: C-miss:heavy  |  A:heavy  |  B:heavy,C:heavy,D:heavy
+block 2: C-miss:heavy  |  D:heavy,B:heavy,C:heavy  |  A:heavy
+block 3: D:heavy,C:heavy,B:heavy  |  A:heavy  |  C-miss:heavy
+block 4: A:heavy  |  C:heavy,B:heavy,D:heavy  |  C-miss:heavy
+block 5: A:heavy  |  C-miss:heavy  |  B:heavy,D:heavy,C:heavy
+block 6: C:heavy,D:heavy,B:heavy  |  C-miss:heavy  |  A:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  1 entry: A:heavy
+  3 entries: B:heavy|C:heavy|D:heavy
+  1 entry: C-miss:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): IMPOSSIBLE: B runs in launches of 3 entries, A in launches of 1; compare.py will pair none of them
+  C vs B (Q2-Q4 global filtering): pairable
+  D vs B (Q3 zone filtering): pairable
+  D vs C (Q5 zones vs global): pairable
+  C-miss vs B (Q8 rules that never match): IMPOSSIBLE: C-miss runs in launches of 1 entry, B in launches of 3; compare.py will pair none of them
+
+order balance (Williams design, seed 1):
+  launches within a block: exact; positions per item A:heavy [2, 2, 2]; B:heavy|C:heavy|D:heavy [2, 2, 2]; C-miss:heavy [2, 2, 2]; each item directly after each other one 2-2 times
+  entries within launch B:heavy|C:heavy|D:heavy: exact; positions per item B:heavy [2, 2, 2]; C:heavy [2, 2, 2]; D:heavy [2, 2, 2]; each item directly after each other one 2-2 times
+
+18 launches, 1.06 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set vanilla, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --configs A,B,C,E --modset sodium --levels heavy --blocks 4 --seed 1 --dry-run
+block 1: E:heavy  |  A:heavy  |  C:heavy,B:heavy
+block 2: E:heavy  |  B:heavy,C:heavy  |  A:heavy
+block 3: C:heavy,B:heavy  |  A:heavy  |  E:heavy
+block 4: A:heavy  |  B:heavy,C:heavy  |  E:heavy
+
+launch groups (one launch each per block; entries share an install state):
+  1 entry: A:heavy
+  2 entries: B:heavy|C:heavy
+  1 entry: E:heavy
+
+comparisons PLAN.md needs, for the configurations in this campaign:
+  B vs A (Q1 overhead when installed but inactive): IMPOSSIBLE: B runs in launches of 2 entries, A in launches of 1; compare.py will pair none of them
+  C vs B (Q2-Q4 global filtering): pairable
+  E vs C (Q7 Sodium Extra vs Particle Filter): IMPOSSIBLE: E runs in launches of 1 entry, C in launches of 2; compare.py will pair none of them
+
+order balance (Williams design, seed 1):
+  launches within a block: NOT exact: use a multiple of 6 blocks; positions per item A:heavy [1, 2, 1]; B:heavy|C:heavy [1, 2, 1]; E:heavy [2, 0, 2]; each item directly after each other one 1-2 times
+  entries within launch B:heavy|C:heavy: exact; positions per item B:heavy [2, 2]; C:heavy [2, 2]; each item directly after each other one 2-2 times
+
+12 launches, 0.65 h of scripted phases and cool-downs (performance timing, 60 s cool-down; game start-up and quit not included). Loader: neoforge (Minecraft 1.21.1), mod set sodium, variant typed.
+(exit 0)
+
+$ pfbench.py campaign --loader forge --configs C,E --modset sodium --levels heavy --blocks 8 --seed 1 --dry-run
+pfbench: launch E:heavy: --modset sodium isn't available for forge (available: vanilla)
+(exit 2)
+
