@@ -373,7 +373,7 @@ class EndToEndCompareTests(TempDir):
         camp = self.build_campaign()
         runs = compare.load_runs(camp)
         report = compare.compare(runs, "B", ["mean_frametime_ms"], 1.0, 2.0)
-        r = report["strata"]["moderate/typed/vanilla"]["results"]["C"]["metrics"]["mean_frametime_ms"]
+        r = report["strata"]["moderate/typed/vanilla"]["datasets"]["primary:unlabelled"]["results"]["C"]["metrics"]["mean_frametime_ms"]
         self.assertEqual(r["pairs"], 6)
         self.assertAlmostEqual(r["mean_diff_pct"], -10.0, places=6)
         self.assertEqual(r["verdict"], "better")
@@ -418,7 +418,84 @@ class EndToEndCompareTests(TempDir):
         report = compare.compare(compare.load_runs(camp), "B", ["mean_frametime_ms"], 1.0, 2.0)
         self.assertEqual(set(report["strata"]), {"moderate/typed/vanilla", "heavy/typed/vanilla"})
         for s in report["strata"].values():
-            self.assertEqual(s["results"]["C"]["metrics"]["mean_frametime_ms"]["pairs"], 1)
+            self.assertEqual(s["datasets"]["primary:unlabelled"]["results"]["C"]["metrics"]["mean_frametime_ms"]["pairs"], 1)
+
+
+class ReducedTpsTests(TempDir):
+    """PLAN.md section 5: reduced-TPS windows are kept, classified, and compared only among themselves."""
+    PHASES_B = {"01-B-moderate": 1.25, "02-B-moderate": 1.25}   # B's window takes 1.25x its nominal time: 16 TPS
+    PHASES_C = {"01-C-moderate": 1.25, "02-C-moderate": 1.25}
+
+    def build(self, slow_blocks: set, slow: dict) -> Path:
+        camp = self.dir / "campaign"
+        for b, launches in enumerate(pfbench.campaign_schedule(["C", "B"], ["moderate"], 6, seed=1), start=1):
+            for li, launch in enumerate(launches, start=1):
+                seq = ",".join(f"{c}:{lv}" for c, lv in launch)
+                run = make_run(self.dir / "launches", seq, block=b, launch_in_block=li, frame_ms={"C": 4.5, "B": 5.0},
+                               slow_ticks=slow if b in slow_blocks else None)
+                ingest_harness.ingest_run(run, camp, None, False, False)
+        return camp
+
+    def test_tps_threshold(self):
+        self.assertEqual(ingest_harness.REDUCED_TPS_BELOW, 19.6)
+        self.assertEqual(ingest_harness.tps_class(19.6), "20tps")
+        self.assertEqual(ingest_harness.tps_class(19.59), "reduced")
+        self.assertIsNone(ingest_harness.tps_class(None))
+
+    def test_reduced_window_is_kept_with_tps_and_request_rates(self):
+        run = make_run(self.dir / "r", "C:moderate,B:moderate", frame_ms={"C": 4.0, "B": 5.0}, slow_ticks=self.PHASES_B)
+        ingest_harness.ingest_run(run, self.dir / "campaign", None, False, False)
+        w = {}
+        for d in (self.dir / "campaign" / "runs").glob("*/"):
+            meta = json.loads((d / "run.json").read_text())
+            w[meta["config"]] = meta | {"_summary": json.loads((d / "summary.json").read_text())}
+        b, c = w["B"], w["C"]
+        self.assertTrue(b["_summary"]["usable"])
+        self.assertEqual(b["tps_class"], "reduced")
+        self.assertAlmostEqual(b["achieved_tps"], 16.0)
+        self.assertEqual(c["tps_class"], "20tps")
+        self.assertAlmostEqual(c["achieved_tps"], 20.0)
+        low = [i for i in b["_summary"]["issues"] if i["code"] == "client_tick_rate_low"]
+        self.assertEqual([i["level"] for i in low], ["info"])
+        for x in (b, c):   # requests per tick are fixed by the plan; per second they follow the tick rate
+            self.assertAlmostEqual(x["workload"]["requests_per_tick"], 75)   # 50 target + 25 control
+            self.assertAlmostEqual(x["per_tick"]["requests_per_tick"], 75)
+        self.assertAlmostEqual(b["workload"]["requests_per_s"], 75 * 16)
+        self.assertAlmostEqual(c["workload"]["requests_per_s"], 75 * 20)
+        self.assertAlmostEqual(b["per_tick"]["frames_per_tick"], 200 / 16)
+        self.assertAlmostEqual(b["per_tick"]["wall_ms_per_tick"], 62.5)
+
+    def test_saturation_pairs_form_their_own_dataset(self):
+        camp = self.build({2, 5}, self.PHASES_B)
+        runs = compare.load_runs(camp)
+        rep = compare.compare(runs, "B", ["mean_frametime_ms"], 1.0, 2.0)["strata"]["moderate/typed/vanilla"]
+        self.assertEqual(rep["excluded"], [])   # a lower per-second rate is not a workload mismatch
+        self.assertEqual(set(rep["datasets"]), {"primary:unlabelled", "saturation:unlabelled"})
+        prim = rep["datasets"]["primary:unlabelled"]["results"]["C"]
+        sat = rep["datasets"]["saturation:unlabelled"]["results"]["C"]
+        self.assertEqual(prim["blocks"], ["1", "3", "4", "6"])
+        self.assertEqual(sat["blocks"], ["2", "5"])
+        self.assertAlmostEqual(prim["metrics"]["mean_frametime_ms"]["mean_diff_pct"], -10.0, places=6)
+        self.assertNotIn("achieved_tps", prim["metrics"])
+        self.assertAlmostEqual(sat["metrics"]["achieved_tps"]["mean_diff"], 4.0)
+        self.assertEqual(sat["metrics"]["achieved_tps"]["verdict"], "better")
+        self.assertAlmostEqual(sat["metrics"]["requests_per_s"]["mean_diff"], 75 * 4)
+        self.assertEqual(sat["metrics"]["requests_per_s"]["verdict"], "descriptive")
+        self.assertEqual([p["block"] for p in rep["held_20tps"]], ["2", "5"])
+        self.assertEqual(rep["lost_20tps"], [])
+        md = compare.to_markdown(compare.compare(runs, "B", ["mean_frametime_ms"], 1.0, 2.0), runs, camp)
+        self.assertIn("Saturation / stress-test dataset", md)
+        self.assertIn("Configuration held 20 TPS, reference did not", md)
+        self.assertIn("| 2 | C | 16.00 → 20.00 |", md)
+        self.assertEqual(md.count("| reduced |"), 2)   # both reduced windows stay in the run table
+
+    def test_unfavourable_tps_loss_is_listed(self):
+        camp = self.build({3}, self.PHASES_C)
+        runs = compare.load_runs(camp)
+        rep = compare.compare(runs, "B", ["mean_frametime_ms"], 1.0, 2.0)["strata"]["moderate/typed/vanilla"]
+        self.assertEqual([p["block"] for p in rep["lost_20tps"]], ["3"])
+        self.assertEqual(rep["held_20tps"], [])
+        self.assertAlmostEqual(rep["datasets"]["saturation:unlabelled"]["results"]["C"]["metrics"]["achieved_tps"]["mean_diff"], -4.0)
 
 
 class ScenarioTests(unittest.TestCase):

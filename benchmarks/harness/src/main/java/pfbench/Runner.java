@@ -85,6 +85,9 @@ public final class Runner {
     private TickLog ticks;
     private String[] phaseNames;
     private long origin;
+    /** Wall clock and JVM uptime read next to {@link #origin}: they align GC-log and system-sampler data with phases. */
+    private long originEpochMs;
+    private long originUptimeMs;
     private int phaseIndex = -1;
     private int phaseTick;
     private long[] phaseStart;
@@ -308,6 +311,8 @@ public final class Runner {
 
     private void begin() {
         recordSetupState();
+        originEpochMs = System.currentTimeMillis();
+        originUptimeMs = ManagementFactory.getRuntimeMXBean().getUptime();
         origin = System.nanoTime();
         frames.start(origin);
         Counters.resetTick();
@@ -552,6 +557,16 @@ public final class Runner {
         j.addProperty("emitters", emitters == null ? 0 : emitters.length);
         j.add("setup", setupInfo);
         j.add("window_at_end", windowInfo());
+        if (origin != 0) {
+            // Every t_ns in frames.csv, ticks.csv and phases.csv is System.nanoTime() minus origin_nano_time. On Linux
+            // System.nanoTime is CLOCK_MONOTONIC, the clock tools/sample_system.py stamps its samples with.
+            JsonObject clock = new JsonObject();
+            clock.addProperty("origin_nano_time", origin);
+            clock.addProperty("origin_epoch_ms", originEpochMs);
+            clock.addProperty("origin_jvm_uptime_ms", originUptimeMs);
+            clock.addProperty("nano_time_source", "System.nanoTime (CLOCK_MONOTONIC on Linux)");
+            j.add("clock", clock);
+        }
         if (frames != null) {
             j.addProperty("frames_logged", frames.size());
             j.addProperty("frames_dropped_capacity", frames.dropped());

@@ -1,0 +1,227 @@
+{
+  "label": "functional",
+  "note": "Functional bring-up run: checks that the harness works. NOT a performance result; don\u0027t quote its timings.",
+  "run_id": "functional-0.3.0-sysdata-C-B",
+  "kind": "run",
+  "plan_file": "plan.json",
+  "plan_sha256": "d5a858ef5e4433b49278bf9ac9bacf358feba470070bc36d4262bc46fce5c2d5",
+  "scenario": {
+    "id": "S1-synthetic",
+    "version": 1,
+    "sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317"
+  },
+  "started_utc": "2026-11-09T13:31:00.590749877Z",
+  "finished_utc": "2026-11-09T13:31:37.228396335Z",
+  "ok": true,
+  "versions": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250",
+    "pfbench": "0.3.0",
+    "particlefilter": "1.2.0",
+    "java": "21.0.12.1+1-LTS",
+    "java_vendor": "Eclipse Adoptium",
+    "os": "Linux 7.2.15-1-omarchy"
+  },
+  "mods": [
+    "minecraft 1.21.1",
+    "particlefilter 1.2.0",
+    "pfbench 0.3.0",
+    "neoforge 21.1.250"
+  ],
+  "mods_folder": [
+    {
+      "file": "particlefilter-neoforge-1.2.0+1.21.1.jar",
+      "sha256": "0806e94cd38daad4b3c77523914e13e1020272a7cae1dfc6ee86c9c2a5efba4e"
+    }
+  ],
+  "mod_files": [
+    {
+      "file": "neoforge-21.1.250.jar",
+      "nested": false,
+      "mods": [
+        "minecraft 1.21.1"
+      ]
+    },
+    {
+      "file": "particlefilter-neoforge-1.2.0+1.21.1.jar",
+      "nested": false,
+      "mods": [
+        "particlefilter 1.2.0"
+      ]
+    },
+    {
+      "file": "main",
+      "nested": false,
+      "mods": [
+        "pfbench 0.3.0"
+      ]
+    },
+    {
+      "file": "neoforge-21.1.250.jar",
+      "nested": false,
+      "mods": [
+        "neoforge 21.1.250"
+      ]
+    }
+  ],
+  "jvm_args": [
+    "-Dfml.modFolders\u003dpfbench%%~/Work/particle-filter/benchmarks/harness/build/classes/java/main:pfbench%%~/Work/particle-filter/benchmarks/harness/build/resources/main",
+    "--module-path\u003d~/.gradle/caches/modules-2/files-2.1/cpw.mods/bootstraplauncher/2.0.2/1a2d076cbc33b0520cbacd591224427b2a20047d/bootstraplauncher-2.0.2.jar:~/.gradle/caches/modules-2/files-2.1/cpw.mods/securejarhandler/3.0.8/c0ef95cecd8699a0449053ac7d9c160748d902cd/securejarhandler-3.0.8.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-commons/9.10.1/4229e4c55fd8e01c23f9fe9884075cc628aacc50/asm-commons-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-util/9.10.1/7bb9d450e8d4cbf9f9e04096c44bbfe7fba80b15/asm-util-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-analysis/9.10.1/8d49f14d51f632cb1d87c88d1ceaf50db0d8af1b/asm-analysis-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.10.1/e244332a17564c1d1572449399a842de35881be2/asm-tree-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.10.1/ada2141c0cc52ee8f5c48cd5fa4ce0e794f22236/asm-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/net.neoforged/JarJarFileSystems/0.4.1/78f59f89defcd032ed788b151ca6a0d40ace796a/JarJarFileSystems-0.4.1.jar",
+    "--add-modules\u003dALL-MODULE-PATH",
+    "--add-opens\u003djava.base/java.util.jar\u003dcpw.mods.securejarhandler",
+    "--add-opens\u003djava.base/java.lang.invoke\u003dcpw.mods.securejarhandler",
+    "--add-exports\u003djava.base/sun.security.util\u003dcpw.mods.securejarhandler",
+    "--add-exports\u003djdk.naming.dns/com.sun.jndi.dns\u003djava.naming",
+    "-Xms4G",
+    "-Xmx4G",
+    "-XX:+UseG1GC",
+    "-Xlog:gc*:file\u003dgc.log:time,uptime,level,tags",
+    "-Dlog4j2.configurationFile\u003d~/Work/particle-filter/benchmarks/harness/build/moddev/clientLog4j2.xml",
+    "-Djava.net.preferIPv6Addresses\u003dsystem",
+    "-DignoreList\u003dmixinextras-neoforge-0.5.3.jar,client-extra,neoforge-",
+    "-DlegacyClassPath.file\u003d~/Work/particle-filter/benchmarks/harness/build/moddev/clientLegacyClasspath.txt",
+    "-Dneoforge.enableGameTest\u003dtrue",
+    "-Dpfbench.plan\u003d~/Work/particle-filter/benchmarks/harness/run/runs/functional-0.3.0-sysdata-C-B/plan.json",
+    "-Dfile.encoding\u003dUTF-8",
+    "-Duser.country\u003dUS",
+    "-Duser.language\u003den",
+    "-Duser.variant"
+  ],
+  "provenance": {
+    "git_commit": "615845d10259ce22f0e59b9471667f828877c77b",
+    "git_dirty_paths": [
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/tools/compare.py",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/sample_system.py",
+      "benchmarks/tools/tests/test_pipeline.py",
+      "benchmarks/tools/tests/test_tools.py",
+      "benchmarks/tools/system_data.py",
+      "benchmarks/tools/tests/test_system_data.py"
+    ],
+    "harness_version": "0.3.0",
+    "harness_sources_sha256": "c44ad21942e45708098c59d8d554a207261d354c5527b525632dbaec89041235",
+    "launcher_sha256": "cabd734eff8ed03d8cf0d9e6a690a44903f3ee4e2702ec54cebdf923918741f5",
+    "tools_sha256": "3254d1a442fe64d6797da5b30bb26f61f948f1007a8291bee400464ac63af4e5"
+  },
+  "seed": 20261109,
+  "variant": "typed",
+  "target_lifetime_ticks": 40,
+  "control_lifetime_ticks": 40,
+  "control_attempts_per_tick": 25.0,
+  "control_z_offset": 1.0,
+  "emitters": 256,
+  "setup": {
+    "particles_setting_found": "ALL",
+    "particlefilter_present": true,
+    "particlefilter_version": "1.2.0",
+    "particlefilter_mode_at_load": "EVERYWHERE",
+    "gl": {
+      "renderer": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2",
+      "vendor": "NVIDIA Corporation",
+      "version": "3.2.0 NVIDIA 615.78.08"
+    },
+    "gamerules": {
+      "doDaylightCycle": false,
+      "doWeatherCycle": false,
+      "doMobSpawning": false,
+      "randomTickSpeed": 0
+    },
+    "level_name": "pfbench",
+    "day_time": 6000,
+    "raining": false,
+    "player_spectator": true,
+    "player_position": [
+      0.5,
+      102.38,
+      0.5
+    ],
+    "player_eye_y": 104.00000000476837,
+    "window_at_start": {
+      "width": 2536,
+      "height": 1390,
+      "fullscreen": false
+    },
+    "options": {
+      "renderDistance": 8,
+      "simulationDistance": 5,
+      "maxFps": 60,
+      "enableVsync": false,
+      "particles": "ALL",
+      "graphicsMode": "FANCY",
+      "fullscreen": false,
+      "ao": true,
+      "renderClouds": "OFF",
+      "fov": 70,
+      "guiScale": 0,
+      "pauseOnLostFocus": false,
+      "hideGui": true
+    }
+  },
+  "window_at_end": {
+    "width": 2536,
+    "height": 1390,
+    "fullscreen": false
+  },
+  "clock": {
+    "origin_nano_time": 25828817298436,
+    "origin_epoch_ms": 1794231068217,
+    "origin_jvm_uptime_ms": 16179,
+    "nano_time_source": "System.nanoTime (CLOCK_MONOTONIC on Linux)"
+  },
+  "frames_logged": 1709,
+  "frames_dropped_capacity": 0,
+  "frame_capacity": 68000,
+  "ticks_logged": 580,
+  "ticks_dropped_capacity": 0,
+  "particlefilter_modes": [
+    {
+      "phase": "load-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r1-01-C",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r1-02-B",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "warmup-r2-01-C",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r2-02-B",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "01-C-moderate-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "01-C-moderate",
+      "mode_requested": null,
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "02-B-moderate-settle",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "02-B-moderate",
+      "mode_requested": null,
+      "mode_after_start": "NONE"
+    }
+  ],
+  "notes": []
+}

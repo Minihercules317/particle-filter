@@ -123,10 +123,11 @@ For Q1 (B vs A), B runs alone, like A (`pfbench.py campaign --configs A,B` does 
 | MangoHud 0.8.4 (host package) | per-frame frame time, CPU load, RAM, `cpu_mhz` | **Works** for the dev client via `mangohud` + Gradle (env vars reach the game JVM; the OpenGL layer loads, the game renders on the NVIDIA GPU). **`no_display` disables logging entirely** in 0.8.4, so runs use the minimal `fps_only,background_alpha=0` HUD, identical in every run. GPU columns (`gpu_load`, `gpu_temp`, `gpu_power`) are **zero** on this hybrid laptop. With `log_interval=0` every frame is logged (checked: frame-time sum matches the `elapsed` span). |
 | MangoHud in the CurseForge Flatpak | same | HUD known to work (Java wrapper). Logging untested. It is a different MangoHud build (Flatpak extension), so record its version. |
 | `nvidia-smi -lms` (via `sample_system.py`) | GPU util, clocks, power, temperature, P-state, throttle reasons | Works |
-| `sample_system.py` (/proc, /sys) | CPU % per game thread, the core each ran on, package temperature, P/E-core clocks, RSS | Works (pilot) |
+| `sample_system.py` (/proc, /sys) | CPU % per game thread, the core each ran on, package temperature, P/E-core clocks, RSS | Works (pilot); **integrated into `pfbench.py`** for every launch (2026-11-09), rows stamped with CLOCK_MONOTONIC and aligned with the harness's phases (`tools/system_data.py`) |
 | pfbench harness | frame log aligned to phases, attempts/created/alive, tick times, GC, JIT compile time, class loading, server saves | **Built** (NeoForge 1.21.1, `harness/`); functional checks pass; no timing validated yet (phase 2b) |
 | `tools/ingest_harness.py` | harness launch → one `summary.json` + `run.json` per measured window (workload, diagnostics, environment, provenance) for `compare.py` | **Built**, unit-tested on synthetic runs; run end to end on functional runs (whose windows are unusable by design: frame-capped, too short) |
-| JVM unified GC log (`-Xlog:gc*:file=…:time,uptime`) | GC pauses and frequency | Standard JVM feature; parser not written yet |
+| JVM unified GC log (`-Xlog:gc*:file=…:time,uptime`) | GC pauses and frequency | Parsed by `tools/system_data.py` (stop-the-world pauses per window, aligned through JVM uptime at the harness origin) |
+| `collect_env.py` | hardware, power (AC, profiles, EPP, RAPL limits), GPU, displays, load | Run by `pfbench.py` before and after every launch; a changed power state fails the launch's checks and makes its windows unusable; the power-state hash is part of the pairing environment |
 | JFR (`jcmd`/`-XX:StartFlightRecording`) | CPU sampling, allocation profiling | Available (Temurin 21); diagnostic runs only |
 | spark (installed in ATM10 To the Sky) | sampling profiler in game | Available there; diagnostic runs only |
 | `perf`, PresentMon, gamemode | n/a | not installed; PresentMon is Windows-only. Not needed for the first phases |
@@ -160,6 +161,12 @@ limiter), > 3% FPS change between the first and last third of the window (drift)
 
 Each window is labelled from the sampler data: GPU-bound if NVIDIA utilization ≥ 95% at stable clocks;
 CPU-bound if the render thread is ≥ 95% busy and GPU utilization is lower. Otherwise it is labelled "mixed".
+Implemented in `tools/system_data.py` (2026-11-09): means over the sampler intervals that lie wholly inside the
+window; "stable clocks" = graphics clock (max − min) / median ≤ 5%; "unlabelled" with fewer than 3 intervals, without
+clock alignment, or when the game doesn't render on the NVIDIA GPU. All four thresholds are provisional until
+phase 4. `compare.py` keeps pairs apart by label: a pair whose two windows share a label goes into that label's
+dataset, and a pair whose labels differ (e.g. filtering turns a GPU-bound window CPU-bound) into a `differs`
+dataset of its own, so no aggregate mixes them.
 At each load level, a resolution probe (same window at 1280×720 and 2560×1440) confirms the label: large
 FPS changes with resolution mean GPU-bound. Results are reported per label and never pooled across them.
 
@@ -216,23 +223,33 @@ FPS changes with resolution mean GPU-bound. Results are reported per label and n
   within ±m, and *inconclusive* otherwise. Inconclusive and negative results are published like the others.
 - **Primary outcomes:** mean frame time (all questions); p99 frame time and 1% low are secondary and
   descriptive. Only primary outcomes support claims, which limits the multiple-comparisons problem.
-- **Reduced-TPS runs (owner decision, 2026-11-09; documentation only, implementation pending).** Phases are
+- **Reduced-TPS runs (owner decision, 2026-11-09; implemented 2026-11-09 in `ingest_harness.py` and `compare.py`,
+  unit-tested on synthetic runs).** Phases are
   counted in client ticks, so a configuration that drops the client below 20 ticks per second (TPS) receives fewer
   particle requests per real-world second. Rules:
   1. **Keep** valid runs where either configuration of a pair falls below 20 TPS. They are not excluded.
   2. **Two datasets, never mixed.** Pairs where both windows hold 20 TPS form the **primary FPS dataset**. Pairs
      where either window falls below 20 TPS are classified separately as **saturation / stress-test results**.
      Saturated and non-saturated measurements are never combined in one aggregate (mean, interval, verdict, chart).
-     Proposed threshold, to confirm when implementing: a window is reduced-TPS if its achieved client tick rate is
-     below 20 × 0.98 = 19.6 TPS (the tolerance `ingest_harness.py` already uses for `client_tick_rate_low`).
+     Threshold (implemented): a window is reduced-TPS if its achieved client tick rate (ticks / wall time of the
+     phase) is below 20 × 0.98 = 19.6 TPS. Pairs with no tick data on either side (manual runs) form a third,
+     separate "TPS unknown" dataset rather than being assumed to hold 20 TPS.
   3. **Report for every window and pair:** achieved TPS, FPS, the frame-time distribution (mean, median, p95, p99,
      p99.9, 1%/0.1% lows, hitches), particle requests per tick, and particle requests per real-world second.
-  4. **Per-tick-normalized analysis** (e.g. frame time per requested particle per tick) may be shown where
-     meaningful, next to the real-time measurements, never instead of them.
+  4. **Per-tick-normalized analysis** may be shown where meaningful, next to the real-time measurements, never
+     instead of them. Implemented as `run.json["per_tick"]`: requests per tick, frames rendered per client tick and
+     wall-clock ms per tick. Frame time per requested particle is *not* computed: requests per tick are fixed by the
+     plan and equal in every paired window, so dividing by them adds no information beyond frame time itself.
   5. **Name the cases where filtering keeps 20 TPS while the baseline cannot** (e.g. C at 20 TPS, B below) as their
      own finding, with both configurations' achieved TPS and FPS.
   6. **Keep raw measurements, including unfavourable ones** (e.g. Particle Filter configurations that lose TPS or
      FPS). Nothing is dropped for being inconvenient; exclusions follow the rules below only.
+- **Workload equivalence under reduced TPS (implementation choice, 2026-11-09):** paired windows must agree on the
+  *per-tick* workload (target and control attempts per tick, mean live control particles; ±2%). Requests per second
+  are reported, never used to exclude a pair, because a lower per-second rate is exactly what a reduced-TPS window
+  shows. In the saturation dataset, achieved TPS and requests per second get their own paired-difference rows (the
+  latter descriptive, without a verdict). If several windows of one configuration in one block differ in TPS class
+  or bound label, that pair is excluded with the reason rather than averaged across classes.
 - **Exclusions:** only by the automatic sanity checks or a reason written in `run.json` *before* looking at
   the comparison. Excluded runs stay in the raw data and are listed in every report.
 - **Never:** pooling CPU-bound and GPU-bound windows; comparing runs with different workloads; presenting

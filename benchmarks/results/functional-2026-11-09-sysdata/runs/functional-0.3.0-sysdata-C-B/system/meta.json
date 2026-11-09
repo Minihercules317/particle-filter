@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "pid": 2979948,
+  "interval_s": 1.0,
+  "min_thread_pct": 1.0,
+  "performance_cpus": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "efficiency_cpus": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "clk_tck": 100,
+  "gpu_query": "timestamp,utilization.gpu,utilization.memory,clocks.gr,clocks.mem,power.draw,temperature.gpu,pstate,clocks_event_reasons.active",
+  "package_temp_source": "/sys/class/hwmon/hwmon3/temp1_input",
+  "self_cpu": null,
+  "clock_start": {
+    "epoch_ns": 1794231052488094215,
+    "mono_ns": 25813087644436,
+    "uncertainty_ns": 1415,
+    "utc_offset_s": -18000
+  },
+  "clock_end": {
+    "epoch_ns": 1794231098553458915,
+    "mono_ns": 25859153004542,
+    "uncertainty_ns": 12007,
+    "utc_offset_s": -18000
+  },
+  "samples": 45
+}

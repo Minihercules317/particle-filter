@@ -1,0 +1,103 @@
+{
+  "format": 1,
+  "kind": "run",
+  "run_id": "functional-0.3.0-mangohud-B",
+  "label": "functional",
+  "output_dir": "~/Work/particle-filter/benchmarks/harness/run/runs/functional-0.3.0-mangohud-B",
+  "scenario": {
+    "id": "S1-synthetic",
+    "version": 1,
+    "sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317"
+  },
+  "seed": 20261109,
+  "variant": "typed",
+  "camera": {
+    "position": [
+      0.5,
+      102.38,
+      0.5
+    ],
+    "yaw": 0.0,
+    "pitch": 0.0,
+    "hide_hud": true
+  },
+  "emitters": {
+    "plane_z": 14.0,
+    "x_range": [
+      -8.0,
+      8.0
+    ],
+    "y_range": [
+      96.0,
+      112.0
+    ],
+    "grid": 16
+  },
+  "target_lifetime_ticks": 40,
+  "control_lifetime_ticks": 40,
+  "control_attempts_per_tick": 25,
+  "control_z_offset": 1.0,
+  "min_settle_ticks": 43,
+  "frame_capacity": 50000,
+  "screenshots": true,
+  "phases": [
+    {
+      "name": "load-settle",
+      "role": "settle",
+      "ticks": 100,
+      "target_per_tick": 0,
+      "control": false,
+      "mode": "NONE"
+    },
+    {
+      "name": "warmup",
+      "role": "warmup",
+      "ticks": 120,
+      "target_per_tick": 50,
+      "control": true,
+      "mode": "NONE",
+      "config": "B",
+      "level": "moderate"
+    },
+    {
+      "name": "01-B-moderate-settle",
+      "role": "switch-settle",
+      "ticks": 80,
+      "mode": "NONE",
+      "gc_at_start": true,
+      "target_per_tick": 50,
+      "control": true,
+      "config": "B",
+      "level": "moderate"
+    },
+    {
+      "name": "01-B-moderate",
+      "role": "measure",
+      "ticks": 100,
+      "screenshot": true,
+      "target_per_tick": 50,
+      "control": true,
+      "config": "B",
+      "level": "moderate"
+    }
+  ],
+  "provenance": {
+    "git_commit": "615845d10259ce22f0e59b9471667f828877c77b",
+    "git_dirty_paths": [
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/tools/compare.py",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/sample_system.py",
+      "benchmarks/tools/tests/test_pipeline.py",
+      "benchmarks/tools/tests/test_tools.py",
+      "benchmarks/tools/system_data.py",
+      "benchmarks/tools/tests/test_system_data.py"
+    ],
+    "harness_version": "0.3.0",
+    "harness_sources_sha256": "c44ad21942e45708098c59d8d554a207261d354c5527b525632dbaec89041235",
+    "launcher_sha256": "cabd734eff8ed03d8cf0d9e6a690a44903f3ee4e2702ec54cebdf923918741f5",
+    "tools_sha256": "3254d1a442fe64d6797da5b30bb26f61f948f1007a8291bee400464ac63af4e5"
+  }
+}

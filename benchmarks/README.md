@@ -34,11 +34,12 @@ design and decides which campaigns run.
 | Script | Purpose |
 |---|---|
 | `tools/frametimes.py summarize LOG [--skip-seconds S] [--duration-seconds D] [--cap-fps N] [--json OUT]` | Metrics and sanity checks for one MangoHud CSV or harness frame log (`.gz` works too) |
-| `tools/compare.py CAMPAIGN --reference B [--margin-pct 1]` | Paired comparison of configurations within each stratum, with bootstrap intervals and verdicts; rejects pairs whose workload or environment differs; shows order balance; lists every run and every exclusion. Refuses functional runs unless `--allow-functional` |
-| `tools/ingest_harness.py RUN_DIR... --campaign DIR [--block N]` | Harness launch → one `run.json` + `summary.json` per measured window (workload, diagnostics, environment, provenance) |
+| `tools/compare.py CAMPAIGN --reference B [--margin-pct 1]` | Paired comparison of configurations within each stratum, with bootstrap intervals and verdicts; rejects pairs whose per-tick workload or environment differs; keeps the primary 20-TPS dataset, the reduced-TPS saturation dataset and each CPU-/GPU-bound label apart (PLAN.md §4, §5); lists every pair, the pairs where filtering held 20 TPS and the reference didn't (and the reverse), order balance, every run and every exclusion. Refuses functional runs unless `--allow-functional` |
+| `tools/ingest_harness.py RUN_DIR... --campaign DIR [--block N]` | Harness launch → one `run.json` + `summary.json` per measured window (achieved TPS and class, workload per tick and per second, diagnostics, sampler and GC-log summaries, bound label, environment, provenance) |
+| `tools/system_data.py` | Library: aligns a launch's sampler rows and GC pauses with the harness's windows, the CPU-/GPU-bound label, the power state from snapshots |
 | `tools/schedule.py --configs A B C D --blocks 8 --seed N` | Counterbalanced (Williams design) run order |
-| `tools/collect_env.py --out env.json [--instance DIR] [--java PATH] [--pid PID]` | Hardware, software, display, power and mod-list snapshot (read-only; home paths and serials left out) |
-| `tools/sample_system.py --pid PID --out-dir DIR` | Per-thread CPU (and which core), clocks, temperature, RSS, `nvidia-smi` GPU stats during a run. Don't use `--self-cpu`: the owner prohibits changing CPU affinity |
+| `tools/collect_env.py --out env.json [--instance DIR] [--java PATH] [--pid PID]` | Hardware, software, display, power and mod-list snapshot (read-only; home paths and serials left out). `pfbench.py` runs it before and after every launch |
+| `tools/sample_system.py --pid PID --out-dir DIR` | Per-thread CPU (and which core), clocks, temperature, RSS, `nvidia-smi` GPU stats during a run, stamped with CLOCK_MONOTONIC. `pfbench.py` runs it for every launch. Don't use `--self-cpu`: the owner prohibits changing CPU affinity |
 | `tools/make_pf_config.py synthetic\|miss\|rules\|zones` | Particle Filter configs for the benchmark configurations |
 | `tools/pilot_devclient.sh OUT [WARMUP] [DURATION] [--hide]` | Pipeline pilot: dev client under MangoHud on the title screen |
 | `harness/pfbench.py template\|run\|campaign\|check` | Synthetic harness launcher: template world, one launch per configuration set, counterbalanced campaigns, functional checks ([harness/README.md](harness/README.md)) |

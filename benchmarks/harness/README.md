@@ -5,7 +5,8 @@ It is **not** part of Particle Filter. It's a separate Gradle build that the rel
 at the repository root), CI and CurseForge uploads never include. Particle Filter contains no benchmark code.
 
 > **Status: built and functionally validated** ([results/functional-2026-11-09](../results/functional-2026-11-09/FUNCTIONAL.md),
-> [results/functional-2026-11-09-pipeline](../results/functional-2026-11-09-pipeline/FUNCTIONAL.md)).
+> [results/functional-2026-11-09-pipeline](../results/functional-2026-11-09-pipeline/FUNCTIONAL.md),
+> [results/functional-2026-11-09-sysdata](../results/functional-2026-11-09-sysdata/FUNCTIONAL.md)).
 > **No performance runs yet:** they are blocked until the owner confirms the laptop's power-limit problems are
 > fixed. The launcher refuses a non-`--functional` run or campaign unless `PFBENCH_PERFORMANCE_APPROVED=1` is set,
 > which must only happen after that confirmation.
@@ -20,6 +21,7 @@ From the repository root (Java comes from mise; Gradle runs offline from the cac
 mise exec -- ./gradlew -p benchmarks/harness compileJava        # build only
 python3 benchmarks/harness/pfbench.py template --hide           # once: create the template void world
 python3 benchmarks/harness/pfbench.py run --functional --hide --sequence C:moderate,B:moderate,D:moderate
+python3 benchmarks/harness/pfbench.py run --functional --hide --mangohud --sequence B:moderate   # + MangoHud frame log
 python3 benchmarks/harness/pfbench.py check benchmarks/harness/run/runs/<run-id>
 python3 benchmarks/harness/pfbench.py campaign --configs C,B,D --levels heavy --blocks 6 --seed 1 --dry-run
 python3 benchmarks/tools/ingest_harness.py benchmarks/harness/run/runs/<run-id> --campaign benchmarks/results/<campaign>
@@ -44,6 +46,10 @@ python3 benchmarks/tools/compare.py benchmarks/results/<campaign> --reference B
 - `--hide` moves the game window to the hidden Hyprland special workspace `pfbench` (functional runs).
 - Particle Filter's jar defaults to the repository's built NeoForge jar for the current `mod.version`
   (`mise exec -- ./gradlew :1.21.1-neoforge:build buildAndCollect`); `--pf-jar` picks another.
+- `--mangohud` runs the launch under MangoHud 0.8.4 with the pilot's minimal HUD (`fps_only,background_alpha=0`;
+  `no_display` would stop its logging) and keeps the per-frame log in `mangohud/` as raw data for the phase 2b
+  cross-check. The HUD renders, so it is part of the environment: use it for every launch of a campaign or none
+  (`campaign --mangohud` does that).
 - `campaign` runs several launches in a counterbalanced order (below). `--dry-run` prints the order only.
 
 Everything a launch writes is under `benchmarks/harness/run/` (gitignored): the template in `run/template/`, one
@@ -59,13 +65,18 @@ setting.
    NeoForge's early loading window off, a fresh copy of the template world, Particle Filter's release jar and
    config for B/C/D/C-miss, and the rendering mods and their configs for `--modset sodium`. Copies of these input
    files go to `inputs/`.
-3. It starts `./gradlew -p benchmarks/harness runClient` with Gradle properties that point the run at that
-   directory and plan, and open the world with `--quickPlaySingleplayer pfbench`.
+3. It takes an environment snapshot (`tools/collect_env.py` → `env-before.json`: CPU, power and RAPL limits, GPU,
+   displays, load, the run's game directory), then starts `./gradlew -p benchmarks/harness runClient` (under
+   MangoHud with `--mangohud`) with Gradle properties that point the run at that directory and plan, and open the
+   world with `--quickPlaySingleplayer pfbench`. As soon as the game JVM appears it starts `tools/sample_system.py`
+   on it (`system/`, one sample per second until the game exits; never `--self-cpu`) and records the process's
+   command line, java binary and CPU affinity (read, never changed).
 4. In game, the harness waits for the world, makes the player a spectator at the camera position, waits 1 s,
    then runs the phases: `load-settle` → warmup → for each entry, `NN-CONFIG-LEVEL-settle` (mode switch and
    `System.gc()` at its start) → `NN-CONFIG-LEVEL` (measure). With several entries the warmup cycles through all of
    them twice (`warmup-r1-01-C`, `warmup-r1-02-B`, …), each in its own mode. Then the harness writes its files and quits.
-5. The launcher copies the configs as the mods saved them on exit to `inputs-after/`, and `pfbench.py check` runs
+5. The launcher stops the sampler if it hasn't stopped by itself, takes `env-after.json` (with the game's java
+   version), copies the configs as the mods saved them on exit to `inputs-after/`, and `pfbench.py check` runs
    the functional checks and writes `check.json`. It prints no timings.
 
 ## Outputs (per launch)
@@ -80,7 +91,11 @@ setting.
 | `launch.json` | Launcher side: sequence and entry positions, campaign/block, scenario and template hashes, Particle Filter jar and config SHA-256, rendering mods, SHA-256 of every input file before and after, the rendering-environment hash, provenance (git commit, uncommitted paths, harness source hash, launcher and tools hashes), window state |
 | `inputs/`, `inputs-after/` | `options.txt`, `fml.toml`, `particlefilter.json`, `sodium-options.json`, `sodium-extra-options.json` as written before the launch and as saved at quit |
 | `check.json` | Functional check results |
-| `game/gc.log` | JVM GC log (scenario `[jvm]` arguments) |
+| `game/gc.log` | JVM GC log (scenario `[jvm]` arguments); `tools/system_data.py` parses its stop-the-world pauses |
+| `env-before.json`, `env-after.json`, `env.log` | `tools/collect_env.py` snapshots before Gradle starts and after the game quit. The power state (AC, platform/power profile, governor, EPP, no_turbo, RAPL limits) must be equal in both: a check fails and ingest marks the windows unusable otherwise |
+| `system/` (`meta.json`, `system.csv`, `threads.csv`, `gpu.csv`), `sampler.log` | `tools/sample_system.py` for the game's whole life: per-thread CPU % and core, CPU busy %, P-/E-core clocks, package temperature, RSS, nvidia-smi (utilization, clocks, power, temperature, P-state, throttle reasons). Rows carry `mono_ns` (CLOCK_MONOTONIC); `meta.json` holds wall/monotonic clock pairs that convert nvidia-smi's timestamps |
+| `mangohud/` | With `--mangohud`: MangoHud's per-frame CSV (no `_summary.csv`: MangoHud writes it when logging stops, and the game quits first). Raw data, unused by the pipeline until phase 2b |
+| `harness.json["clock"]` | `System.nanoTime()`, wall clock and JVM uptime at the phase origin (harness 0.3.0+): every `t_ns` is relative to it, which lines sampler and GC-log data up with phases |
 
 ## From a launch to compare.py
 
@@ -91,11 +106,28 @@ setting.
   separate phase), plus window issues: `functional_check_failed` or `harness_error` (errors: unusable),
   `frames_missing` (error), `client_tick_rate_low`, `jit_activity`, `autosave_in_window` (warnings), `gc_in_window`,
   `classes_loaded` (info), and frametimes' own checks (e.g. `too_few_frames`, `frame_limited`).
-- `run.json` has the configuration, `block`, `launch_in_block`, `position_in_launch`, the `stratum`
-  (level/variant/modset), `workload` (attempts and created per tick and per second, target and control live means,
-  ticks per second), `diagnostics` (GC, JIT, classes, saves, tick times, heap, CPU frame time), `environment` (what
-  paired runs must share; see PLAN.md §2) and `provenance` (jar and config hashes, versions, mods, JVM arguments,
-  GPU, commit).
+- `run.json` (schema 2) has the configuration, `block`, `launch_in_block`, `position_in_launch`, the `stratum`
+  (level/variant/modset), `achieved_tps` and `tps_class`, `workload` (particle requests, attempts and created per
+  tick **and** per real-world second, target and control live means), `per_tick` (requests per tick, frames per
+  tick, wall ms per tick), `diagnostics` (GC, JIT, classes, saves, tick times, heap, CPU frame time), `gc_log`
+  (pauses that ended inside the window), `system` (sampler summary: render/server thread CPU % and P-core share,
+  CPU busy, clocks, package temperature, GPU utilization/clocks/power/P-states/throttle reasons), `bound` and
+  `bound_reason`, `environment` (what paired runs must share; see PLAN.md §2) and `provenance` (jar and config
+  hashes, versions, mods, JVM arguments, GPU, commit).
+- **Reduced TPS** (PLAN.md §5): a window whose achieved client tick rate is below 19.6 is `tps_class: "reduced"`.
+  It stays usable (`client_tick_rate_low` is informational). Phases are counted in ticks, so its requests per
+  tick equal everyone else's while its requests per second are lower.
+- **Bound label** (PLAN.md §4, `tools/system_data.py`): `gpu-bound` if mean NVIDIA utilization ≥ 95% with the
+  graphics clock within 5% (max−min over median); `cpu-bound` if the render thread is ≥ 95% busy and the GPU below
+  95%; else `mixed`; `unlabelled` without aligned sampler data, with fewer than 3 sampler intervals in the window, or
+  when the game doesn't render on the NVIDIA GPU. Provisional thresholds (phase 4).
+- `compare.py` pairs windows whose workload **per tick** and environment match, then puts each pair into a dataset:
+  `primary` (both windows at 20 TPS: the primary FPS dataset) or `saturation` (either below: stress-test results;
+  achieved TPS and requests per second get their own difference rows), crossed with the pair's bound label
+  (`differs` when the two windows' labels differ). No mean, interval or verdict combines datasets. The report lists
+  every pair (TPS, FPS, frame times, requests per tick and per second, frames per tick, reference → configuration),
+  the pairs where the configuration held 20 TPS and the reference did not, the reverse, and every window with its
+  full frame-time distribution.
 - Functional runs are refused unless `--allow-functional` (pipeline tests only); their windows keep the label.
   `compare.py` refuses them in turn unless `--allow-functional`, and then titles the report "PIPELINE TEST, NOT A
   RESULT". At a 60 FPS cap with 5 s phases they are also unusable by frametimes' own checks.
@@ -147,9 +179,7 @@ setting.
 
 ## Not done yet
 
-- Integrating `tools/collect_env.py` and `tools/sample_system.py` into the launcher (no `--self-cpu`), optional
-  MangoHud wrapping, and the CPU-/GPU-bound label (`run.json["bound"]` is `unlabelled` until then).
-- A GC-log parser (`game/gc.log`); per-window GC counts come from the MXBeans for now.
 - Forge 1.20.1 port.
+- The bound label's thresholds and the sampler's own cost are unvalidated (they need performance runs: phases 2b/4).
 - Phase 2b checks (harness frame log vs MangoHud, hidden-window throttling, fullscreen on DP-1): they compare
   timings, so they wait for the power-limit confirmation.

@@ -4,9 +4,14 @@
 Read-only and low-overhead: reads /proc and /sys once per interval and leaves GPU polling to one
 `nvidia-smi -lms` process. Writes three CSVs into --out-dir:
 
-  threads.csv  t_s, tid, name, cpu_pct, last_cpu       (threads above --min-thread-pct, plus named ones)
-  system.csv   t_s, cpu_busy_pct, pcore_mhz_mean, ecore_mhz_mean, pkg_temp_c, game_rss_mb
-  gpu.csv      nvidia-smi output (timestamp, utilization, clocks, power, temperature, P-state)
+  threads.csv  t_s, mono_ns, tid, name, cpu_pct, last_cpu  (threads above --min-thread-pct, plus named ones)
+  system.csv   t_s, mono_ns, cpu_busy_pct, pcore_mhz_mean, ecore_mhz_mean, pkg_temp_c, game_rss_mb
+  gpu.csv      nvidia-smi output (timestamp, utilization, clocks, power, temperature, P-state, throttle reasons)
+  meta.json    interval, P-/E-core lists, the GPU query, and (wall clock, CLOCK_MONOTONIC) pairs at start and end
+
+A sample at mono_ns covers the interval [mono_ns - interval, mono_ns]. mono_ns is CLOCK_MONOTONIC, the clock
+Java's System.nanoTime uses on Linux, so samples line up with the pfbench harness's phases (harness.json "clock").
+nvidia-smi stamps gpu.csv rows with local wall-clock time; meta.json's clock pairs convert them.
 
 cpu_pct is percent of one logical CPU (a thread using a full core reads 100). last_cpu is the CPU the
 thread last ran on, which shows P-core vs E-core placement on hybrid Intel CPUs.
@@ -21,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import glob
 import os
 import re
@@ -33,6 +39,17 @@ from pathlib import Path
 CLK_TCK = os.sysconf("SC_CLK_TCK")
 # Always written when present, even when idle, so their absence is visible in the data.
 WATCHED_THREADS = ("Render thread", "Server thread", "Worker-Main", "Particle", "C2ME", "GC Thread", "G1 ")
+GPU_QUERY = ("timestamp,utilization.gpu,utilization.memory,clocks.gr,clocks.mem,power.draw,temperature.gpu,pstate,"
+             "clocks_event_reasons.active")
+
+
+def clock_pair() -> dict:
+    """Wall clock and CLOCK_MONOTONIC read back to back (the monotonic read is bracketed to bound the error)."""
+    m0 = time.monotonic_ns()
+    wall = time.time_ns()
+    m1 = time.monotonic_ns()
+    return {"epoch_ns": wall, "mono_ns": (m0 + m1) // 2, "uncertainty_ns": m1 - m0,
+            "utc_offset_s": time.localtime(wall / 1e9).tm_gmtoff}
 
 
 def find_pid(pattern: str) -> int | None:
@@ -145,21 +162,26 @@ def main(argv: list[str] | None = None) -> int:
 
     gpu_proc = None
     if not args.no_gpu and shutil.which("nvidia-smi"):
-        q = "timestamp,utilization.gpu,utilization.memory,clocks.gr,clocks.mem,power.draw,temperature.gpu,pstate,clocks_event_reasons.active"
-        gpu_proc = subprocess.Popen(["nvidia-smi", f"--query-gpu={q}", "--format=csv",
+        gpu_proc = subprocess.Popen(["nvidia-smi", f"--query-gpu={GPU_QUERY}", "--format=csv",
                                      f"-lms={max(100, int(args.interval * 1000))}", "-f", str(args.out_dir / "gpu.csv")])
 
     pcores = read_cpu_list("/sys/devices/cpu_core/cpus")
     ecores = read_cpu_list("/sys/devices/cpu_atom/cpus")
     temp_path = package_temp_path()
+    meta = {"schema": 1, "pid": pid, "interval_s": args.interval, "min_thread_pct": args.min_thread_pct,
+            "performance_cpus": pcores, "efficiency_cpus": ecores, "clk_tck": CLK_TCK,
+            "gpu_query": GPU_QUERY if gpu_proc else None, "package_temp_source": temp_path,
+            "self_cpu": args.self_cpu, "clock_start": clock_pair(), "clock_end": None, "samples": 0}
+    meta_path = args.out_dir / "meta.json"
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n")
     start = time.monotonic()
     prev_threads = thread_times(pid)
     prev_busy, prev_total = cpu_busy()
     print(f"sampling pid {pid} every {args.interval}s into {args.out_dir}", file=sys.stderr)
     with open(args.out_dir / "threads.csv", "w", newline="") as tf, open(args.out_dir / "system.csv", "w", newline="") as sf:
         tw, sw = csv.writer(tf), csv.writer(sf)
-        tw.writerow(["t_s", "tid", "name", "cpu_pct", "last_cpu"])
-        sw.writerow(["t_s", "cpu_busy_pct", "pcore_mhz_mean", "ecore_mhz_mean", "pkg_temp_c", "game_rss_mb"])
+        tw.writerow(["t_s", "mono_ns", "tid", "name", "cpu_pct", "last_cpu"])
+        sw.writerow(["t_s", "mono_ns", "cpu_busy_pct", "pcore_mhz_mean", "ecore_mhz_mean", "pkg_temp_c", "game_rss_mb"])
         try:
             next_t = start + args.interval
             while True:
@@ -167,7 +189,8 @@ def main(argv: list[str] | None = None) -> int:
                 next_t += args.interval
                 if not Path(f"/proc/{pid}").exists():
                     break
-                now = time.monotonic()
+                mono = time.monotonic_ns()
+                now = mono / 1e9
                 t = round(now - start, 3)
                 cur = thread_times(pid)
                 for tid, (name, ticks, last_cpu) in cur.items():
@@ -176,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
                         continue
                     pct = (ticks - before[1]) / CLK_TCK / args.interval * 100
                     if pct >= args.min_thread_pct or name.startswith(WATCHED_THREADS):
-                        tw.writerow([t, tid, name, round(pct, 1), last_cpu])
+                        tw.writerow([t, mono, tid, name, round(pct, 1), last_cpu])
                 prev_threads = cur
                 busy, total = cpu_busy()
                 busy_pct = (busy - prev_busy) / max(1, total - prev_total) * 100
@@ -187,7 +210,8 @@ def main(argv: list[str] | None = None) -> int:
                         temp = int(Path(temp_path).read_text()) / 1000
                     except OSError:
                         pass
-                sw.writerow([t, round(busy_pct, 1), mean_mhz(pcores), mean_mhz(ecores), temp, rss_mb(pid)])
+                sw.writerow([t, mono, round(busy_pct, 1), mean_mhz(pcores), mean_mhz(ecores), temp, rss_mb(pid)])
+                meta["samples"] += 1
                 tf.flush()
                 sf.flush()
                 if args.duration is not None and now - start >= args.duration:
@@ -198,6 +222,8 @@ def main(argv: list[str] | None = None) -> int:
             if gpu_proc:
                 gpu_proc.terminate()
                 gpu_proc.wait(timeout=5)
+            meta["clock_end"] = clock_pair()
+            meta_path.write_text(json.dumps(meta, indent=2) + "\n")
     return 0
 
 

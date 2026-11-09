@@ -17,6 +17,12 @@ starts the harness through Gradle, waits for it to quit, and checks the counters
   pfbench.py check RUN_DIR
       Functional checks of a finished run (counters consistent, files parse, provenance matches). Prints no timings.
 
+Every launch also takes environment snapshots before and after (tools/collect_env.py: env-before.json,
+env-after.json), runs tools/sample_system.py against the game process for its whole life (system/; never with
+--self-cpu: CPU affinity changes are prohibited), and can run under MangoHud (--mangohud: raw frame log in mangohud/,
+for the blocked phase 2b cross-check; the HUD is part of the rendering environment, so it must be the same in every
+launch that is compared).
+
 Turning finished runs into compare.py input is done by benchmarks/tools/ingest_harness.py.
 
 Everything it writes lives under benchmarks/harness/run/ (gitignored). It never touches a Minecraft
@@ -55,8 +61,10 @@ TICKS_PER_SECOND = 20
 QUEUE_LIMIT = 16384   # ParticleEngine's EvictingQueue size per render type
 
 sys.path.insert(0, str(TOOLS))
-import make_pf_config  # noqa: E402  (benchmarks/tools)
+import collect_env  # noqa: E402  (benchmarks/tools)
+import make_pf_config  # noqa: E402
 import schedule  # noqa: E402
+import system_data  # noqa: E402
 
 # Configuration id -> (Particle Filter config kind or None for "not installed", Active rules mode,
 #                      Sodium Extra hides the target)
@@ -104,6 +112,12 @@ FUNCTIONAL_OPTIONS = {"maxFps": 60, "fullscreen": False}   # light on the machin
 FUNCTIONAL_WINDOW = ["--width", "1280", "--height", "720"]
 FUNCTIONAL_COOLDOWN_S = 5
 HARNESS_SOURCES = ("src", "build.gradle.kts", "settings.gradle.kts", "gradle.properties")
+SAMPLER_INTERVAL_S = 1.0
+SAMPLER_STOP_TIMEOUT_S = 15
+ENV_SNAPSHOT_TIMEOUT_S = 120
+# The pilot's MangoHud settings (tools/pilot_devclient.sh): the smallest HUD (0.8.4 logs nothing with no_display),
+# one row per frame, logging from 1 s after the first frame until the game quits.
+MANGOHUD_CONFIG = "fps_only,background_alpha=0,log_interval=0,autostart_log=1,log_versioning"
 
 
 def die(message: str) -> None:
@@ -280,12 +294,68 @@ def render_environment(game: Path, modset: str) -> dict:
 
 # ---- Gradle, window ----
 
-def gradle(args: list[str], log: Path) -> subprocess.Popen:
+def gradle(args: list[str], log: Path, mangohud_dir: Path | None = None) -> subprocess.Popen:
     cmd = ["mise", "exec", "--", "./gradlew", "--offline", "--console=plain", "-p", "benchmarks/harness", "runClient", *args]
+    env = None
+    if mangohud_dir is not None:
+        cmd = ["mangohud", "--dlsym", *cmd]
+        env = os.environ | {"MANGOHUD": "1", "MANGOHUD_CONFIG": f"{MANGOHUD_CONFIG},output_folder={mangohud_dir}"}
     with open(log, "w") as fh:
         fh.write("$ " + " ".join(cmd) + "\n")
         fh.flush()
-        return subprocess.Popen(cmd, cwd=REPO, stdout=fh, stderr=subprocess.STDOUT, start_new_session=True)
+        return subprocess.Popen(cmd, cwd=REPO, stdout=fh, stderr=subprocess.STDOUT, start_new_session=True, env=env)
+
+
+# ---- environment snapshots, system sampler ----
+
+def env_snapshot(out: Path, name: str, game: Path, jvm_args: str, note: str, java: str | None = None) -> dict:
+    """tools/collect_env.py into out/<name>.json, in its own process (read-only queries; a few seconds)."""
+    cmd = [sys.executable, "-I", str(TOOLS / "collect_env.py"), "--out", str(out / f"{name}.json"),
+           "--instance", str(game), "--repo", str(REPO), "--jvm-args", jvm_args, "--note", note]
+    if java:
+        cmd += ["--java", java]
+    with open(out / "env.log", "a") as fh:
+        fh.write("$ " + " ".join(cmd) + "\n")
+        fh.flush()
+        try:
+            code = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=ENV_SNAPSHOT_TIMEOUT_S).returncode
+        except subprocess.TimeoutExpired:
+            code = None
+    return {"file": f"{name}.json", "returncode": code}
+
+
+def start_sampler(pid: int, out: Path) -> subprocess.Popen:
+    """tools/sample_system.py for the game's whole life. Never --self-cpu (CPU affinity changes are prohibited)."""
+    cmd = [sys.executable, "-I", str(TOOLS / "sample_system.py"), "--pid", str(pid), "--out-dir", str(out / "system"),
+           "--interval", str(SAMPLER_INTERVAL_S)]
+    with open(out / "sampler.log", "w") as log:
+        log.write("$ " + " ".join(cmd) + "\n")
+        log.flush()
+        return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+
+
+def stop_sampler(proc: subprocess.Popen) -> int | None:
+    """The sampler stops by itself when the game exits; stop it if it doesn't."""
+    try:
+        return proc.wait(timeout=SAMPLER_STOP_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        proc.terminate()
+        try:
+            return proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return None
+
+
+def game_process(pid: int) -> tuple[dict, str | None]:
+    """The game JVM as the launcher saw it (command line, affinity: recorded, never changed) and its java binary."""
+    info = collect_env.redact(collect_env.process_info(pid))
+    try:
+        exe = os.readlink(f"/proc/{pid}/exe")
+    except OSError:
+        exe = None
+    info["java_exe"] = collect_env.redact(exe)
+    return info, exe
 
 
 def game_pid(timeout: float = 180) -> int | None:
@@ -506,7 +576,7 @@ def copy_inputs(game: Path, dest: Path) -> dict:
 
 def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str, functional: bool, hide: bool,
                pf_jar_path: str | None = None, run_id: str | None = None, sodium_defaults: bool = False,
-               campaign: dict | None = None) -> tuple[int, Path]:
+               campaign: dict | None = None, mangohud: bool = False) -> tuple[int, Path]:
     if not functional and os.environ.get("PFBENCH_PERFORMANCE_APPROVED") != "1":
         die("performance runs are blocked until the owner confirms the laptop's power-limit problems are fixed "
             "(benchmarks/HANDOFF.md). Use --functional for bring-up checks.")
@@ -531,6 +601,8 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
     template = TEMPLATE_DIR / scenario["world"]["template"]
     if not (template / "level.dat").exists():
         die(f"no template world at {template}; run: pfbench.py template")
+    if mangohud and not shutil.which("mangohud"):
+        die("--mangohud: mangohud is not installed")
     if game_running():
         die("a dev client is already running; close it first")
 
@@ -590,22 +662,34 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
               **install, "mods_dir": jars, "inputs_sha256": inputs,
               "render_environment": render_environment(game, modset),
               "jvm_args_requested": scenario.get("jvm", {}).get("args", ""),
-              "provenance": prov, "campaign": campaign, "hidden_window": hide}
+              "provenance": prov, "campaign": campaign, "hidden_window": hide,
+              "mangohud": {"config": MANGOHUD_CONFIG, "dir": "mangohud",
+                           "version": collect_env.run(["mangohud", "--version"])} if mangohud else None}
     gradle_args = [f"-Ppfbench.gameDir={game}", f"-Ppfbench.plan={plan_file}",
                    f"-Ppfbench.world={scenario['world']['template']}",
                    "-Ppfbench.jvmArgs=" + scenario.get("jvm", {}).get("args", "")]
     if functional:
         gradle_args.append("-Ppfbench.gameArgs=" + " ".join(FUNCTIONAL_WINDOW))
+    jvm_args = scenario.get("jvm", {}).get("args", "")
+    launch["env_snapshots"] = {"before": env_snapshot(out, "env-before", game, jvm_args, f"pfbench {run_id}: before launch")}
     (out / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")   # rewritten with the outcome below
-    proc = gradle(gradle_args, out / "gradle.log")
+    if mangohud:
+        (out / "mangohud").mkdir()
+    proc = gradle(gradle_args, out / "gradle.log", out / "mangohud" if mangohud else None)
     pid = game_pid()
     if pid is None:
         wait_for_exit(proc, 5)
         die(f"the game didn't start; see {out}/gradle.log")
+    sampler = start_sampler(pid, out)
+    launch["game_process"], java_exe = game_process(pid)
     launch["window"] = hide_window(pid, out / "window.log") if hide else window(pid)
     finished = wait_for_exit(proc, total_s + 600)
     launch["finished_utc"] = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     launch["exited_by_itself"] = finished
+    launch["system_sampler"] = {"dir": "system", "interval_s": SAMPLER_INTERVAL_S, "self_cpu": None,
+                                "returncode": stop_sampler(sampler)}
+    launch["env_snapshots"]["after"] = env_snapshot(out, "env-after", game, jvm_args,
+                                                    f"pfbench {run_id}: after the game quit", java=java_exe)
     launch["inputs_after_sha256"] = copy_inputs(game, out / "inputs-after")   # what the mods saved on exit
     (out / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")
     if not finished:
@@ -616,7 +700,7 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
 def cmd_run(args: argparse.Namespace) -> int:
     code, _ = run_launch(scenario_path=Path(args.scenario), sequence=args.sequence, variant=args.variant,
                          modset=args.modset, functional=args.functional, hide=args.hide, pf_jar_path=args.pf_jar,
-                         run_id=args.run_id, sodium_defaults=args.sodium_defaults)
+                         run_id=args.run_id, sodium_defaults=args.sodium_defaults, mangohud=args.mangohud)
     return code
 
 
@@ -660,6 +744,7 @@ def cmd_campaign(args: argparse.Namespace) -> int:
     name = args.name or f"campaign-{stamp}"
     sheet = {"campaign": name, "seed": args.seed, "configs": configs, "levels": levels, "variant": args.variant,
              "modset": args.modset, "label": "functional" if args.functional else "performance",
+             "mangohud": args.mangohud,
              "blocks": [[",".join(f"{c}:{lv}" for c, lv in launch) for launch in launches] for launches in plan]}
     for b, launches in enumerate(sheet["blocks"], start=1):
         print(f"block {b}: " + "  |  ".join(launches))
@@ -680,7 +765,8 @@ def cmd_campaign(args: argparse.Namespace) -> int:
             run_id = f"{name}-b{b:02d}-l{li}-{sequence.replace(':', '_').replace(',', '-')}"
             code, out = run_launch(scenario_path=Path(args.scenario), sequence=sequence, variant=args.variant,
                                    modset=args.modset, functional=args.functional, hide=args.hide, run_id=run_id,
-                                   campaign={"name": name, "block": b, "launch_in_block": li, "seed": args.seed})
+                                   campaign={"name": name, "block": b, "launch_in_block": li, "seed": args.seed},
+                                   mangohud=args.mangohud)
             failures += code != 0
             sheet["launches"].append({"block": b, "launch_in_block": li, "sequence": sequence, "run_id": run_id,
                                       "check_passed": code == 0})
@@ -846,7 +932,61 @@ def check(run: Path) -> int:
     names = {r["phase"] for r in frames}
     missing = [p["name"] for p in phases if p["name"] not in names]
     record("every phase has frames", not missing, ", ".join(missing))
+    if launch:
+        check_system_data(run, launch, harness, phases, record)
     return report(run, results)
+
+
+def check_system_data(run: Path, launch: dict, harness: dict, phases: list[dict], record) -> None:
+    """Environment snapshots, system sampler, GC log, MangoHud: written, parseable, covering the measured phases.
+    Counts and coverage only; no timing is read."""
+    snaps = launch.get("env_snapshots")
+    if snaps is not None:
+        envs = {}
+        for when in ("before", "after"):
+            info = snaps.get(when) or {}
+            path = run / str(info.get("file", f"env-{when}.json"))
+            try:
+                envs[when] = json.loads(path.read_text())
+                ok = info.get("returncode") == 0 and bool(envs[when].get("cpu"))
+            except (OSError, json.JSONDecodeError):
+                ok = False
+            record(f"environment snapshot written: {path.name}", ok, f"returncode {info.get('returncode')}")
+        if len(envs) == 2:
+            a, b = (system_data.power_state(envs[w]) for w in ("before", "after"))
+            diff = sorted(k for k in a if a[k] != b.get(k))
+            record("power settings unchanged from before to after the launch (AC, profiles, RAPL limits)", not diff,
+                   ", ".join(f"{k}: {a[k]} -> {b.get(k)}" for k in diff))
+    if launch.get("system_sampler") is not None:
+        info = launch["system_sampler"]
+        record("system sampler ran without --self-cpu (no affinity change)", info.get("self_cpu") is None)
+        sampler = system_data.load_sampler(run / info.get("dir", "system"))
+        record("system sampler wrote meta.json, system.csv and threads.csv",
+               sampler is not None and bool(sampler["system"]) and bool(sampler["threads"]),
+               f"{len(sampler['system']) if sampler else 0} system rows")
+        clock = harness.get("clock")
+        record("harness.json records the clock origin", bool(clock and clock.get("origin_nano_time")))
+        measures = [p for p in phases if p["role"] == "measure" and p["start_t_ns"] and p["end_t_ns"]]
+        if sampler and sampler["system"] and clock and measures:
+            first = system_data.window_mono(harness, int(measures[0]["start_t_ns"]), int(measures[0]["end_t_ns"]))[0]
+            last = system_data.window_mono(harness, int(measures[-1]["start_t_ns"]), int(measures[-1]["end_t_ns"]))[1]
+            interval = int(float(sampler["meta"].get("interval_s", 1.0)) * 1e9)
+            mono = [r["mono_ns"] for r in sampler["system"]]
+            covered = min(mono) - interval <= first and max(mono) >= last
+            record("sampler covers every measured phase", covered,
+                   f"{sum(1 for m in mono if first <= m <= last)} samples inside the measured span")
+            if sampler["meta"].get("gpu_query"):
+                record("GPU samples line up with the measured phases",
+                       any(first <= g["mono_ns"] <= last for g in sampler["gpu"]), f"{len(sampler['gpu'])} GPU rows")
+    gc_log = run / "game" / "gc.log"
+    if gc_log.exists():
+        pauses = system_data.parse_gc_log(gc_log)
+        record("gc.log parses (the settles' System.gc() pauses are there)",
+               any("System.gc()" in p["kind"] for p in pauses), f"{len(pauses)} pauses")
+    if launch.get("mangohud"):
+        logs = [f for f in (run / "mangohud").glob("*.csv") if not f.name.endswith("_summary.csv")]
+        rows = sum(max(0, sum(1 for _ in open(f)) - 3) for f in logs)   # MangoHud: 2 header lines + column header
+        record("MangoHud wrote a per-frame log", rows > 0, f"{len(logs)} files, {rows} rows")
 
 
 def report(run: Path, results: list[dict]) -> int:
@@ -874,6 +1014,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--modset", default="vanilla", choices=list(MODSETS), help="rendering mods in every configuration")
     r.add_argument("--functional", action="store_true", help="short phases, 60 FPS cap, windowed: bring-up checks only")
     r.add_argument("--hide", action="store_true", help="move the game window to the hidden special workspace")
+    r.add_argument("--mangohud", action="store_true", help="run under MangoHud and keep its per-frame log (raw data)")
     r.add_argument("--pf-jar", help="Particle Filter jar (default: the repo's build/libs/<version>/ NeoForge jar)")
     r.add_argument("--run-id")
     r.add_argument("--sodium-defaults", action="store_true",
@@ -889,6 +1030,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--name")
     c.add_argument("--functional", action="store_true")
     c.add_argument("--hide", action="store_true")
+    c.add_argument("--mangohud", action="store_true", help="every launch under MangoHud (all or none: the HUD renders)")
     c.add_argument("--dry-run", action="store_true", help="print the launch order only")
     k = sub.add_parser("check", help="functional checks of a finished run")
     k.add_argument("run_dir")

@@ -195,10 +195,10 @@ class ScheduleTests(unittest.TestCase):
 
 
 class CompareTests(TempDirTest):
-    def add_run(self, run_id, config, block, mean_ft, usable=True, workload=None):
+    def add_run(self, run_id, config, block, mean_ft, usable=True, workload=None, tps_class="20tps", bound="unlabelled"):
         d = self.dir / "runs" / run_id
         d.mkdir(parents=True)
-        meta = {"config": config, "block": block, "order": 1}
+        meta = {"config": config, "block": block, "order": 1, "tps_class": tps_class, "bound": bound}
         if workload:
             meta["workload"] = workload
         (d / "run.json").write_text(json.dumps(meta))
@@ -213,11 +213,11 @@ class CompareTests(TempDirTest):
             self.add_run(f"b{b}-C", "C", b, base * 1.10)
             self.add_run(f"b{b}-D", "D", b, base)
         report = compare.compare(compare.load_runs(self.dir), "B", ["mean_frametime_ms", "avg_fps"], 1.0, 2.0)
-        c = report["results"]["C"]["metrics"]["mean_frametime_ms"]
+        c = report["strata"]["all"]["datasets"]["primary:unlabelled"]["results"]["C"]["metrics"]["mean_frametime_ms"]
         self.assertAlmostEqual(c["mean_diff_pct"], 10.0, places=6)
         self.assertEqual(c["verdict"], "worse")
-        self.assertEqual(report["results"]["C"]["metrics"]["avg_fps"]["verdict"], "worse")
-        self.assertTrue(report["results"]["D"]["metrics"]["mean_frametime_ms"]["verdict"].startswith("equivalent"))
+        self.assertEqual(report["strata"]["all"]["datasets"]["primary:unlabelled"]["results"]["C"]["metrics"]["avg_fps"]["verdict"], "worse")
+        self.assertTrue(report["strata"]["all"]["datasets"]["primary:unlabelled"]["results"]["D"]["metrics"]["mean_frametime_ms"]["verdict"].startswith("equivalent"))
 
     def test_unusable_and_mismatched_runs_are_excluded_and_listed(self):
         self.add_run("b1-B", "B", 1, 5.0, workload={"spawn_attempts_per_s": 1000})
@@ -228,7 +228,44 @@ class CompareTests(TempDirTest):
         reasons = " ".join(why for _, why in report["excluded"])
         self.assertIn("workload differs", reasons)
         self.assertIn("not usable", reasons)
-        self.assertEqual(report["results"]["C"]["metrics"], {})
+        self.assertEqual(report["strata"]["all"]["datasets"], {})   # no pair survived
+
+    def test_workload_is_compared_per_tick_not_per_second(self):
+        same_tick = {"attempts_per_tick": 50, "control_attempts_per_tick": 25, "control_particles_live_mean": 1025}
+        self.add_run("b1-B", "B", 1, 5.0, workload=same_tick | {"spawn_attempts_per_s": 800}, tps_class="reduced")
+        self.add_run("b1-C", "C", 1, 4.5, workload=same_tick | {"spawn_attempts_per_s": 1000})
+        self.add_run("b2-B", "B", 2, 5.0, workload=same_tick)
+        self.add_run("b2-C", "C", 2, 4.5, workload=same_tick | {"attempts_per_tick": 60})
+        rep = compare.compare(compare.load_runs(self.dir), "B", ["mean_frametime_ms"], 1.0, 2.0)["strata"]["all"]
+        self.assertEqual([what for what, _ in rep["excluded"]], ["block 2 C"])
+        self.assertIn("attempts_per_tick", rep["excluded"][0][1])
+        self.assertEqual(rep["datasets"]["saturation:unlabelled"]["results"]["C"]["blocks"], ["1"])
+
+    def test_windows_of_one_side_with_different_tps_class_are_not_averaged(self):
+        self.add_run("b1-B", "B", 1, 5.0)
+        self.add_run("b1-C1", "C", 1, 4.5)
+        self.add_run("b1-C2", "C", 1, 4.5, tps_class="reduced")
+        rep = compare.compare(compare.load_runs(self.dir), "B", ["mean_frametime_ms"], 1.0, 2.0)["strata"]["all"]
+        self.assertEqual(rep["datasets"], {})
+        self.assertIn("TPS class", rep["excluded"][0][1])
+
+    def test_bound_labels_are_never_pooled(self):
+        for b in (1, 2, 3):
+            self.add_run(f"b{b}-B", "B", b, 5.0, bound="gpu-bound")
+            self.add_run(f"b{b}-C", "C", b, 4.5, bound="gpu-bound")
+        self.add_run("b4-B", "B", 4, 5.0, bound="gpu-bound")
+        self.add_run("b4-C", "C", 4, 3.0, bound="cpu-bound")
+        rep = compare.compare(compare.load_runs(self.dir), "B", ["mean_frametime_ms"], 1.0, 2.0)["strata"]["all"]
+        self.assertEqual(rep["datasets"]["primary:gpu-bound"]["results"]["C"]["blocks"], ["1", "2", "3"])
+        self.assertEqual(rep["datasets"]["primary:differs"]["results"]["C"]["blocks"], ["4"])
+        self.assertAlmostEqual(rep["datasets"]["primary:gpu-bound"]["results"]["C"]["metrics"]["mean_frametime_ms"]["mean_diff_pct"], -10.0)
+
+    def test_runs_without_tick_data_are_kept_apart(self):
+        for b in (1, 2):
+            self.add_run(f"b{b}-B", "B", b, 5.0, tps_class=None)
+            self.add_run(f"b{b}-C", "C", b, 4.5, tps_class=None)
+        rep = compare.compare(compare.load_runs(self.dir), "B", ["mean_frametime_ms"], 1.0, 2.0)["strata"]["all"]
+        self.assertEqual(set(rep["datasets"]), {"tps-unknown:unlabelled"})
 
     def test_inconclusive(self):
         diffs = [+5, -5, +6, -4, +5, -6]
@@ -236,7 +273,7 @@ class CompareTests(TempDirTest):
             self.add_run(f"b{b}-B", "B", b, 5.0)
             self.add_run(f"b{b}-C", "C", b, 5.0 * (1 + d / 100))
         report = compare.compare(compare.load_runs(self.dir), "B", ["mean_frametime_ms"], 1.0, 2.0)
-        self.assertEqual(report["results"]["C"]["metrics"]["mean_frametime_ms"]["verdict"], "inconclusive")
+        self.assertEqual(report["strata"]["all"]["datasets"]["primary:unlabelled"]["results"]["C"]["metrics"]["mean_frametime_ms"]["verdict"], "inconclusive")
 
     def test_bootstrap_ci_contains_mean_and_is_deterministic(self):
         values = [1.0, 2.0, 3.0, 4.0, 5.0]
