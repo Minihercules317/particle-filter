@@ -1,0 +1,235 @@
+{
+  "label": "functional",
+  "note": "Functional bring-up run: checks that the harness works. NOT a performance result; don\u0027t quote its timings.",
+  "run_id": "functional-0.4.0-neoforge-C-B-typed",
+  "kind": "run",
+  "plan_file": "plan.json",
+  "plan_sha256": "3a339f554765e9a88c7db92cb864bc7fb33e1f683adf3b579e4c77db2b410ab1",
+  "scenario": {
+    "id": "S1-synthetic",
+    "version": 1,
+    "sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317"
+  },
+  "started_utc": "2026-11-09T13:57:33.900597990Z",
+  "finished_utc": "2026-11-09T13:58:10.027874750Z",
+  "ok": true,
+  "versions": {
+    "minecraft": "1.21.1",
+    "loader": "neoforge",
+    "neoforge": "21.1.250",
+    "pfbench": "0.4.0",
+    "particlefilter": "1.2.0",
+    "java": "21.0.12.1+1-LTS",
+    "java_vendor": "Eclipse Adoptium",
+    "os": "Linux 7.2.15-1-omarchy"
+  },
+  "mods": [
+    "minecraft 1.21.1",
+    "particlefilter 1.2.0",
+    "pfbench 0.4.0",
+    "neoforge 21.1.250"
+  ],
+  "mods_folder": [
+    {
+      "file": "particlefilter-neoforge-1.2.0+1.21.1.jar",
+      "sha256": "0806e94cd38daad4b3c77523914e13e1020272a7cae1dfc6ee86c9c2a5efba4e"
+    }
+  ],
+  "mod_files": [
+    {
+      "file": "neoforge-21.1.250.jar",
+      "nested": false,
+      "mods": [
+        "minecraft 1.21.1"
+      ]
+    },
+    {
+      "file": "particlefilter-neoforge-1.2.0+1.21.1.jar",
+      "nested": false,
+      "mods": [
+        "particlefilter 1.2.0"
+      ]
+    },
+    {
+      "file": "main",
+      "nested": false,
+      "mods": [
+        "pfbench 0.4.0"
+      ]
+    },
+    {
+      "file": "neoforge-21.1.250.jar",
+      "nested": false,
+      "mods": [
+        "neoforge 21.1.250"
+      ]
+    }
+  ],
+  "jvm_args": [
+    "-Dfml.modFolders\u003dpfbench%%~/Work/particle-filter/benchmarks/harness/build/classes/java/main:pfbench%%~/Work/particle-filter/benchmarks/harness/build/resources/main",
+    "--module-path\u003d~/.gradle/caches/modules-2/files-2.1/cpw.mods/bootstraplauncher/2.0.2/1a2d076cbc33b0520cbacd591224427b2a20047d/bootstraplauncher-2.0.2.jar:~/.gradle/caches/modules-2/files-2.1/cpw.mods/securejarhandler/3.0.8/c0ef95cecd8699a0449053ac7d9c160748d902cd/securejarhandler-3.0.8.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-commons/9.10.1/4229e4c55fd8e01c23f9fe9884075cc628aacc50/asm-commons-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-util/9.10.1/7bb9d450e8d4cbf9f9e04096c44bbfe7fba80b15/asm-util-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-analysis/9.10.1/8d49f14d51f632cb1d87c88d1ceaf50db0d8af1b/asm-analysis-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.10.1/e244332a17564c1d1572449399a842de35881be2/asm-tree-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.10.1/ada2141c0cc52ee8f5c48cd5fa4ce0e794f22236/asm-9.10.1.jar:~/.gradle/caches/modules-2/files-2.1/net.neoforged/JarJarFileSystems/0.4.1/78f59f89defcd032ed788b151ca6a0d40ace796a/JarJarFileSystems-0.4.1.jar",
+    "--add-modules\u003dALL-MODULE-PATH",
+    "--add-opens\u003djava.base/java.util.jar\u003dcpw.mods.securejarhandler",
+    "--add-opens\u003djava.base/java.lang.invoke\u003dcpw.mods.securejarhandler",
+    "--add-exports\u003djava.base/sun.security.util\u003dcpw.mods.securejarhandler",
+    "--add-exports\u003djdk.naming.dns/com.sun.jndi.dns\u003djava.naming",
+    "-Xms4G",
+    "-Xmx4G",
+    "-XX:+UseG1GC",
+    "-Xlog:gc*:file\u003dgc.log:time,uptime,level,tags",
+    "-Dlog4j2.configurationFile\u003d~/Work/particle-filter/benchmarks/harness/build/moddev/clientLog4j2.xml",
+    "-Djava.net.preferIPv6Addresses\u003dsystem",
+    "-DignoreList\u003dmixinextras-neoforge-0.5.3.jar,client-extra,neoforge-",
+    "-DlegacyClassPath.file\u003d~/Work/particle-filter/benchmarks/harness/build/moddev/clientLegacyClasspath.txt",
+    "-Dneoforge.enableGameTest\u003dtrue",
+    "-Dpfbench.plan\u003d~/Work/particle-filter/benchmarks/harness/run/runs/functional-0.4.0-neoforge-C-B-typed/plan.json",
+    "-Dfile.encoding\u003dUTF-8",
+    "-Duser.country\u003dUS",
+    "-Duser.language\u003den",
+    "-Duser.variant"
+  ],
+  "provenance": {
+    "git_commit": "bee31ca057fca220abdf9323f8cfb6e7f91f2981",
+    "git_dirty_paths": [
+      "benchmarks/HANDOFF.md",
+      "benchmarks/HARNESS.md",
+      "benchmarks/PLAN.md",
+      "benchmarks/harness/README.md",
+      "benchmarks/harness/build.gradle.kts",
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/PfControl.java",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/harness/src/main/java/pfbench/PfBench.java -\u003e benchmarks/harness/src/neoforge/java/pfbench/PfBench.java",
+      "benchmarks/harness/src/main/resources/META-INF/neoforge.mods.toml -\u003e benchmarks/harness/src/neoforge/resources/META-INF/neoforge.mods.toml",
+      "benchmarks/harness/src/main/resources/pfbench.mixins.json -\u003e benchmarks/harness/src/neoforge/resources/pfbench.mixins.json",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/tests/test_pipeline.py",
+      "benchmarks/harness-forge/",
+      "benchmarks/harness/src/neoforge/java/pfbench/Platform.java"
+    ],
+    "harness_version": "0.4.0",
+    "loader": "neoforge",
+    "harness_sources_sha256": "874d41fedd7513d723f2b8599039cc2310af0408600193e9dc56d84dd5c4da38",
+    "launcher_sha256": "61f0bc13fc78a6942b1369432d783e1af2211faa42fd17d42dbd0b6017c40535",
+    "tools_sha256": "d8eaf09ad893833a29691c496c75980b1e6fb25e4df5a6e9b27732f56f6a50ec"
+  },
+  "seed": 20261109,
+  "variant": "typed",
+  "target_lifetime_ticks": 40,
+  "control_lifetime_ticks": 40,
+  "control_attempts_per_tick": 25.0,
+  "control_z_offset": 1.0,
+  "emitters": 256,
+  "setup": {
+    "particles_setting_found": "ALL",
+    "particlefilter_present": true,
+    "particlefilter_version": "1.2.0",
+    "particlefilter_mode_at_load": "EVERYWHERE",
+    "gl": {
+      "renderer": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2",
+      "vendor": "NVIDIA Corporation",
+      "version": "3.2.0 NVIDIA 615.78.08"
+    },
+    "gamerules": {
+      "doDaylightCycle": false,
+      "doWeatherCycle": false,
+      "doMobSpawning": false,
+      "randomTickSpeed": 0
+    },
+    "level_name": "pfbench",
+    "day_time": 6000,
+    "raining": false,
+    "player_spectator": true,
+    "player_position": [
+      0.5,
+      102.38,
+      0.5
+    ],
+    "player_eye_y": 104.00000000476837,
+    "window_at_start": {
+      "width": 2536,
+      "height": 1390,
+      "fullscreen": false
+    },
+    "options": {
+      "renderDistance": 8,
+      "simulationDistance": 5,
+      "maxFps": 60,
+      "enableVsync": false,
+      "particles": "ALL",
+      "graphicsMode": "FANCY",
+      "fullscreen": false,
+      "ao": true,
+      "renderClouds": "OFF",
+      "fov": 70,
+      "guiScale": 0,
+      "pauseOnLostFocus": false,
+      "hideGui": true
+    }
+  },
+  "window_at_end": {
+    "width": 2536,
+    "height": 1390,
+    "fullscreen": false
+  },
+  "clock": {
+    "origin_nano_time": 27421591146730,
+    "origin_epoch_ms": 1794232660991,
+    "origin_jvm_uptime_ms": 19482,
+    "nano_time_source": "System.nanoTime (CLOCK_MONOTONIC on Linux)"
+  },
+  "frames_logged": 1714,
+  "frames_dropped_capacity": 0,
+  "frame_capacity": 68000,
+  "ticks_logged": 580,
+  "ticks_dropped_capacity": 0,
+  "particlefilter_modes": [
+    {
+      "phase": "load-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r1-01-C",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r1-02-B",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "warmup-r2-01-C",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r2-02-B",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "01-C-moderate-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "01-C-moderate",
+      "mode_requested": null,
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "02-B-moderate-settle",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "02-B-moderate",
+      "mode_requested": null,
+      "mode_after_start": "NONE"
+    }
+  ],
+  "notes": []
+}

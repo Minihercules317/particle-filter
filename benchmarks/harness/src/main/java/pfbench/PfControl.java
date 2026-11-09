@@ -1,7 +1,5 @@
 package pfbench;
 
-import net.neoforged.fml.ModList;
-
 import java.lang.reflect.Method;
 
 /**
@@ -23,13 +21,12 @@ final class PfControl {
 
     /** Null when Particle Filter isn't loaded (configuration A). */
     static PfControl find() {
-        if (!ModList.get().isLoaded("particlefilter")) return null;
+        if (!Platform.isLoaded("particlefilter")) return null;
         try {
             ClassLoader loader = PfControl.class.getClassLoader();
             Class<?> config = Class.forName("particlefilter.config.PfConfig", true, loader);
             Class<?> mode = Class.forName("particlefilter.config.FilterMode", true, loader);
-            String version = ModList.get().getModContainerById("particlefilter")
-                .map(c -> c.getModInfo().getVersion().toString()).orElse("?");
+            String version = String.valueOf(Platform.modVersion("particlefilter"));
             return new PfControl(config.getMethod("setMode", mode), config.getMethod("mode"), mode, version);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Particle Filter is loaded but PfConfig.setMode/mode weren't found", e);

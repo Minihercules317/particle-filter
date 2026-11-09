@@ -1,4 +1,4 @@
-// pfbench harness for NeoForge 1.21.1. Mirrors ../../build.neoforge.gradle.kts (ModDevGradle, Java 21).
+// pfbench harness for NeoForge 1.21.1 (Forge 1.20.1: ../harness-forge). Mirrors ../../build.neoforge.gradle.kts (ModDevGradle, Java 21).
 //
 // Particle Filter is NOT a build dependency: the launcher (pfbench.py) copies its release jar into the run
 // directory's mods/ folder for configurations B/C/D and leaves it out for A, and the harness reaches it only
@@ -21,6 +21,14 @@ group = "pfbench"
 base.archivesName = "pfbench-neoforge"
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+// Shared harness code (Runner, counters, logs, particles, mixins) lives in src/main and is also compiled by the
+// Forge 1.20.1 build (../harness-forge). NeoForge-only files (entry point, Platform, mods.toml, mixin config) are in
+// src/neoforge.
+sourceSets.main {
+    java.srcDir("src/neoforge/java")
+    resources.srcDir("src/neoforge/resources")
+}
 
 fun prop(name: String): String? = providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
 fun words(value: String?): List<String> = value?.trim()?.split(Regex("\\s+"))?.filter { it.isNotEmpty() } ?: emptyList()

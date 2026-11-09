@@ -1,0 +1,138 @@
+{
+  "run_id": "functional-0.4.0-forge-A-typed",
+  "label": "functional",
+  "loader": "forge",
+  "minecraft": "1.20.1",
+  "started_utc": "20261109T135232Z",
+  "sequence": "A:moderate",
+  "entries": [
+    {
+      "position": 1,
+      "config": "A",
+      "level": "moderate"
+    }
+  ],
+  "variant": "typed",
+  "scenario_file": "S1-synthetic.toml",
+  "scenario_sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317",
+  "template_sha256_tree": "6f39066759eaa268f390b560031be1ce455543641bc2e81ea64b2de0381df2df",
+  "particlefilter": null,
+  "modset": "vanilla",
+  "render_mods": {},
+  "sodium_extra_hides_target": false,
+  "mods_dir": {},
+  "inputs_sha256": {
+    "options.txt": "df4fd72b3c639826fb8c28afa493d3f46f2e0d1ce574df471ff272827a945c46",
+    "fml.toml": "e5a10cae57974d3270e34cacc387b6d3c3b5a929dcf763e7175e9178b8e45db7"
+  },
+  "render_environment": {
+    "modset": "vanilla",
+    "options_txt_sha256": "df4fd72b3c639826fb8c28afa493d3f46f2e0d1ce574df471ff272827a945c46",
+    "render_mods": {},
+    "sodium_options_sha256": null,
+    "sodium_extra_options_sha256_without_particle_map": null,
+    "sha256": "0c5e35356aec66b8d0e7c22fb9f1403af36bc42c18bb0863809a94de5008dca9"
+  },
+  "jvm_args_requested": "-Xms4G -Xmx4G -XX:+UseG1GC -Xlog:gc*:file=gc.log:time,uptime,level,tags",
+  "provenance": {
+    "git_commit": "bee31ca057fca220abdf9323f8cfb6e7f91f2981",
+    "git_dirty_paths": [
+      "benchmarks/HANDOFF.md",
+      "benchmarks/HARNESS.md",
+      "benchmarks/PLAN.md",
+      "benchmarks/harness/README.md",
+      "benchmarks/harness/build.gradle.kts",
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/PfControl.java",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/harness/src/main/java/pfbench/PfBench.java -> benchmarks/harness/src/neoforge/java/pfbench/PfBench.java",
+      "benchmarks/harness/src/main/resources/META-INF/neoforge.mods.toml -> benchmarks/harness/src/neoforge/resources/META-INF/neoforge.mods.toml",
+      "benchmarks/harness/src/main/resources/pfbench.mixins.json -> benchmarks/harness/src/neoforge/resources/pfbench.mixins.json",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/tests/test_pipeline.py",
+      "benchmarks/harness-forge/",
+      "benchmarks/harness/src/neoforge/java/pfbench/Platform.java"
+    ],
+    "harness_version": "0.4.0",
+    "loader": "forge",
+    "harness_sources_sha256": "dbf04e5863163adaf80c53392586f6ee837161ae823abc1dd2ff350790cba941",
+    "launcher_sha256": "61f0bc13fc78a6942b1369432d783e1af2211faa42fd17d42dbd0b6017c40535",
+    "tools_sha256": "d8eaf09ad893833a29691c496c75980b1e6fb25e4df5a6e9b27732f56f6a50ec"
+  },
+  "campaign": null,
+  "hidden_window": true,
+  "mangohud": null,
+  "env_snapshots": {
+    "before": {
+      "file": "env-before.json",
+      "returncode": 0
+    },
+    "after": {
+      "file": "env-after.json",
+      "returncode": 0
+    }
+  },
+  "game_process": {
+    "pid": 3348266,
+    "cmdline": "~/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2/bin/java -Dfml.modFolders=pfbench%%~/Work/particle-filter/benchmarks/harness-forge/build/classes/java/main:pfbench%%~/Work/particle-filter/benchmarks/harness-forge/build/resources/main @~/Work/particle-filter/benchmarks/harness-forge/build/moddev/clientRunVmArgs.txt -Dfile.encoding=UTF-8 -Duser.country=US -Duser.language=en -Duser.variant -cp ~/Work/particle-filter/benchmarks/harness-forge/build/classes/java/main:~/Work/particle-filter/benchmarks/harness-forge/build/resources/main:~/Work/particle-filter/benchmarks/harness-forge/build/moddev/artifacts/forge-1.20.1-47.4.28.jar:~/Work/particle-filter/benchmarks/harness-forge/build/moddev/artifacts/client-extra-1.20.1-47.4.28.jar:~/Work/particle-filter/benchmarks/harness-forge/build/moddev/artifacts/intermediateToNamed.zip:~/.gradle/caches/modules-2/files-2.1/net.neoforged/DevLaunch/1.0.2/2e0e9a67793d5bfdedee4f9ea00934dbf3f2e22d/DevLaunch-1.0.2.jar:~/.gradle/caches/modules-2/files-2.1/cpw.mods/bootstraplauncher/1.1.2/c546e00443d8432cda6baa1c860346980742628/bootstraplauncher-1.1.2.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/fmlearlydisplay/1.20.1-47.4.28/3dadce8bfe5d10799189cac6196ea1162a04b9ae/fmlearlydisplay-1.20.1-47.4.28.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/javafmllanguage/1.20.1-47.4.28/2f0765ea31561e9dfaf8eb8b54ac0548cd857559/javafmllanguage-1.20.1-47.4.28.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/lowcodelanguage/1.20.1-47.4.28/4e54a5f415a61888bd9c5d61b140ae5f86bf665f/lowcodelanguage-1.20.1-47.4.28.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/mclanguage/1.20.1-47.4.28/4d3efb7da0466927cc5b1e4487c3d3c33ba842d0/mclanguage-1.20.1-47.4.28.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/fmlcore/1.20.1-47.4.28/99808794b6f9f27ca527ad9db1203409fb8552f8/fmlcore-1.20.1-47.4.28.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/fmlloader/1.20.1-47.4.28/ef60cc90bbcd259cb40881e459c49a7350ed2002/fmlloader-1.20.1-47.4.28.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/forgespi/7.0.1/3b4972a0cdb135853dba219be61a79b22cff1309/forgespi-7.0.1.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/accesstransformers/8.0.4/272d240aa73f42195b2a68e2ebd8b701ecf41f63/accesstransformers-8.0.4.jar:~/.gradle/caches/modules-2/files-2.1/cpw.mods/modlauncher/10.0.9/6d9443f56f50bb85cea383686ff9c867391458b/modlauncher-10.0.9.jar:~/.gradle/caches/modules-2/files-2.1/cpw.mods/securejarhandler/2.1.10/51e6a22c6c716beb11e244bf5b8be480f51dd6b5/securejarhandler-2.1.10.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/eventbus/6.2.33/3fae69cfa9c5095bcc25c0a8a3ed9b26c156f922/eventbus-6.2.33.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/coremods/5.2.4/e30bab269d896613e38396274711410b3a0e4b87/coremods-5.2.4.jar:~/.gradle/caches/modules-2/files-2.1/org.openjdk.nashorn/nashorn-core/15.4/f67f5ffaa5f5130cf6fb9b133da00c7df3b532a5/nashorn-core-15.4.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-commons/9.9.1/ab35de4c537184a09339069f1a3b3aacf2289149/asm-commons-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/mergetool/1.1.5/e31dad26696043b540681aabc93e2001a1a2cd44/mergetool-1.1.5.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/mergetool/1.1.5/f3da18e12c696d35a47c82cbb2cc8b5aa15e1154/mergetool-1.1.5-api.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-util/9.9.1/e51f5b0ae0b0c1960687ae970a2a3434d39d8abb/asm-util-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-analysis/9.9.1/1ab8d9316ef7a67240087919a708246c37ed1660/asm-analysis-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.9.1/b6b1b3366296163b4b1f540731aad0a2baa484d8/asm-tree-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.9.1/2ceea6ab43bcae1979b2a6d85fc0ca429877e5ab/asm-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/JarJarFileSystems/0.3.19/2464eb7d6b9ddb9db36a82cf8a95193e5c6fe020/JarJarFileSystems-0.3.19.jar:~/.gradle/caches/modules-2/files-2.1/org.antlr/antlr4/4.9.1/e92af8ab33e428461927b484e90bb155a4f3a052/antlr4-4.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.antlr/antlr4-runtime/4.9.1/428664f05d2b7f7b7610204b5aa7c1763f62011a/antlr4-runtime-4.9.1.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/unsafe/0.2.0/54d7a0a5e8fdb71b973025caa46f341ae5904f39/unsafe-0.2.0.jar:~/.gradle/caches/modules-2/files-2.1/com.electronwill.night-config/toml/3.6.4/51d6cefb2b55ee55ee26b16391212fb2c7dfb4f4/toml-3.6.4.jar:~/.gradle/caches/modules-2/files-2.1/com.electronwill.night-config/core/3.6.4/510f174abbf1c947494db50ef2445683bd52c230/core-3.6.4.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/JarJarSelector/0.3.19/376cc9c8ea60720cf027c01fc033de915699801c/JarJarSelector-0.3.19.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/JarJarMetadata/0.3.19/83feaa9b770e6ac0e96ee4fc23fa89325c5fe2/JarJarMetadata-0.3.19.jar:~/.gradle/caches/modules-2/files-2.1/org.apache.maven/maven-artifact/3.8.5/4433f50c07debefaed0553bd0068f4f48d449313/maven-artifact-3.8.5.jar:~/.gradle/caches/modules-2/files-2.1/net.jodah/typetools/0.6.3/a01aaa6ddaea9ec07ec4f209487b7a46a526283a/typetools-0.6.3.jar:~/.gradle/caches/modules-2/files-2.1/net.minecrell/terminalconsoleappender/1.2.0/96d02cd3b384ff015a8fef4223bcb4ccf1717c95/terminalconsoleappender-1.2.0.jar:~/.gradle/caches/modules-2/files-2.1/org.jline/jline-reader/3.12.1/4382ab1382c7b6f379377ed5f665dc2f6e1218bc/jline-reader-3.12.1.jar:~/.gradle/caches/modules-2/files-2.1/org.jline/jline-terminal/3.12.1/c777448314e050d980a6b697c140f3bfe9eb7416/jline-terminal-3.12.1.jar:~/.gradle/caches/modules-2/files-2.1/org.spongepowered/mixin/0.8.5/9d1c0c3a304ae6697ecd477218fa61b850bf57fc/mixin-0.8.5.jar:~/.gradle/caches/modules-2/files-2.1/com.github.oshi/oshi-core/6.2.2/54f5efc19bca95d709d9a37d19ffcbba3d21c1a6/oshi-core-6.2.2.jar:~/.gradle/caches/modules-2/files-2.1/com.google.code.gson/gson/2.10/dd9b193aef96e973d5a11ab13cd17430c2e4306b/gson-2.10.jar:~/.gradle/caches/modules-2/files-2.1/com.google.guava/guava/31.1-jre/60458f877d055d0c9114d9e1a2efb737b4bc282c/guava-31.1-jre.jar:~/.gradle/caches/modules-2/files-2.1/com.google.guava/failureaccess/1.0.1/1dcf1de382a0bf95a3d8b0849546c88bac1292c9/failureaccess-1.0.1.jar:~/.gradle/caches/modules-2/files-2.1/com.ibm.icu/icu4j/61.1/28d33b5e44e72edcc66a5da7a34a42147f38d987/icu4j-61.1.jar:~/.gradle/caches/modules-2/files-2.1/com.mojang/authlib/4.0.43/2ff9d747a77570a07a60d32ac77eb6162ad2a2d9/authlib-4.0.43.jar:~/.gradle/caches/modules-2/files-2.1/com.mojang/blocklist/1.0.10/5c685c5ffa94c4cd39496c7184c1d122e515ecef/blocklist-1.0.10.jar:~/.gradle/caches/modules-2/files-2.1/com.mojang/brigadier/1.1.8/5244ce82c3337bba4a196a3ce858bfaecc74404a/brigadier-1.1.8.jar:~/.gradle/caches/modules-2/files-2.1/com.mojang/datafixerupper/6.0.8/3ba4a30557a9b057760af4011f909ba619fc5125/datafixerupper-6.0.8.jar:~/.gradle/caches/modules-2/files-2.1/com.mojang/logging/1.1.1/832b8e6674a9b325a5175a3a6267dfaf34c85139/logging-1.1.1.jar:~/.gradle/caches/modules-2/files-2.1/com.mojang/patchy/2.2.10/da05971b07cbb379d002cf7eaec6a2048211fefc/patchy-2.2.10.jar:~/.gradle/caches/modules-2/files-2.1/com.mojang/text2speech/1.17.9/3cad216e3a7f0c19b4b394388bc9ffc446f13b14/text2speech-1.17.9.jar:~/.gradle/caches/modules-2/files-2.1/commons-codec/commons-codec/1.15/49d94806b6e3dc933dacbd8acb0fdbab8ebd1e5d/commons-codec-1.15.jar:~/.gradle/caches/modules-2/files-2.1",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "threads": 16,
+    "limits_rttime": [
+      "Max realtime timeout      unlimited            unlimited            us"
+    ],
+    "java_exe": "~/.gradle/jdks/eclipse_adoptium-17-amd64-linux.2/bin/java"
+  },
+  "window": {
+    "class": "Minecraft* Forge 1.20.1",
+    "title": "Minecraft* Forge 1.20.1",
+    "size": [
+      2536,
+      1390
+    ],
+    "workspace": {
+      "id": -97,
+      "name": "special:pfbench"
+    },
+    "monitor": 1,
+    "floating": false,
+    "fullscreen": 0
+  },
+  "finished_utc": "20261109T135319Z",
+  "exited_by_itself": true,
+  "system_sampler": {
+    "dir": "system",
+    "interval_s": 1.0,
+    "self_cpu": null,
+    "returncode": 0
+  },
+  "inputs_after_sha256": {
+    "options.txt": "df4fd72b3c639826fb8c28afa493d3f46f2e0d1ce574df471ff272827a945c46",
+    "fml.toml": "268c065f8b2267370aac60709f54fd6411b316eb3b118dee89ecb70245195fb3"
+  }
+}

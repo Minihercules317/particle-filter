@@ -30,7 +30,6 @@ import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorPresets;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.minecraft.client.ParticleStatus;
-import net.neoforged.fml.ModList;
 
 import java.io.IOException;
 import java.lang.management.ClassLoadingMXBean;
@@ -399,7 +398,7 @@ public final class Runner {
             alive.pfbench$alive(ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT),
             alive.pfbench$alive(ParticleRenderType.TERRAIN_SHEET),
             alive.pfbench$aliveTotal(),
-            Counters.clientTickNs, server == null ? -1 : server.getAverageTickTimeNanos(),
+            Counters.clientTickNs, server == null ? -1 : Platform.serverAverageTickNs(server),
             gcCount, gcTime, rt.totalMemory() - rt.freeMemory(),
             Counters.controlLive, jit.isCompilationTimeMonitoringSupported() ? jit.getTotalCompilationTime() : -1,
             classes.getTotalLoadedClassCount(), Counters.serverSaves.get());
@@ -464,12 +463,12 @@ public final class Runner {
         LevelSettings settings = new LevelSettings(w.level_name, GameType.SPECTATOR, false, Difficulty.PEACEFUL, true, rules,
             WorldDataConfiguration.DEFAULT);
         WorldOptions options = new WorldOptions(plan.seed, false, false);
-        mc.createWorldOpenFlows().createFreshLevel(w.level_name, settings, options, registries -> {
+        Platform.createFreshLevel(mc, w.level_name, settings, options, registries -> {
             var voidPreset = registries.registryOrThrow(Registries.FLAT_LEVEL_GENERATOR_PRESET)
                 .getHolderOrThrow(FlatLevelGeneratorPresets.THE_VOID).value();
             return WorldPresets.createNormalWorldDimensions(registries)
                 .replaceOverworldGenerator(registries, new FlatLevelSource(voidPreset.settings()));
-        }, new TitleScreen());
+        });
     }
 
     // ---- output ----
@@ -531,18 +530,17 @@ public final class Runner {
 
         JsonObject v = new JsonObject();
         v.addProperty("minecraft", SharedConstants.getCurrentVersion().getName());
-        v.addProperty("neoforge", modVersion("neoforge"));
+        v.addProperty("loader", Platform.LOADER);
+        v.addProperty(Platform.LOADER, modVersion(Platform.LOADER));
         v.addProperty("pfbench", modVersion("pfbench"));
-        v.addProperty("particlefilter", ModList.get().isLoaded("particlefilter") ? modVersion("particlefilter") : null);
+        v.addProperty("particlefilter", Platform.isLoaded("particlefilter") ? modVersion("particlefilter") : null);
         v.addProperty("java", System.getProperty("java.runtime.version"));
         v.addProperty("java_vendor", System.getProperty("java.vendor"));
         v.addProperty("os", System.getProperty("os.name") + " " + System.getProperty("os.version"));
         j.add("versions", v);
-        JsonArray mods = new JsonArray();
-        ModList.get().getMods().forEach(m -> mods.add(m.getModId() + " " + m.getVersion()));
-        j.add("mods", mods);
+        j.add("mods", Platform.mods());
         j.add("mods_folder", modsFolder());
-        j.add("mod_files", loadedModFiles());
+        j.add("mod_files", Platform.loadedModFiles());
         JsonArray jvm = new JsonArray();
         ManagementFactory.getRuntimeMXBean().getInputArguments().forEach(jvm::add);
         j.add("jvm_args", jvm);
@@ -616,22 +614,6 @@ public final class Runner {
         return files;
     }
 
-    /** Every mod file NeoForge loaded (including nested jar-in-jar files and the game itself), with its mods. */
-    private JsonArray loadedModFiles() {
-        JsonArray files = new JsonArray();
-        ModList.get().getModFiles().forEach(info -> {
-            JsonObject f = new JsonObject();
-            Path file = info.getFile().getFilePath();
-            f.addProperty("file", file.getFileName() == null ? file.toString() : file.getFileName().toString());
-            f.addProperty("nested", file.getFileSystem() != java.nio.file.FileSystems.getDefault());
-            JsonArray ids = new JsonArray();
-            info.getMods().forEach(m -> ids.add(m.getModId() + " " + m.getVersion()));
-            f.add("mods", ids);
-            files.add(f);
-        });
-        return files;
-    }
-
     private JsonObject windowInfo() {
         JsonObject w = new JsonObject();
         w.addProperty("width", mc.getWindow().getWidth());
@@ -659,7 +641,7 @@ public final class Runner {
     }
 
     private static String modVersion(String id) {
-        return ModList.get().getModContainerById(id).map(c -> c.getModInfo().getVersion().toString()).orElse(null);
+        return Platform.modVersion(id);
     }
 
     private static JsonArray array(double... values) {

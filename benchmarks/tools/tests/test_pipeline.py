@@ -498,6 +498,52 @@ class ReducedTpsTests(TempDir):
         self.assertAlmostEqual(rep["datasets"]["saturation:unlabelled"]["results"]["C"]["metrics"]["achieved_tps"]["mean_diff"], -4.0)
 
 
+class LoaderTests(TempDir):
+    """NeoForge 1.21.1 and Forge 1.20.1 share the launcher; what differs lives in pfbench.LOADERS."""
+
+    def test_plan_and_options_carry_the_loader(self):
+        sc, sha = scenario()
+        plan = pfbench.build_plan(sc, sha, [("B", "heavy")], "typed", False, "x", Path("/tmp/x"), loader="forge")
+        self.assertEqual((plan["loader"], plan["minecraft"]), ("forge", "1.20.1"))
+        self.assertTrue(pfbench.options_txt({"maxFps": 260}, "forge").startswith("version:3465\n"))
+        self.assertTrue(pfbench.options_txt({"maxFps": 260}).startswith("version:3955\n"))
+
+    def test_forge_hashes_shared_and_own_sources(self):
+        neo, forge = pfbench.harness_sources_sha256("neoforge"), pfbench.harness_sources_sha256("forge")
+        self.assertNotEqual(neo, forge)
+        self.assertEqual(len(forge), 64)
+        self.assertEqual(pfbench.provenance("forge")["loader"], "forge")
+
+    def test_forge_uses_the_named_jar_and_finds_its_release_jar(self):
+        self.assertIn("devlibs", pfbench.LOADERS["forge"]["pf_jar"])
+        self.assertIsNone(pfbench.pf_release_jar("neoforge", Path("particlefilter-neoforge-1.2.0+1.21.1.jar")))
+
+    def test_sodium_is_refused_for_forge(self):
+        with self.assertRaises(SystemExit):
+            quiet(pfbench.run_launch, scenario_path=SCENARIO_PATH, sequence="B:moderate", variant="typed",
+                  modset="sodium", functional=True, hide=False, loader="forge")
+
+    def test_loader_mismatch_fails_the_check_and_loaders_are_never_paired(self):
+        run = make_run(self.dir / "l", "B:moderate", block=1)
+        h = json.loads((run / "harness.json").read_text())
+        h["versions"]["loader"] = "forge"
+        (run / "harness.json").write_text(json.dumps(h))
+        quiet(pfbench.check, run)
+        failed = [c["check"] for c in json.loads((run / "check.json").read_text())["checks"] if not c["ok"]]
+        self.assertIn("harness ran on the planned loader and Minecraft version", failed)
+
+        camp = self.dir / "camp"
+        a = make_run(self.dir / "m", "A:moderate", block=1)
+        b = make_run(self.dir / "m", "B:moderate", block=1, launch_in_block=2)
+        plan = json.loads((b / "plan.json").read_text())
+        plan["loader"] = "forge"
+        (b / "plan.json").write_text(json.dumps(plan))
+        for r in (a, b):
+            ingest_harness.ingest_run(r, camp, None, False, False)
+        report = compare.compare(compare.load_runs(camp), "A", ["mean_frametime_ms"], 1.0, 2.0)
+        self.assertTrue(any("loader" in why for _, why in report["excluded"]), report["excluded"])
+
+
 class ScenarioTests(unittest.TestCase):
     def test_scenario_parses_and_settle_is_long_enough(self):
         sc = tomllib.loads(SCENARIO_PATH.read_text())

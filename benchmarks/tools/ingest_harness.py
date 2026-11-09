@@ -235,8 +235,10 @@ def environment(plan: dict, launch: dict, harness: dict, level: str, power_state
         "variant": plan.get("variant"),
         "level": level,
         "launch_entries": len(launch.get("entries") or []) or None,   # a config alone vs with others in one launch
+        "loader": plan.get("loader", "neoforge"),
         "minecraft": v.get("minecraft"),
         "neoforge": v.get("neoforge"),
+        "forge": v.get("forge"),
         "java": v.get("java"),
         "jvm_args_requested": launch.get("jvm_args_requested"),
         "harness_version": v.get("pfbench"),

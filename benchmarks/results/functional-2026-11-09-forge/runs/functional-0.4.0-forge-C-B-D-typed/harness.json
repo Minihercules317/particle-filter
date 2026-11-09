@@ -1,0 +1,258 @@
+{
+  "label": "functional",
+  "note": "Functional bring-up run: checks that the harness works. NOT a performance result; don\u0027t quote its timings.",
+  "run_id": "functional-0.4.0-forge-C-B-D-typed",
+  "kind": "run",
+  "plan_file": "plan.json",
+  "plan_sha256": "e985f8ed6e6fcd6a91ded52869aad3ae9c28ceed8fa24d4d927bcd8c10d825a2",
+  "scenario": {
+    "id": "S1-synthetic",
+    "version": 1,
+    "sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317"
+  },
+  "started_utc": "2026-11-09T13:51:36.511260677Z",
+  "finished_utc": "2026-11-09T13:52:24.953431283Z",
+  "ok": true,
+  "versions": {
+    "minecraft": "1.20.1",
+    "loader": "forge",
+    "forge": "47.4.28",
+    "pfbench": "0.4.0",
+    "particlefilter": "1.2.0",
+    "java": "17.0.21+9",
+    "java_vendor": "Eclipse Adoptium",
+    "os": "Linux 7.2.15-1-omarchy"
+  },
+  "mods": [
+    "minecraft 1.20.1",
+    "particlefilter 1.2.0",
+    "forge 47.4.28",
+    "pfbench 0.4.0"
+  ],
+  "mods_folder": [
+    {
+      "file": "particlefilter-forge-1.2.0+1.20.1.jar",
+      "sha256": "613c58b651ab843e55f0aac46b8b02aeed796fa81e4b15362d3174a51cfc5411"
+    }
+  ],
+  "mod_files": [
+    {
+      "file": "forge-1.20.1-47.4.28.jar",
+      "nested": false,
+      "mods": [
+        "minecraft 1.20.1"
+      ]
+    },
+    {
+      "file": "particlefilter-forge-1.2.0+1.20.1.jar",
+      "nested": false,
+      "mods": [
+        "particlefilter 1.2.0"
+      ]
+    },
+    {
+      "file": "",
+      "nested": true,
+      "mods": [
+        "forge 47.4.28"
+      ]
+    },
+    {
+      "file": "main",
+      "nested": false,
+      "mods": [
+        "pfbench 0.4.0"
+      ]
+    }
+  ],
+  "jvm_args": [
+    "-Dfml.modFolders\u003dpfbench%%~/Work/particle-filter/benchmarks/harness-forge/build/classes/java/main:pfbench%%~/Work/particle-filter/benchmarks/harness-forge/build/resources/main",
+    "-Djava.net.preferIPv6Addresses\u003dsystem",
+    "--module-path\u003d~/.gradle/caches/modules-2/files-2.1/cpw.mods/bootstraplauncher/1.1.2/c546e00443d8432cda6baa1c860346980742628/bootstraplauncher-1.1.2.jar:~/.gradle/caches/modules-2/files-2.1/cpw.mods/securejarhandler/2.1.10/51e6a22c6c716beb11e244bf5b8be480f51dd6b5/securejarhandler-2.1.10.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-commons/9.9.1/ab35de4c537184a09339069f1a3b3aacf2289149/asm-commons-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-util/9.9.1/e51f5b0ae0b0c1960687ae970a2a3434d39d8abb/asm-util-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-analysis/9.9.1/1ab8d9316ef7a67240087919a708246c37ed1660/asm-analysis-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm-tree/9.9.1/b6b1b3366296163b4b1f540731aad0a2baa484d8/asm-tree-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.9.1/2ceea6ab43bcae1979b2a6d85fc0ca429877e5ab/asm-9.9.1.jar:~/.gradle/caches/modules-2/files-2.1/net.minecraftforge/JarJarFileSystems/0.3.19/2464eb7d6b9ddb9db36a82cf8a95193e5c6fe020/JarJarFileSystems-0.3.19.jar",
+    "--add-modules\u003dALL-MODULE-PATH",
+    "--add-opens\u003djava.base/java.util.jar\u003dcpw.mods.securejarhandler",
+    "--add-opens\u003djava.base/java.lang.invoke\u003dcpw.mods.securejarhandler",
+    "--add-exports\u003djava.base/sun.security.util\u003dcpw.mods.securejarhandler",
+    "--add-exports\u003djdk.naming.dns/com.sun.jndi.dns\u003djava.naming",
+    "--add-exports\u003dcpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher\u003dALL-UNNAMED",
+    "-Xms4G",
+    "-Xmx4G",
+    "-XX:+UseG1GC",
+    "-Xlog:gc*:file\u003dgc.log:time,uptime,level,tags",
+    "-Dlog4j2.configurationFile\u003d~/Work/particle-filter/benchmarks/harness-forge/build/moddev/clientLog4j2.xml",
+    "-DlegacyClassPath.file\u003d~/Work/particle-filter/benchmarks/harness-forge/build/moddev/clientLegacyClasspath.txt",
+    "-DignoreList\u003dbootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,JarJarFileSystems,client-extra,fmlcore,javafmllanguage,lowcodelanguage,mclanguage,forge-",
+    "-DmergeModules\u003djna-5.10.0.jar,jna-platform-5.10.0.jar",
+    "-Dforge.enableGameTest\u003dtrue",
+    "-Dpfbench.plan\u003d~/Work/particle-filter/benchmarks/harness/run/runs/functional-0.4.0-forge-C-B-D-typed/plan.json",
+    "-Dmixin.env.remapRefMap\u003dtrue",
+    "-Dmixin.env.refMapRemappingFile\u003d~/Work/particle-filter/benchmarks/harness-forge/build/moddev/artifacts/intermediateToNamed.srg",
+    "-Dfile.encoding\u003dUTF-8",
+    "-Duser.country\u003dUS",
+    "-Duser.language\u003den",
+    "-Duser.variant"
+  ],
+  "provenance": {
+    "git_commit": "bee31ca057fca220abdf9323f8cfb6e7f91f2981",
+    "git_dirty_paths": [
+      "benchmarks/HANDOFF.md",
+      "benchmarks/PLAN.md",
+      "benchmarks/harness/README.md",
+      "benchmarks/harness/build.gradle.kts",
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/PfControl.java",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/harness/src/main/java/pfbench/PfBench.java -\u003e benchmarks/harness/src/neoforge/java/pfbench/PfBench.java",
+      "benchmarks/harness/src/main/resources/META-INF/neoforge.mods.toml -\u003e benchmarks/harness/src/neoforge/resources/META-INF/neoforge.mods.toml",
+      "benchmarks/harness/src/main/resources/pfbench.mixins.json -\u003e benchmarks/harness/src/neoforge/resources/pfbench.mixins.json",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/tests/test_pipeline.py",
+      "benchmarks/harness-forge/",
+      "benchmarks/harness/src/neoforge/java/pfbench/Platform.java"
+    ],
+    "harness_version": "0.4.0",
+    "loader": "forge",
+    "harness_sources_sha256": "dbf04e5863163adaf80c53392586f6ee837161ae823abc1dd2ff350790cba941",
+    "launcher_sha256": "61f0bc13fc78a6942b1369432d783e1af2211faa42fd17d42dbd0b6017c40535",
+    "tools_sha256": "d8eaf09ad893833a29691c496c75980b1e6fb25e4df5a6e9b27732f56f6a50ec"
+  },
+  "seed": 20261109,
+  "variant": "typed",
+  "target_lifetime_ticks": 40,
+  "control_lifetime_ticks": 40,
+  "control_attempts_per_tick": 25.0,
+  "control_z_offset": 1.0,
+  "emitters": 256,
+  "setup": {
+    "particles_setting_found": "ALL",
+    "particlefilter_present": true,
+    "particlefilter_version": "1.2.0",
+    "particlefilter_mode_at_load": "EVERYWHERE",
+    "gl": {
+      "renderer": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2",
+      "vendor": "NVIDIA Corporation",
+      "version": "3.2.0 NVIDIA 615.78.08"
+    },
+    "gamerules": {
+      "doDaylightCycle": false,
+      "doWeatherCycle": false,
+      "doMobSpawning": false,
+      "randomTickSpeed": 0
+    },
+    "level_name": "pfbench",
+    "day_time": 6000,
+    "raining": false,
+    "player_spectator": true,
+    "player_position": [
+      0.5,
+      102.38,
+      0.5
+    ],
+    "player_eye_y": 104.00000000476837,
+    "window_at_start": {
+      "width": 2536,
+      "height": 1390,
+      "fullscreen": false
+    },
+    "options": {
+      "renderDistance": 8,
+      "simulationDistance": 5,
+      "maxFps": 60,
+      "enableVsync": false,
+      "particles": "ALL",
+      "graphicsMode": "FANCY",
+      "fullscreen": false,
+      "ao": true,
+      "renderClouds": "OFF",
+      "fov": 70,
+      "guiScale": 0,
+      "pauseOnLostFocus": false,
+      "hideGui": true
+    }
+  },
+  "window_at_end": {
+    "width": 2536,
+    "height": 1390,
+    "fullscreen": false
+  },
+  "clock": {
+    "origin_nano_time": 27067548249287,
+    "origin_epoch_ms": 1794232306948,
+    "origin_jvm_uptime_ms": 18942,
+    "nano_time_source": "System.nanoTime (CLOCK_MONOTONIC on Linux)"
+  },
+  "frames_logged": 2246,
+  "frames_dropped_capacity": 0,
+  "frame_capacity": 86000,
+  "ticks_logged": 760,
+  "ticks_dropped_capacity": 0,
+  "particlefilter_modes": [
+    {
+      "phase": "load-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r1-01-C",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r1-02-B",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "warmup-r1-03-D",
+      "mode_requested": "ZONES",
+      "mode_after_start": "ZONES"
+    },
+    {
+      "phase": "warmup-r2-01-C",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "warmup-r2-02-B",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "warmup-r2-03-D",
+      "mode_requested": "ZONES",
+      "mode_after_start": "ZONES"
+    },
+    {
+      "phase": "01-C-moderate-settle",
+      "mode_requested": "EVERYWHERE",
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "01-C-moderate",
+      "mode_requested": null,
+      "mode_after_start": "EVERYWHERE"
+    },
+    {
+      "phase": "02-B-moderate-settle",
+      "mode_requested": "NONE",
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "02-B-moderate",
+      "mode_requested": null,
+      "mode_after_start": "NONE"
+    },
+    {
+      "phase": "03-D-moderate-settle",
+      "mode_requested": "ZONES",
+      "mode_after_start": "ZONES"
+    },
+    {
+      "phase": "03-D-moderate",
+      "mode_requested": null,
+      "mode_after_start": "ZONES"
+    }
+  ],
+  "notes": []
+}

@@ -5,12 +5,16 @@ It turns a scenario file into a plan.json, prepares an isolated run directory (o
 template world, Particle Filter's release jar and config, and the rendering mods when the configuration needs them),
 starts the harness through Gradle, waits for it to quit, and checks the counters.
 
-  pfbench.py template [--force] [--hide]
-      Creates the template void world once (run/template/pfbench), from the scenario's [world] section.
+  pfbench.py template [--loader neoforge|forge] [--force] [--hide]
+      Creates the template void world once per loader (run/template/pfbench for NeoForge 1.21.1,
+      run/template-forge-1.20.1/pfbench for Forge 1.20.1), from the scenario's [world] section.
   pfbench.py run --sequence C:heavy,B:heavy,D:heavy --functional [--variant typed] [--modset vanilla] [--hide]
       One launch. Each entry is CONFIG:LEVEL (PLAN.md section 2 ids; levels from the scenario's [levels]).
       All entries of a launch must share an install state: A alone, B/C/D together, C-miss alone, or E alone
       (E needs --modset sodium).
+      --loader forge runs the Forge 1.20.1 harness (benchmarks/harness-forge) instead of NeoForge 1.21.1. Its dev
+      runtime uses Mojang's names, so it loads Particle Filter's named-mappings jar from the same build as the
+      release jar (the release jar is reobfuscated to SRG names); both hashes are recorded. --modset vanilla only.
   pfbench.py campaign --configs C,B,D,A --levels heavy --blocks 8 --seed 1 [--functional] [--dry-run]
       Several launches in a counterbalanced (Williams) order: every configuration appears in every position and,
       for an even count, after every other one equally often, both inside launches and between launches.
@@ -52,11 +56,11 @@ REPO = HARNESS.parent.parent
 TOOLS = REPO / "benchmarks" / "tools"
 CONFIGS_DIR = REPO / "benchmarks" / "configs"
 RUN_ROOT = HARNESS / "run"
-TEMPLATE_DIR = RUN_ROOT / "template"
+FORGE_HARNESS = REPO / "benchmarks" / "harness-forge"
 DOWNLOADS = RUN_ROOT / "downloads"
 DEFAULT_SCENARIO = REPO / "benchmarks" / "scenarios" / "S1-synthetic.toml"
+# Both ModDevGradle runs (NeoForge and legacy Forge) start the game JVM through DevLaunch.
 GAME_PATTERN = "net.neoforged.devlaunch.Main"
-DATA_VERSION_1_21_1 = 3955
 TICKS_PER_SECOND = 20
 QUEUE_LIMIT = 16384   # ParticleEngine's EvictingQueue size per render type
 
@@ -112,6 +116,31 @@ FUNCTIONAL_OPTIONS = {"maxFps": 60, "fullscreen": False}   # light on the machin
 FUNCTIONAL_WINDOW = ["--width", "1280", "--height", "720"]
 FUNCTIONAL_COOLDOWN_S = 5
 HARNESS_SOURCES = ("src", "build.gradle.kts", "settings.gradle.kts", "gradle.properties")
+FORGE_SOURCES = ("src", "build.gradle.kts", "settings.gradle.kts", "gradle.properties")
+# What differs per loader. Every launch of a campaign uses one loader; ingest puts it in the pairing environment.
+LOADERS = {
+    "neoforge": {
+        "minecraft": "1.21.1", "data_version": 3955, "gradle_dir": HARNESS, "template_dir": RUN_ROOT / "template",
+        # Mojang names at runtime: the release jar itself runs in the dev client.
+        "pf_jar": "build/libs/{v}/particlefilter-neoforge-{v}+1.21.1.jar", "pf_release_jar": None,
+        "pf_build": "mise exec -- ./gradlew :1.21.1-neoforge:build buildAndCollect",
+        "modsets": ("vanilla", "sodium"),
+        "sources": ((HARNESS, HARNESS_SOURCES),),
+    },
+    "forge": {
+        "minecraft": "1.20.1", "data_version": 3465, "gradle_dir": FORGE_HARNESS,
+        "template_dir": RUN_ROOT / "template-forge-1.20.1",
+        # The release jar is reobfuscated to SRG names, which only a production Forge loads; the dev client (Mojang
+        # names) loads the jar reobfJar was made from, written by the same Gradle run (devlibs/).
+        "pf_jar": "versions/1.20.1-forge/build/devlibs/particlefilter-forge-{v}+1.20.1.jar",
+        # reobfJar's own output (the dev jar's sibling); buildAndCollect copies it to build/libs/<v>/ for release.
+        "pf_release_jar": "versions/1.20.1-forge/build/libs/particlefilter-forge-{v}+1.20.1.jar",
+        "pf_collected_jar": "build/libs/{v}/particlefilter-forge-{v}+1.20.1.jar",
+        "pf_build": "mise exec -- ./gradlew :1.20.1-forge:build buildAndCollect",
+        "modsets": ("vanilla",),   # no approved rendering mods for Forge 1.20.1
+        "sources": ((HARNESS, ("src/main", "gradle.properties")), (FORGE_HARNESS, FORGE_SOURCES)),
+    },
+}
 SAMPLER_INTERVAL_S = 1.0
 SAMPLER_STOP_TIMEOUT_S = 15
 ENV_SNAPSHOT_TIMEOUT_S = 120
@@ -188,7 +217,13 @@ def git(*args: str) -> str:
     return r.stdout.rstrip() if r.returncode == 0 else ""
 
 
-def provenance() -> dict:
+def harness_sources_sha256(loader: str) -> str:
+    """Hash of the harness sources one loader's build compiles (Forge: the shared sources plus its own)."""
+    parts = [sha256_tree(root, paths) for root, paths in LOADERS[loader]["sources"]]
+    return parts[0] if len(parts) == 1 else sha256_bytes("\n".join(parts).encode())
+
+
+def provenance(loader: str = "neoforge") -> dict:
     """What produced a run: commit, uncommitted changes that matter, and hashes of the code that ran."""
     dirty = [line[3:] for line in git("status", "--porcelain", "--", "benchmarks", "src").splitlines()
              if not line[3:].startswith("benchmarks/harness/run/")]
@@ -196,15 +231,16 @@ def provenance() -> dict:
         "git_commit": git("rev-parse", "HEAD"),
         "git_dirty_paths": dirty,
         "harness_version": harness_version(),
-        "harness_sources_sha256": sha256_tree(HARNESS, HARNESS_SOURCES),
+        "loader": loader,
+        "harness_sources_sha256": harness_sources_sha256(loader),
         "launcher_sha256": sha256_file(Path(__file__).resolve()),
         "tools_sha256": sha256_tree(TOOLS, tuple(p.name for p in sorted(TOOLS.glob("*.py")))),
     }
 
 
-def options_txt(options: dict) -> str:
+def options_txt(options: dict, loader: str = "neoforge") -> str:
     """options.txt in Minecraft's format. Keys not listed keep Minecraft's defaults."""
-    lines = [f"version:{DATA_VERSION_1_21_1}"]
+    lines = [f"version:{LOADERS[loader]['data_version']}"]
     for key, value in options.items():
         if key == "fov":
             value = (float(value) - 70.0) / 40.0   # stored as (degrees - 70) / 40
@@ -218,23 +254,34 @@ def options_txt(options: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def prepare_game_dir(game: Path, options: dict) -> None:
+def prepare_game_dir(game: Path, options: dict, loader: str = "neoforge") -> None:
     """options.txt plus config/fml.toml with NeoForge's early loading window off. The early window hands its GL
     context to the game window after loading; that handoff failed once when the window had been moved to a hidden
     workspace, leaving the game stuck on an error dialog. Without the early window there is one window from start
     to end, the same in every run."""
-    (game / "options.txt").write_text(options_txt(options))
+    (game / "options.txt").write_text(options_txt(options, loader))
     (game / "config").mkdir(exist_ok=True)
     (game / "config" / "fml.toml").write_text("earlyWindowControl = false\n")
 
 
-def pf_jar() -> Path:
+def pf_jar(loader: str = "neoforge") -> Path:
+    """The Particle Filter jar the loader's dev client loads (see LOADERS)."""
     props = tomllib.loads((REPO / "stonecutter.properties.toml").read_text())
     version = props["mod"]["version"]
-    jar = REPO / "build" / "libs" / version / f"particlefilter-neoforge-{version}+1.21.1.jar"
+    jar = REPO / LOADERS[loader]["pf_jar"].format(v=version)
     if not jar.exists():
-        die(f"{jar} not found; build it with: mise exec -- ./gradlew :1.21.1-neoforge:build buildAndCollect")
+        die(f"{jar} not found; build it with: {LOADERS[loader]['pf_build']}")
     return jar
+
+
+def pf_release_jar(loader: str, jar: Path) -> Path | None:
+    """The release jar built together with `jar`, when the loader can't run the release jar itself (Forge)."""
+    pattern = LOADERS[loader]["pf_release_jar"]
+    if pattern is None:
+        return None
+    version = jar.name.split("-")[2].split("+")[0]   # particlefilter-<loader>-<version>+<mc>.jar
+    release = REPO / pattern.format(v=version)
+    return release if release.exists() else None
 
 
 def pf_config(kind: str, variant: str, first_mode: str) -> dict:
@@ -294,8 +341,9 @@ def render_environment(game: Path, modset: str) -> dict:
 
 # ---- Gradle, window ----
 
-def gradle(args: list[str], log: Path, mangohud_dir: Path | None = None) -> subprocess.Popen:
-    cmd = ["mise", "exec", "--", "./gradlew", "--offline", "--console=plain", "-p", "benchmarks/harness", "runClient", *args]
+def gradle(args: list[str], log: Path, mangohud_dir: Path | None = None, loader: str = "neoforge") -> subprocess.Popen:
+    project = str(LOADERS[loader]["gradle_dir"].relative_to(REPO))
+    cmd = ["mise", "exec", "--", "./gradlew", "--offline", "--console=plain", "-p", project, "runClient", *args]
     env = None
     if mangohud_dir is not None:
         cmd = ["mangohud", "--dlsym", *cmd]
@@ -418,17 +466,19 @@ def wait_for_exit(proc: subprocess.Popen, timeout: float) -> bool:
 def cmd_template(args: argparse.Namespace) -> int:
     scenario, scenario_sha = load_scenario(Path(args.scenario))
     world = scenario["world"]
-    target = TEMPLATE_DIR / world["template"]
+    loader = args.loader
+    template_dir = LOADERS[loader]["template_dir"]
+    target = template_dir / world["template"]
     if target.exists() and not args.force:
         print(f"template exists: {target} (use --force to recreate)")
         return 0
     if game_running():
         die("a dev client is already running; close it first")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    work = RUN_ROOT / f"template-{stamp}"
+    work = RUN_ROOT / f"template-{stamp}" if loader == "neoforge" else RUN_ROOT / f"template-{loader}-{stamp}"
     game = work / "game"
     game.mkdir(parents=True)
-    prepare_game_dir(game, dict(scenario["options"]) | FUNCTIONAL_OPTIONS)
+    prepare_game_dir(game, dict(scenario["options"]) | FUNCTIONAL_OPTIONS, loader)
     gamerules = world.get("gamerules", {})
     plan = {
         "format": 1, "kind": "create_template", "run_id": f"template-{stamp}", "label": "functional",
@@ -441,12 +491,13 @@ def cmd_template(args: argparse.Namespace) -> int:
                   "doWeatherCycle": gamerules.get("doWeatherCycle", False),
                   "doMobSpawning": gamerules.get("doMobSpawning", False),
                   "randomTickSpeed": gamerules.get("randomTickSpeed", 0)},
-        "provenance": provenance(),
+        "loader": loader,
+        "provenance": provenance(loader),
     }
     plan_file = work / "plan.json"
     plan_file.write_text(json.dumps(plan, indent=2) + "\n")
     proc = gradle([f"-Ppfbench.gameDir={game}", f"-Ppfbench.plan={plan_file}", "-Ppfbench.gameArgs=" + " ".join(FUNCTIONAL_WINDOW)],
-                  work / "gradle.log")
+                  work / "gradle.log", loader=loader)
     pid = game_pid()
     if pid and args.hide:
         hide_window(pid, work / "window.log")
@@ -458,11 +509,12 @@ def cmd_template(args: argparse.Namespace) -> int:
         die(f"template world wasn't created; see {work}/gradle.log and {work}/harness.json")
     if target.exists():
         remove_tree(target)
-    TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
+    template_dir.mkdir(parents=True, exist_ok=True)
     shutil.copytree(made, target)
-    info = {"created_utc": stamp, "scenario": plan["scenario"], "world": plan["world"], "seed": plan["seed"],
-            "sha256_tree": sha256_tree(target), "setup": harness.get("setup"), "versions": harness.get("versions")}
-    (TEMPLATE_DIR / "template.json").write_text(json.dumps(info, indent=2) + "\n")
+    info = {"created_utc": stamp, "loader": loader, "scenario": plan["scenario"], "world": plan["world"],
+            "seed": plan["seed"], "sha256_tree": sha256_tree(target), "setup": harness.get("setup"),
+            "versions": harness.get("versions")}
+    (template_dir / "template.json").write_text(json.dumps(info, indent=2) + "\n")
     print(f"template world: {target}\nsha256 (tree): {info['sha256_tree']}")
     return 0
 
@@ -511,7 +563,7 @@ def min_settle_ticks(lifetimes: tuple[int, int], variant: str) -> int:
 
 
 def build_plan(scenario: dict, scenario_sha: str, entries: list[tuple[str, str]], variant: str, functional: bool,
-               run_id: str, out: Path, prov: dict | None = None) -> dict:
+               run_id: str, out: Path, prov: dict | None = None, loader: str = "neoforge") -> dict:
     timing = FUNCTIONAL_PHASES if functional else scenario["phases"]
     levels = scenario["levels"]
     ticks = {k: int(round(v * TICKS_PER_SECOND)) for k, v in timing.items()
@@ -547,6 +599,7 @@ def build_plan(scenario: dict, scenario_sha: str, entries: list[tuple[str, str]]
     total_s = sum(p["ticks"] for p in phases) / TICKS_PER_SECOND
     return {
         "format": 1, "kind": "run", "run_id": run_id, "label": "functional" if functional else "performance",
+        "loader": loader, "minecraft": LOADERS[loader]["minecraft"],
         "output_dir": str(out),
         "scenario": {"id": scenario["scenario"]["id"], "version": scenario["scenario"]["version"], "sha256": scenario_sha},
         "seed": scenario["world"]["seed"], "variant": variant, "camera": camera(scenario),
@@ -576,7 +629,7 @@ def copy_inputs(game: Path, dest: Path) -> dict:
 
 def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str, functional: bool, hide: bool,
                pf_jar_path: str | None = None, run_id: str | None = None, sodium_defaults: bool = False,
-               campaign: dict | None = None, mangohud: bool = False) -> tuple[int, Path]:
+               campaign: dict | None = None, mangohud: bool = False, loader: str = "neoforge") -> tuple[int, Path]:
     if not functional and os.environ.get("PFBENCH_PERFORMANCE_APPROVED") != "1":
         die("performance runs are blocked until the owner confirms the laptop's power-limit problems are fixed "
             "(benchmarks/HANDOFF.md). Use --functional for bring-up checks.")
@@ -584,8 +637,12 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
     entries = parse_sequence(sequence, scenario["levels"])
     if variant not in VARIANTS:
         die(f"unknown variant {variant!r}")
+    if loader not in LOADERS:
+        die(f"unknown loader {loader!r} (known: {', '.join(LOADERS)})")
     if modset not in MODSETS:
         die(f"unknown modset {modset!r} (known: {', '.join(MODSETS)})")
+    if modset not in LOADERS[loader]["modsets"]:
+        die(f"--modset {modset} isn't available for {loader} (available: {', '.join(LOADERS[loader]['modsets'])})")
     pf_kind, _, se_hides = CONFIGS[entries[0][0]]
     if variant == "block_dust" and any(c == "D" for c, _ in entries):
         die("block_dust can't be filtered by zones (Particle Filter's block rules are global)")
@@ -598,16 +655,17 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
         die(f"no Sodium config templates in {SODIUM_CONFIGS}; capture the mods' defaults once with --sodium-defaults")
     if sodium_defaults and not functional:
         die("--sodium-defaults is for capturing the mods' default configs in a functional run")
-    template = TEMPLATE_DIR / scenario["world"]["template"]
+    template_dir = LOADERS[loader]["template_dir"]
+    template = template_dir / scenario["world"]["template"]
     if not (template / "level.dat").exists():
-        die(f"no template world at {template}; run: pfbench.py template")
+        die(f"no template world at {template}; run: pfbench.py template --loader {loader}")
     if mangohud and not shutil.which("mangohud"):
         die("--mangohud: mangohud is not installed")
     if game_running():
         die("a dev client is already running; close it first")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    tags = [c for c, _ in entries] + [variant] + ([modset] if modset != "vanilla" else [])
+    tags = ([loader] if loader != "neoforge" else []) + [c for c, _ in entries] + [variant] + ([modset] if modset != "vanilla" else [])
     run_id = run_id or f"{stamp}-{'-'.join(tags)}" + ("-functional" if functional else "")
     out = RUN_ROOT / "runs" / run_id
     if out.exists():
@@ -615,20 +673,29 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
     game = out / "game"
     (game / "saves").mkdir(parents=True)
     shutil.copytree(template, game / "saves" / scenario["world"]["template"])   # fresh copy; the template is never opened
-    prepare_game_dir(game, dict(scenario["options"]) | (FUNCTIONAL_OPTIONS if functional else {}))
+    prepare_game_dir(game, dict(scenario["options"]) | (FUNCTIONAL_OPTIONS if functional else {}), loader)
 
     jars: dict[str, str] = {}   # file name in mods/ -> SHA-256 of what was copied
     install: dict = {"particlefilter": None, "modset": modset, "render_mods": {}, "sodium_extra_hides_target": se_hides}
     if pf_kind is not None or modset != "vanilla":
         (game / "mods").mkdir()
     if pf_kind is not None:
-        jar = Path(pf_jar_path) if pf_jar_path else pf_jar()
+        jar = Path(pf_jar_path) if pf_jar_path else pf_jar(loader)
         shutil.copy2(jar, game / "mods" / jar.name)
         jars[jar.name] = sha256_file(game / "mods" / jar.name)
         cfg = pf_config(pf_kind, variant, CONFIGS[entries[0][0]][1])
         (game / "config" / "particlefilter.json").write_text(json.dumps(cfg, indent=2) + "\n")
         install["particlefilter"] = {"jar": jar.name, "sha256": jars[jar.name], "config_kind": pf_kind,
-                                     "config_sha256": sha256_file(game / "config" / "particlefilter.json")}
+                                     "config_sha256": sha256_file(game / "config" / "particlefilter.json"),
+                                     "jar_path": str(jar).replace(str(Path.home()), "~")}
+        release = pf_release_jar(loader, jar)
+        if LOADERS[loader]["pf_release_jar"] is not None:
+            # Named-mappings jar: record the release jar it was reobfuscated into, and that they come from one build.
+            collected = REPO / LOADERS[loader]["pf_collected_jar"].format(v=jar.name.split("-")[2].split("+")[0])
+            install["particlefilter"]["release_jar"] = {
+                "jar": release.name if release else None, "sha256": sha256_file(release) if release else None,
+                "built_seconds_apart": round(abs(release.stat().st_mtime - jar.stat().st_mtime), 1) if release else None,
+                "collected_copy_sha256": sha256_file(collected) if collected.exists() else None}
     for name in MODSETS[modset]:
         jar = render_mod_jar(name)
         shutil.copy2(jar, game / "mods" / jar.name)
@@ -647,18 +714,19 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
                                          "sodium_extra_target": VARIANTS[variant][0],
                                          "sodium_extra_target_enabled": not se_hides}
 
-    prov = provenance()
-    plan = build_plan(scenario, scenario_sha, entries, variant, functional, run_id, out, prov)
+    prov = provenance(loader)
+    plan = build_plan(scenario, scenario_sha, entries, variant, functional, run_id, out, prov, loader)
     plan_file = out / "plan.json"
     plan_file.write_text(json.dumps(plan, indent=2) + "\n")
     total_s = sum(p["ticks"] for p in plan["phases"]) / TICKS_PER_SECOND
     inputs = copy_inputs(game, out / "inputs")
 
-    launch = {"run_id": run_id, "label": plan["label"], "started_utc": stamp, "sequence": sequence,
+    launch = {"run_id": run_id, "label": plan["label"], "loader": loader, "minecraft": LOADERS[loader]["minecraft"],
+              "started_utc": stamp, "sequence": sequence,
               "entries": [{"position": i, "config": c, "level": lv} for i, (c, lv) in enumerate(entries, start=1)],
               "variant": variant, "scenario_file": scenario_path.name, "scenario_sha256": scenario_sha,
-              "template_sha256_tree": json.loads((TEMPLATE_DIR / "template.json").read_text()).get("sha256_tree")
-              if (TEMPLATE_DIR / "template.json").exists() else None,
+              "template_sha256_tree": json.loads((template_dir / "template.json").read_text()).get("sha256_tree")
+              if (template_dir / "template.json").exists() else None,
               **install, "mods_dir": jars, "inputs_sha256": inputs,
               "render_environment": render_environment(game, modset),
               "jvm_args_requested": scenario.get("jvm", {}).get("args", ""),
@@ -675,7 +743,7 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
     (out / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")   # rewritten with the outcome below
     if mangohud:
         (out / "mangohud").mkdir()
-    proc = gradle(gradle_args, out / "gradle.log", out / "mangohud" if mangohud else None)
+    proc = gradle(gradle_args, out / "gradle.log", out / "mangohud" if mangohud else None, loader)
     pid = game_pid()
     if pid is None:
         wait_for_exit(proc, 5)
@@ -700,7 +768,8 @@ def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str,
 def cmd_run(args: argparse.Namespace) -> int:
     code, _ = run_launch(scenario_path=Path(args.scenario), sequence=args.sequence, variant=args.variant,
                          modset=args.modset, functional=args.functional, hide=args.hide, pf_jar_path=args.pf_jar,
-                         run_id=args.run_id, sodium_defaults=args.sodium_defaults, mangohud=args.mangohud)
+                         run_id=args.run_id, sodium_defaults=args.sodium_defaults, mangohud=args.mangohud,
+                         loader=args.loader)
     return code
 
 
@@ -739,12 +808,14 @@ def cmd_campaign(args: argparse.Namespace) -> int:
     for lv in levels:
         if lv not in scenario["levels"]:
             die(f"unknown level {lv!r}")
+    if args.modset not in LOADERS[args.loader]["modsets"]:
+        die(f"--modset {args.modset} isn't available for {args.loader}")
     plan = campaign_schedule(configs, levels, args.blocks, args.seed)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     name = args.name or f"campaign-{stamp}"
     sheet = {"campaign": name, "seed": args.seed, "configs": configs, "levels": levels, "variant": args.variant,
              "modset": args.modset, "label": "functional" if args.functional else "performance",
-             "mangohud": args.mangohud,
+             "mangohud": args.mangohud, "loader": args.loader,
              "blocks": [[",".join(f"{c}:{lv}" for c, lv in launch) for launch in launches] for launches in plan]}
     for b, launches in enumerate(sheet["blocks"], start=1):
         print(f"block {b}: " + "  |  ".join(launches))
@@ -766,7 +837,7 @@ def cmd_campaign(args: argparse.Namespace) -> int:
             code, out = run_launch(scenario_path=Path(args.scenario), sequence=sequence, variant=args.variant,
                                    modset=args.modset, functional=args.functional, hide=args.hide, run_id=run_id,
                                    campaign={"name": name, "block": b, "launch_in_block": li, "seed": args.seed},
-                                   mangohud=args.mangohud)
+                                   mangohud=args.mangohud, loader=args.loader)
             failures += code != 0
             sheet["launches"].append({"block": b, "launch_in_block": li, "sequence": sequence, "run_id": run_id,
                                       "check_passed": code == 0})
@@ -833,10 +904,25 @@ def check(run: Path) -> int:
         record("mods/ held exactly the jars the launcher copied (SHA-256, read in game)", folder == launch.get("mods_dir", {}),
                f"in game: {sorted(folder)}")
         mod_ids = {m.split(" ", 1)[0] for m in harness.get("mods", [])}
+        loader = launch.get("loader", "neoforge")
+        versions = harness.get("versions", {})
+        if "loader" in versions:
+            record("harness ran on the planned loader and Minecraft version",
+                   versions["loader"] == loader and versions.get("minecraft") == LOADERS[loader]["minecraft"],
+                   f"{versions['loader']} {versions.get('minecraft')}, planned {loader} {LOADERS[loader]['minecraft']}")
         if launch.get("particlefilter"):
-            want = launch["particlefilter"]["jar"].split("-")[2].split("+")[0]   # particlefilter-neoforge-<ver>+<mc>.jar
-            got = harness.get("versions", {}).get("particlefilter")
+            want = launch["particlefilter"]["jar"].split("-")[2].split("+")[0]   # particlefilter-<loader>-<ver>+<mc>.jar
+            got = versions.get("particlefilter")
             record("loaded Particle Filter version matches the jar", got == want, f"loaded {got}, jar {want}")
+            if "release_jar" in launch["particlefilter"]:
+                rel = launch["particlefilter"]["release_jar"]
+                apart = rel.get("built_seconds_apart")
+                record("named-mappings jar was built with the release jar (same Gradle run, <= 60 s apart)",
+                       bool(rel.get("sha256")) and apart is not None and apart <= 60,
+                       f"release {rel.get('jar')} {str(rel.get('sha256'))[:12]}, {apart} s apart")
+                record("that release jar is the one collected for release (build/libs/<version>/)",
+                       rel.get("collected_copy_sha256") in (None, rel.get("sha256")),
+                       f"collected copy {str(rel.get('collected_copy_sha256'))[:12]}")
         for name, spec in RENDER_MODS.items():
             want = name in MODSETS[launch.get("modset", "vanilla")]
             record(f"{spec['mod_id']} loaded only when the mod set includes it", (spec["mod_id"] in mod_ids) == want,
@@ -1005,22 +1091,25 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="command", required=True)
     t = sub.add_parser("template", help="create the template void world")
     t.add_argument("--scenario", default=str(DEFAULT_SCENARIO))
+    t.add_argument("--loader", default="neoforge", choices=list(LOADERS), help="neoforge (1.21.1) or forge (1.20.1)")
     t.add_argument("--force", action="store_true")
     t.add_argument("--hide", action="store_true", help="move the game window to the hidden special workspace")
     r = sub.add_parser("run", help="one launch")
     r.add_argument("--scenario", default=str(DEFAULT_SCENARIO))
+    r.add_argument("--loader", default="neoforge", choices=list(LOADERS), help="neoforge (1.21.1) or forge (1.20.1)")
     r.add_argument("--sequence", required=True, help="CONFIG:LEVEL,... e.g. C:heavy,B:heavy,D:heavy")
     r.add_argument("--variant", default="typed", choices=list(VARIANTS))
     r.add_argument("--modset", default="vanilla", choices=list(MODSETS), help="rendering mods in every configuration")
     r.add_argument("--functional", action="store_true", help="short phases, 60 FPS cap, windowed: bring-up checks only")
     r.add_argument("--hide", action="store_true", help="move the game window to the hidden special workspace")
     r.add_argument("--mangohud", action="store_true", help="run under MangoHud and keep its per-frame log (raw data)")
-    r.add_argument("--pf-jar", help="Particle Filter jar (default: the repo's build/libs/<version>/ NeoForge jar)")
+    r.add_argument("--pf-jar", help="Particle Filter jar (default: the loader's jar of the repo's current version, see LOADERS)")
     r.add_argument("--run-id")
     r.add_argument("--sodium-defaults", action="store_true",
                    help="functional only: don't write Sodium configs, so the mods save their defaults (to capture them)")
     c = sub.add_parser("campaign", help="several launches in a counterbalanced order")
     c.add_argument("--scenario", default=str(DEFAULT_SCENARIO))
+    c.add_argument("--loader", default="neoforge", choices=list(LOADERS), help="neoforge (1.21.1) or forge (1.20.1)")
     c.add_argument("--configs", required=True, help="e.g. C,B,D,A")
     c.add_argument("--levels", required=True, help="e.g. heavy or moderate,heavy")
     c.add_argument("--blocks", type=int, required=True)

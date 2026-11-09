@@ -1,0 +1,412 @@
+{
+  "label": "functional",
+  "note": "Functional checks of the harness. Not a performance result.",
+  "passed": true,
+  "checks": [
+    {
+      "check": "harness finished without error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "frames.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "phases.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "world is the template (level name pfbench)",
+      "ok": true,
+      "detail": "pfbench"
+    },
+    {
+      "check": "player is a spectator at the camera position",
+      "ok": true,
+      "detail": "[0.5, 102.38, 0.5]"
+    },
+    {
+      "check": "Particles setting is All",
+      "ok": true,
+      "detail": "ALL"
+    },
+    {
+      "check": "window size unchanged from first phase to quit",
+      "ok": true,
+      "detail": "{'width': 2536, 'height': 1390, 'fullscreen': False} -> {'width': 2536, 'height': 1390, 'fullscreen': False}"
+    },
+    {
+      "check": "no frame or tick rows dropped",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "Particle Filter installed as the configuration requires",
+      "ok": true,
+      "detail": "present=True"
+    },
+    {
+      "check": "mode switched: load-settle",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: warmup-r1-01-C",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: warmup-r1-02-B",
+      "ok": true,
+      "detail": "requested NONE, got NONE"
+    },
+    {
+      "check": "mode switched: warmup-r1-03-D",
+      "ok": true,
+      "detail": "requested ZONES, got ZONES"
+    },
+    {
+      "check": "mode switched: warmup-r2-01-C",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: warmup-r2-02-B",
+      "ok": true,
+      "detail": "requested NONE, got NONE"
+    },
+    {
+      "check": "mode switched: warmup-r2-03-D",
+      "ok": true,
+      "detail": "requested ZONES, got ZONES"
+    },
+    {
+      "check": "mode switched: 01-C-moderate-settle",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: 02-B-moderate-settle",
+      "ok": true,
+      "detail": "requested NONE, got NONE"
+    },
+    {
+      "check": "mode switched: 03-D-moderate-settle",
+      "ok": true,
+      "detail": "requested ZONES, got ZONES"
+    },
+    {
+      "check": "harness version matches the source tree",
+      "ok": true,
+      "detail": "loaded 0.4.0, source 0.4.0"
+    },
+    {
+      "check": "mods/ held exactly the jars the launcher copied (SHA-256, read in game)",
+      "ok": true,
+      "detail": "in game: ['particlefilter-forge-1.2.0+1.20.1.jar']"
+    },
+    {
+      "check": "harness ran on the planned loader and Minecraft version",
+      "ok": true,
+      "detail": "forge 1.20.1, planned forge 1.20.1"
+    },
+    {
+      "check": "loaded Particle Filter version matches the jar",
+      "ok": true,
+      "detail": "loaded 1.2.0, jar 1.2.0"
+    },
+    {
+      "check": "named-mappings jar was built with the release jar (same Gradle run, <= 60 s apart)",
+      "ok": true,
+      "detail": "release particlefilter-forge-1.2.0+1.20.1.jar 5d7e1bf5eccc, 0.6 s apart"
+    },
+    {
+      "check": "that release jar is the one collected for release (build/libs/<version>/)",
+      "ok": true,
+      "detail": "collected copy 5d7e1bf5eccc"
+    },
+    {
+      "check": "sodium loaded only when the mod set includes it",
+      "ok": true,
+      "detail": "loaded=False, modset=vanilla"
+    },
+    {
+      "check": "sodium_extra loaded only when the mod set includes it",
+      "ok": true,
+      "detail": "loaded=False, modset=vanilla"
+    },
+    {
+      "check": "GPU renderer recorded",
+      "ok": true,
+      "detail": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2"
+    },
+    {
+      "check": "ticks.csv has alive_control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has jit_time_ms",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has classes_loaded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has server_saves",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "JIT time is logged and never decreases",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "every settle after a switch is >= 43 ticks (longest particle life + 2)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "warmup ran every measured configuration",
+      "ok": true,
+      "detail": "measured ['B', 'C', 'D'], warmed ['B', 'C', 'D']"
+    },
+    {
+      "check": "ticks logged: load-settle",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "ticks logged: warmup-r1-01-C",
+      "ok": true,
+      "detail": "20 of 20"
+    },
+    {
+      "check": "ticks logged: warmup-r1-02-B",
+      "ok": true,
+      "detail": "20 of 20"
+    },
+    {
+      "check": "ticks logged: warmup-r1-03-D",
+      "ok": true,
+      "detail": "20 of 20"
+    },
+    {
+      "check": "ticks logged: warmup-r2-01-C",
+      "ok": true,
+      "detail": "20 of 20"
+    },
+    {
+      "check": "ticks logged: warmup-r2-02-B",
+      "ok": true,
+      "detail": "20 of 20"
+    },
+    {
+      "check": "ticks logged: warmup-r2-03-D",
+      "ok": true,
+      "detail": "20 of 20"
+    },
+    {
+      "check": "ticks logged: 01-C-moderate-settle",
+      "ok": true,
+      "detail": "80 of 80"
+    },
+    {
+      "check": "01-C-moderate-settle: target created == 0",
+      "ok": true,
+      "detail": "attempts 4000, created 0"
+    },
+    {
+      "check": "01-C-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2000, created 2000"
+    },
+    {
+      "check": "ticks logged: 01-C-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "01-C-moderate: target created == 0",
+      "ok": true,
+      "detail": "attempts 5000, created 0"
+    },
+    {
+      "check": "01-C-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "01-C-moderate: no target particle alive (no carry-over)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "01-C-moderate: control alive == 1025 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "01-C-moderate: translucent queue == control only (1025)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "ticks logged: 02-B-moderate-settle",
+      "ok": true,
+      "detail": "80 of 80"
+    },
+    {
+      "check": "02-B-moderate-settle: target created == attempts",
+      "ok": true,
+      "detail": "attempts 4000, created 4000"
+    },
+    {
+      "check": "02-B-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2000, created 2000"
+    },
+    {
+      "check": "ticks logged: 02-B-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "02-B-moderate: target created == attempts",
+      "ok": true,
+      "detail": "attempts 5000, created 5000"
+    },
+    {
+      "check": "02-B-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "02-B-moderate: target alive == 2050 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "02-B-moderate: control alive == 1025 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "02-B-moderate: translucent queue == control only (1025)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "ticks logged: 03-D-moderate-settle",
+      "ok": true,
+      "detail": "80 of 80"
+    },
+    {
+      "check": "03-D-moderate-settle: target created == 0",
+      "ok": true,
+      "detail": "attempts 4000, created 0"
+    },
+    {
+      "check": "03-D-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2000, created 2000"
+    },
+    {
+      "check": "ticks logged: 03-D-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "03-D-moderate: target created == 0",
+      "ok": true,
+      "detail": "attempts 5000, created 0"
+    },
+    {
+      "check": "03-D-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "03-D-moderate: no target particle alive (no carry-over)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "03-D-moderate: control alive == 1025 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "03-D-moderate: translucent queue == control only (1025)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "frames.csv parses with tools/frametimes.py",
+      "ok": true,
+      "detail": "2246 rows, 0 skipped, format generic-ns"
+    },
+    {
+      "check": "every phase has frames",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "environment snapshot written: env-before.json",
+      "ok": true,
+      "detail": "returncode 0"
+    },
+    {
+      "check": "environment snapshot written: env-after.json",
+      "ok": true,
+      "detail": "returncode 0"
+    },
+    {
+      "check": "power settings unchanged from before to after the launch (AC, profiles, RAPL limits)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "system sampler ran without --self-cpu (no affinity change)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "system sampler wrote meta.json, system.csv and threads.csv",
+      "ok": true,
+      "detail": "57 system rows"
+    },
+    {
+      "check": "harness.json records the clock origin",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "sampler covers every measured phase",
+      "ok": true,
+      "detail": "23 samples inside the measured span"
+    },
+    {
+      "check": "GPU samples line up with the measured phases",
+      "ok": true,
+      "detail": "58 GPU rows"
+    },
+    {
+      "check": "gc.log parses (the settles' System.gc() pauses are there)",
+      "ok": true,
+      "detail": "23 pauses"
+    }
+  ]
+}

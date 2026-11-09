@@ -1,6 +1,7 @@
 # pfbench: the synthetic benchmark harness
 
-A benchmark-only client mod and launcher that implement [HARNESS.md](../HARNESS.md) for **NeoForge 1.21.1**.
+A benchmark-only client mod and launcher that implement [HARNESS.md](../HARNESS.md) for **NeoForge 1.21.1** and
+(since 2026-11-09) **Forge 1.20.1** ([../harness-forge](../harness-forge), see "Forge 1.20.1" below).
 It is **not** part of Particle Filter. It's a separate Gradle build that the release build (`settings.gradle.kts`
 at the repository root), CI and CurseForge uploads never include. Particle Filter contains no benchmark code.
 
@@ -56,6 +57,34 @@ Everything a launch writes is under `benchmarks/harness/run/` (gitignored): the 
 directory per launch in `run/runs/<run-id>/` with the game directory in `game/`, the downloaded rendering mods in
 `run/downloads/`, campaign sheets in `run/campaigns/`. Nothing touches a Minecraft installation, world or system
 setting.
+
+## Forge 1.20.1
+
+`benchmarks/harness-forge/` is a second Gradle build (ModDevGradle legacyforge 2.0.148, Forge 1.20.1-47.4.28,
+Java 17, mixin refmap) that compiles the **same** harness code: `harness/src/main` holds everything shared (Runner,
+counters, frame and tick logs, particles, both mixins, particle definitions); each build adds its own entry point,
+`Platform` class (mod list, server tick time, world creation: the only API differences found), mods.toml and mixin
+config (`harness/src/neoforge`, `harness-forge/src/main`). Both builds take the harness version from
+`harness/gradle.properties`, and the Forge provenance hash covers the shared and the Forge-only sources.
+
+```sh
+mise exec -- ./gradlew -p benchmarks/harness-forge compileJava
+python3 benchmarks/harness/pfbench.py template --loader forge --hide          # run/template-forge-1.20.1/
+python3 benchmarks/harness/pfbench.py run --loader forge --functional --hide --sequence C:moderate,B:moderate,D:moderate
+```
+
+- `--loader forge` on `template`, `run` and `campaign`; the default stays `neoforge`. The loader is recorded in
+  `plan.json`, `launch.json` and `harness.json["versions"]["loader"]` (a check compares them), and ingest puts it in
+  the environment, so windows of different loaders are never paired.
+- **Particle Filter jar:** the release jar for Forge is reobfuscated to SRG names, which only a production Forge
+  loads; the dev client runs on Mojang's names. The launcher therefore copies the jar `reobfJar` was made from
+  (`versions/1.20.1-forge/build/devlibs/`, written by the same Gradle run as the release jar) and records both
+  hashes and how far apart they were built (a check requires ≤ 60 s). The bytecode is the same apart from names.
+  Like the NeoForge harness, this measures the dev runtime, not a production install (a limitation for both loaders).
+- Only `--modset vanilla`: no rendering mods are approved for Forge 1.20.1, so configuration E doesn't exist there.
+- Checked in the 1.20.1 sources: `Minecraft.getFrameTimeNs()` exists and spans render start to blit as in 1.21.1;
+  particle lifetimes (end_rod 60–71, default ≤ 40) and the 32-block spawn limit are unchanged, so the settle rules hold;
+  the integrated server's tick time is a float in ms (converted to ns).
 
 ## How a launch works
 
@@ -179,7 +208,6 @@ setting.
 
 ## Not done yet
 
-- Forge 1.20.1 port.
 - The bound label's thresholds and the sampler's own cost are unvalidated (they need performance runs: phases 2b/4).
 - Phase 2b checks (harness frame log vs MangoHud, hidden-window throttling, fullscreen on DP-1): they compare
   timings, so they wait for the power-limit confirmation.

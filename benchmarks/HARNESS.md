@@ -29,6 +29,10 @@ Investigation showed that the controlled benchmark needs things no existing tool
 Forge 1.20.1 follows once the NeoForge numbers are trusted. The code is small and could be shared with
 Stonecutter, but keeping the harness out of the release build matters more than avoiding duplication.
 
+*Update 2026-11-09:* the Forge 1.20.1 build exists (`benchmarks/harness-forge`, built ahead of the NeoForge numbers
+on the owner's instruction, functional checks only). It shares the harness code without Stonecutter: a second
+Gradle build compiles `harness/src/main` plus a small per-loader `Platform` class; see harness/README.md.
+
 ### 1. Workload generator
 
 Runs on the client tick, inside a singleplayer world:

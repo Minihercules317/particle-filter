@@ -1,0 +1,222 @@
+{
+  "schema": 1,
+  "collected_at": "2026-11-09T13:58:11+00:00",
+  "note": "pfbench functional-0.4.0-neoforge-C-B-typed: after the game quit",
+  "cpu": {
+    "model": "Intel(R) Core(TM) Ultra 9 275HX",
+    "logical_cpus": 24,
+    "performance_cores": "0-7",
+    "efficiency_cores": "8-23",
+    "max_freq_khz_by_cpu": {
+      "cpu0": "5300000",
+      "cpu1": "5300000",
+      "cpu2": "5300000",
+      "cpu3": "5500000",
+      "cpu4": "5300000",
+      "cpu5": "5300000",
+      "cpu6": "5500000",
+      "cpu7": "5300000",
+      "cpu8": "4700000",
+      "cpu9": "4700000",
+      "cpu10": "4700000",
+      "cpu11": "4700000",
+      "cpu12": "4700000",
+      "cpu13": "4700000",
+      "cpu14": "4700000",
+      "cpu15": "4700000",
+      "cpu16": "4700000",
+      "cpu17": "4700000",
+      "cpu18": "4700000",
+      "cpu19": "4700000",
+      "cpu20": "4700000",
+      "cpu21": "4700000",
+      "cpu22": "4700000",
+      "cpu23": "4700000"
+    },
+    "governor": "powersave",
+    "energy_performance_preference": "performance",
+    "intel_no_turbo": "0",
+    "platform_profile": "performance",
+    "power_profile": "performance",
+    "rapl_limits_w": {
+      "intel-rapl-mmio:0": {
+        "long_term": 95.0,
+        "short_term": 30.0,
+        "peak_power": 0.0
+      },
+      "intel-rapl:0": {
+        "long_term": 170.0,
+        "short_term": 210.0
+      },
+      "intel-rapl:0:0": {
+        "long_term": 0.0
+      },
+      "intel-rapl:0:1": {
+        "long_term": 0.0
+      }
+    }
+  },
+  "power": {
+    "ADP0": {
+      "type": "Mains",
+      "online": "1",
+      "status": null,
+      "capacity": null
+    },
+    "hidpp_battery_0": {
+      "type": "Battery",
+      "online": "1",
+      "status": "Discharging",
+      "capacity": "13"
+    },
+    "BAT0": {
+      "type": "Battery",
+      "online": null,
+      "status": "Not charging",
+      "capacity": "79"
+    }
+  },
+  "gpu": {
+    "pci": "00:02.0 VGA compatible controller: Intel Corporation Arrow Lake-S [Intel Graphics] (rev 06)\n02:00.0 VGA compatible controller: NVIDIA Corporation GB205M [GeForce RTX 5070 Ti Mobile] (rev a1)\n80:14.5 Non-VGA unclassified device: Intel Corporation Device 7f2f (rev 10)",
+    "nvidia_smi": "name, driver_version, pstate, clocks.current.graphics [MHz], clocks.current.memory [MHz], clocks.max.graphics [MHz], power.draw [W], power.limit [W], temperature.gpu, utilization.gpu [%]\nNVIDIA GeForce RTX 5070 Ti Laptop GPU, 615.78.08, P0, 1890 MHz, 14001 MHz, 3090 MHz, 56.65 W, [N/A], 59, 11 %",
+    "drm_cards": {
+      "card1": {
+        "driver": "nvidia",
+        "vendor": "0x10de"
+      },
+      "card0": {
+        "driver": "i915",
+        "vendor": "0x8086"
+      }
+    },
+    "connected_outputs": {
+      "card0-eDP-2": "connected",
+      "card1-DP-1": "connected"
+    }
+  },
+  "display": {
+    "session_type": "wayland",
+    "hyprland": [
+      "Hyprland 0.56.2 built from branch v0.56.2 at commit efb50993780079460b0cbed1363e2166a2de1d9f clean ([gha] Nix: update inputs)."
+    ],
+    "monitors": [
+      {
+        "name": "eDP-2",
+        "make": "Samsung Display Corp.",
+        "model": "ATNA60HU01-0 ",
+        "width": 2560,
+        "height": 1600,
+        "refreshRate": 240.0,
+        "x": 0,
+        "y": 0,
+        "scale": 1.6,
+        "vrr": false,
+        "activelyTearing": false,
+        "directScanoutTo": "0",
+        "focused": false,
+        "activeWorkspace": {
+          "id": 2,
+          "name": "2"
+        }
+      },
+      {
+        "name": "DP-1",
+        "make": "ASUSTek COMPUTER INC",
+        "model": "VG27AQML1A",
+        "width": 2560,
+        "height": 1440,
+        "refreshRate": 240.00101,
+        "x": -2560,
+        "y": 0,
+        "scale": 1,
+        "vrr": false,
+        "activelyTearing": false,
+        "directScanoutTo": "0",
+        "focused": true,
+        "activeWorkspace": {
+          "id": 13,
+          "name": "13"
+        }
+      }
+    ]
+  },
+  "software": {
+    "kernel": "7.2.15-1-omarchy",
+    "os": {
+      "NAME": "Omarchy",
+      "ID": "omarchy",
+      "BUILD_ID": "4.5.0",
+      "VERSION_ID": "4.5.0"
+    },
+    "mangohud": "v0.8.4",
+    "mangohud_package": "mangohud 0.8.4-1",
+    "java": "openjdk version \"21.0.12.1\" 2026-08-18 LTS\nOpenJDK Runtime Environment Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS, mixed mode, sharing)",
+    "python": "3.14.8",
+    "gpu_env": {
+      "__GLX_VENDOR_LIBRARY_NAME": "nvidia",
+      "__NV_PRIME_RENDER_OFFLOAD": "1",
+      "__NV_PRIME_RENDER_OFFLOAD_PROVIDER": "NVIDIA-G0",
+      "__VK_LAYER_NV_optimus": "NVIDIA_only"
+    }
+  },
+  "load": {
+    "loadavg": "14.81 15.46 11.03 1/2515 3385648",
+    "cpu_pressure": "some avg10=3.71 avg60=8.69 avg300=7.91 total=208308539\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+    "memory": {
+      "MemTotal": "32257812 kB",
+      "MemAvailable": "18399468 kB",
+      "SwapTotal": "64520348 kB",
+      "SwapFree": "59813416 kB"
+    },
+    "top_processes": [
+      "%CPU %MEM COMMAND",
+      " 7.4  0.0 python3",
+      " 7.0  3.2 ChatGPT",
+      " 5.7  0.7 Hyprland",
+      " 4.3  1.3 claude",
+      " 4.0  1.2 claude",
+      " 3.4  1.4 vesktop",
+      " 2.8  1.5 owe-render",
+      " 2.1  1.0 claude",
+      " 1.8  0.0 perl",
+      " 1.8  0.0 bash",
+      " 1.8  0.0 tmux: server"
+    ],
+    "thermal": "{\"ucsi_source_psy_USBC000:001-isa-0000\":{\"Adapter\":\"ISA adapter\",\"in0\":{\"in0_input\":0.000000,\"in0_min\":0.000000,\"in0_max\":0.000000},\"curr1\":{\"curr1_input\":3.000000,\"curr1_max\":0.000000}},\"spd5118-i2c-21-53\":{\"Adapter\":\"SMBus I801 adapter at 0000:80:1f.4\",\"temp1\":{\"temp1_input\":53.500000,\"temp1_max\":55.000000,\"temp1_min\":0.000000,\"temp1_crit\":85.000000,\"temp1_lcrit\":0.000000,\"temp1_min_alarm\":0.000000,\"temp1_crit_alarm\":0.000000,\"temp1_lcrit_alarm\":0.000000}},\"lenovo_wmi_other-virtual-0\":{\"Adapter\":\"Virtual device\",\"fan1\":{\"fan1_input\":2800.000000,\"fan1_min\":1600.000000,\"fan1_max\":5200.000000,\"fan1_div\":100.000000},\"fan2\":{\"fan2_input\":2700.000000,\"fan2_min\":1700.000000,\"fan2_max\":5400.000000,\"fan2_div\":100.000000},\"fan4\":{\"fan4_input\":3600.000000,\"fan4_min\":2300.000000,\"fan4_max\":6500.000000,\"fan4_div\":100.000000}},\"nvme-pci-0100\":{\"Adapter\":\"PCI adapter\",\"Composite\":{\"temp1_input\":42.850000,\"temp1_max\":83.850000,\"temp1_min\":-5.150000,\"temp1_crit\":87.850000,\"temp1_alarm\":0.000000},\"Sensor 1\":{\"temp2_input\":51.850000,\"temp2_max\":65261.850000,\"temp2_min\":-273.150000},\"Sensor 2\":{\"temp3_input\":42.850000,\"temp3_max\":65261.850000,\"temp3_min\":-273.150000},\"Sensor 3\":{\"temp4_input\":42.850000,\"temp4_max\":65261.850000,\"temp4_min\":-273.150000}},\"ucsi_source_psy_USBC000:002-isa-0000\":{\"Adapter\":\"ISA adapter\",\"in0\":{\"in0_input\":0.000000,\"in0_min\":0.000000,\"in0_max\":0.000000},\"curr1\":{\"curr1_input\":3.000000,\"curr1_max\":0.000000}},\"iwlwifi_1-virtual-0\":{\"Adapter\":\"Virtual device\",\"temp1\":{\"temp1_input\":58.000000}},\"spd5118-i2c-21-51\":{\"Adapter\":\"SMBus I801 adapter at 0000:80:1f.4\",\"temp1\":{\"temp1_input\":57.750000,\"temp1_max\":55.000000,\"temp1_min\":0.000000,\"temp1_crit\":85.000000,\"temp1_lcrit\":0.000000,\"temp1_min_alarm\":0.000000,\"temp1_crit_alarm\":0.000000,\"temp1_lcrit_alarm\":0.000000}},\"coretemp-isa-0000\":{\"Adapter\":\"ISA adapter\",\"Package id 0\":{\"temp1_input\":66.000000,\"temp1_max\":105.000000,\"temp1_crit\":105.000000,\"temp1_crit_alarm\":0.000000},\"Core 0\":{\"temp2_input\":66.000000,\"temp2_max\":105.000000,\"temp2_crit\":105.000000,\"temp2_crit_alarm\":0.000000},\"Core 4\":{\"temp6_input\":64.000000,\"temp6_max\":105.000000,\"temp6_crit\":105.000000,\"temp6_crit_alarm\":0.000000},\"Core 8\":{\"temp10_input\":64.000000,\"temp10_max\":105.000000,\"temp10_crit\":105.000000,\"temp10_crit_alarm\":0.000000},\"Core 9\":{\"temp11_input\":64.000000,\"temp11_max\":105.000000,\"temp11_crit\":105.000000,\"temp11_crit_alarm\":0.000000},\"Core 10\":{\"temp12_input\":64.000000,\"temp12_max\":105.000000,\"temp12_crit\":105.000000,\"temp12_crit_alarm\":0.000000},\"Core 11\":{\"temp13_input\":64.000000,\"temp13_max\":105.000000,\"temp13_crit\":105.000000,\"temp13_crit_alarm\":0.000000},\"Core 12\":{\"temp14_input\":64.000000,\"temp14_max\":105.000000,\"temp14_crit\":105.000000,\"temp14_crit_alarm\":0.000000},\"Core 13\":{\"temp15_input\":64.000000,\"temp15_max\":105.000000,\"temp15_crit\":105.000000,\"temp15_crit_alarm\":0.000000},\"Core 14\":{\"temp16_input\":66.000000,\"temp16_max\":105.000000,\"temp16_crit\":105.000000,\"temp16_crit_alarm\":0.000000},\"Core 15\":{\"temp17_input\":64.000000,\"temp17_max\":105.000000,\"temp17_crit\":105.000000,\"temp17_crit_alarm\":0.000000},\"Core 16\":{\"temp18_input\":66.000000,\"temp18_max\":105.000000,\"temp18_crit\":105.000000,\"temp18_crit_alarm\":0.000000},\"Core 20\":{\"temp22_input\":64.000000,\"temp22_max\":105.000000,\"temp22_crit\":105.000000,\"temp22_crit_alarm\":0.000000},\"Core 24\":{\"temp26_input\":66.000000,\"temp26_max\":105.000000,\"temp26_crit\":105.000000,\"temp26_crit_alarm\":0.000000},\"Core 28\":{\"temp30_input\":66.000000,\"temp30_max\":105.000000,\"temp30_crit\":105.000000,\"temp30_crit_alarm\":0.000000},\"Core 32\":{\"temp34_input\":64.000000,\"temp34_max\":105.000000,\"temp34_crit\":105.000000,\"temp34_crit_alarm\":0.000000},\"Core 33\":{\"temp35_input\":66.000000,\"temp35_max\":105.000000,\"temp35_crit\":105.000000,\"temp35_crit_alarm\":0.000000},\"Core 34\":{\"temp36_input\":66.000000,\"temp36_max\":105.000000,\"temp36_crit\":105.000000,\"temp36_crit_alarm\":0.000000},\"Core 35\":{\"temp37_input\":66.000000,\"temp37_max\":105.000000,\"temp37_crit\":105.000000,\"temp37_crit_alarm\":0.000000},\"Core 36\":{\"temp38_input\":64.000000,\"temp38_max\":105.000000,\"temp38_crit\":105.000000,\"temp38_crit_alarm\":0.000000},\"Core 37\":{\"temp39_input\":64.000000,\"temp39_max\":105.000000,\"temp39_crit\":105.000000,\"temp39_crit_alarm\":0.000000},\"Core 38\":{\"temp40_input\":64.000000,\"temp40_max\":105.000000,\"temp40_crit\":105.000000,\"temp40_crit_alarm\":0.000000},\"Core 39\":{\"temp41_input\":64.000000,\"temp41_max\":105.000000,\"temp41_crit\":105.000000,\"temp41_crit_alarm\":0.000000},\"Core 40\":{\"temp42_input\":66.000000,\"temp42_max\":105.000000,\"temp42_crit\":105.000000,\"temp42_crit_alarm\":0.000000},\"Core 44\":{\"temp46_input\":64.000000,\"temp46_max\":105.000000,\"temp46_crit\":105.000000,\"temp46_crit_alarm\":0.000000}},\"BAT0-acpi-0\":{\"Adapter\":\"ACPI interface\",\"in0\":{\"in0_input\":16.747000},\"power1\":{\"power1_input\":0.000000}}}\nERROR: Can't get value of subfeature temp1_max_alarm: Can't read\nERROR: Can't get value of subfeature temp1_max_alarm: Can't read"
+  },
+  "particle_filter_repo": {
+    "commit": "bee31ca057fca220abdf9323f8cfb6e7f91f2981",
+    "branch": "benchmarks/foundation",
+    "dirty": true
+  },
+  "jvm_args": "-Xms4G -Xmx4G -XX:+UseG1GC -Xlog:gc*:file=gc.log:time,uptime,level,tags",
+  "instance": {
+    "path": "~/Work/particle-filter/benchmarks/harness/run/runs/functional-0.4.0-neoforge-C-B-typed/game",
+    "mods": [
+      {
+        "file": "particlefilter-neoforge-1.2.0+1.21.1.jar",
+        "sha256": "0806e94cd38daad4b3c77523914e13e1020272a7cae1dfc6ee86c9c2a5efba4e",
+        "enabled": true
+      }
+    ],
+    "mod_count": 1,
+    "options": {
+      "renderDistance": "8",
+      "simulationDistance": "5",
+      "maxFps": "60",
+      "enableVsync": "false",
+      "particles": "0",
+      "graphicsMode": "1",
+      "fullscreen": "false",
+      "ao": "true",
+      "fov": "0.0"
+    },
+    "configs": {
+      "particlefilter.json": {
+        "sha256": "286b52968db70797ca4de40f4da61b7eb7e6e1b31c705438474915a44369e788",
+        "content": "{\n  \"hiddenParticles\": [\n    \"pfbench:target\"\n  ],\n  \"hiddenBlocks\": [],\n  \"zones\": [\n    {\n      \"id\": \"cc4ca257-a6dc-56c3-9a79-1323d627305c\",\n      \"name\": \"Target zone\",\n      \"world\": \"pfbench\",\n      \"dimension\": \"minecraft:overworld\",\n      \"x\": 0,\n      \"y\": 90,\n      \"z\": 14,\n      \"width\": 33,\n      \"height\": 30,\n      \"length\": 9,\n      \"particles\": [\n        \"pfbench:target\"\n      ]\n    }\n  ],\n  \"mode\": \"NONE\"\n}"
+      }
+    }
+  },
+  "process": null
+}

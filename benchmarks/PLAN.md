@@ -73,6 +73,10 @@ For Q1 (B vs A), B runs alone, like A (`pfbench.py campaign --configs A,B` does 
 
 - The repo's dev client (`./gradlew :1.21.1-neoforge:runClient`), vanilla rendering, plus the pfbench
   harness. Its run directory is gitignored and holds no user data.
+- Forge 1.20.1 (harness built 2026-11-09, `benchmarks/harness-forge`, `pfbench.py --loader forge`): same harness
+  code, scenario and checks; Particle Filter's named-mappings jar from the release build (the reobfuscated release
+  jar needs a production Forge); vanilla rendering only (no configuration E). Results of the two loaders are never
+  paired or pooled (the loader is part of the pairing environment).
 - Fixed template world copied fresh for each launch; locked camera; HUD hidden; Particles = All.
 - **Load levels (provisional; finalized by the Phase 3 calibration).** The harness target particle has
   a fixed 40-tick lifetime, so the steady-state live count = attempts per tick × 40, up to the 16,384
