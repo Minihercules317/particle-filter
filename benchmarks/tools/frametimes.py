@@ -264,7 +264,12 @@ def sanity_checks(window: FrameLog, metrics: dict, cap_fps: list[float]) -> list
 
 def summarize(path: str | Path, skip_s: float = 0.0, duration_s: float | None = None,
               cap_fps: list[float] | None = None) -> dict:
-    log = read_log(path)
+    return summarize_log(read_log(path), path, skip_s, duration_s, cap_fps)
+
+
+def summarize_log(log: FrameLog, path: str | Path, skip_s: float = 0.0, duration_s: float | None = None,
+                  cap_fps: list[float] | None = None) -> dict:
+    """summarize() for a FrameLog already in memory (e.g. one phase of a harness frames.csv)."""
     window = select_window(log, skip_s, duration_s)
     if not window.frametimes_ms:
         raise ValueError(f"{path}: window is empty (log has {len(log.frametimes_ms)} frames, "

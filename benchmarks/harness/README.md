@@ -4,10 +4,11 @@ A benchmark-only client mod and launcher that implement [HARNESS.md](../HARNESS.
 It is **not** part of Particle Filter. It's a separate Gradle build that the release build (`settings.gradle.kts`
 at the repository root), CI and CurseForge uploads never include. Particle Filter contains no benchmark code.
 
-> **Status: built and functionally validated** ([results/functional-2026-11-09](../results/functional-2026-11-09/FUNCTIONAL.md)).
+> **Status: built and functionally validated** ([results/functional-2026-11-09](../results/functional-2026-11-09/FUNCTIONAL.md),
+> [results/functional-2026-11-09-pipeline](../results/functional-2026-11-09-pipeline/FUNCTIONAL.md)).
 > **No performance runs yet:** they are blocked until the owner confirms the laptop's power-limit problems are
-> fixed. The launcher refuses a non-`--functional` run unless `PFBENCH_PERFORMANCE_APPROVED=1` is set, which
-> must only happen after that confirmation.
+> fixed. The launcher refuses a non-`--functional` run or campaign unless `PFBENCH_PERFORMANCE_APPROVED=1` is set,
+> which must only happen after that confirmation.
 
 Written by Claude (AI), like the rest of the benchmark suite and the mod.
 
@@ -20,86 +21,135 @@ mise exec -- ./gradlew -p benchmarks/harness compileJava        # build only
 python3 benchmarks/harness/pfbench.py template --hide           # once: create the template void world
 python3 benchmarks/harness/pfbench.py run --functional --hide --sequence C:moderate,B:moderate,D:moderate
 python3 benchmarks/harness/pfbench.py check benchmarks/harness/run/runs/<run-id>
+python3 benchmarks/harness/pfbench.py campaign --configs C,B,D --levels heavy --blocks 6 --seed 1 --dry-run
+python3 benchmarks/tools/ingest_harness.py benchmarks/harness/run/runs/<run-id> --campaign benchmarks/results/<campaign>
+python3 benchmarks/tools/compare.py benchmarks/results/<campaign> --reference B
 ```
 
 - `--sequence` lists `CONFIG:LEVEL` entries ([PLAN.md §2](../PLAN.md) ids; levels from the scenario's `[levels]`).
   One launch has one install state: `A` alone (Particle Filter not installed), `B`/`C`/`D` together (one
-  config file, the harness switches the Active rules mode), or `C-miss` alone.
+  config file, the harness switches the Active rules mode), `C-miss` alone, or `E` alone (Sodium Extra hides
+  the target; needs `--modset sodium`).
 - `--variant typed|untyped|block_dust|vanilla` picks what the target is (scenario `[variants]`). The launcher
   writes a Particle Filter config whose rule matches that target (`tools/make_pf_config.py`). `block_dust`
-  works with B/C only: block rules are global, so there is no D.
-- `--functional`: 5 s phases (3 s settle after a switch), 60 FPS cap, windowed (1280×720 requested; Hyprland's
-  tiling may resize it), screenshots at the
-  end of each measured phase, and every output labelled `functional`.
+  works with B/C only: block rules are global, so there is no D. `E` works with `typed` and `vanilla` only
+  (Sodium Extra hides typed particles by type id).
+- `--modset vanilla|sodium`: rendering mods present in **every** configuration of the launch. `sodium` copies
+  Sodium 0.8.13 and Sodium Extra 0.9.5 from `run/downloads/` (pinned by SHA-256; see
+  [SODIUM.md](../results/functional-2026-11-09-pipeline/SODIUM.md) for where they come from) and writes their configs
+  from `../configs/sodium/`. Only Sodium Extra's entry for the target differs between configurations.
+- `--functional`: 5 s phases (6 s warmup, 4 s settle after a switch), 60 FPS cap, windowed (1280×720 requested;
+  Hyprland's tiling may resize it), screenshots at the end of each measured phase, and every output labelled
+  `functional`.
 - `--hide` moves the game window to the hidden Hyprland special workspace `pfbench` (functional runs).
 - Particle Filter's jar defaults to the repository's built NeoForge jar for the current `mod.version`
   (`mise exec -- ./gradlew :1.21.1-neoforge:build buildAndCollect`); `--pf-jar` picks another.
+- `campaign` runs several launches in a counterbalanced order (below). `--dry-run` prints the order only.
 
-Everything a launch writes is under `benchmarks/harness/run/` (gitignored): the template in `run/template/`, and one
-directory per launch in `run/runs/<run-id>/` with the game directory in `game/`. Nothing touches a Minecraft
-installation, world or system setting.
+Everything a launch writes is under `benchmarks/harness/run/` (gitignored): the template in `run/template/`, one
+directory per launch in `run/runs/<run-id>/` with the game directory in `game/`, the downloaded rendering mods in
+`run/downloads/`, campaign sheets in `run/campaigns/`. Nothing touches a Minecraft installation, world or system
+setting.
 
 ## How a launch works
 
 1. `pfbench.py` reads the scenario (`../scenarios/S1-synthetic.toml`) and writes `plan.json`: the full phase list
    with tick counts, rates and modes. The mod executes the plan literally and makes no decisions of its own.
 2. It prepares the game directory: `options.txt` from the scenario's `[options]`, `config/fml.toml` with
-   NeoForge's early loading window off, a fresh copy of the template world, and for B/C/D/C-miss Particle
-   Filter's release jar in `mods/` plus its config in `config/particlefilter.json`.
+   NeoForge's early loading window off, a fresh copy of the template world, Particle Filter's release jar and
+   config for B/C/D/C-miss, and the rendering mods and their configs for `--modset sodium`. Copies of these input
+   files go to `inputs/`.
 3. It starts `./gradlew -p benchmarks/harness runClient` with Gradle properties that point the run at that
    directory and plan, and open the world with `--quickPlaySingleplayer pfbench`.
 4. In game, the harness waits for the world, makes the player a spectator at the camera position, waits 1 s,
-   then runs the phases: `load-settle` → `warmup` → for each entry, `NN-CONFIG-LEVEL-settle` (mode switch at its
-   start) → `NN-CONFIG-LEVEL` (measure). Then it writes its files and quits the game.
-5. `pfbench.py check` runs the functional checks (FUNCTIONAL.md lists them) and writes `check.json`. It prints
-   no timings.
+   then runs the phases: `load-settle` → warmup → for each entry, `NN-CONFIG-LEVEL-settle` (mode switch and
+   `System.gc()` at its start) → `NN-CONFIG-LEVEL` (measure). With several entries the warmup cycles through all of
+   them twice (`warmup-r1-01-C`, `warmup-r1-02-B`, …), each in its own mode. Then the harness writes its files and quits.
+5. The launcher copies the configs as the mods saved them on exit to `inputs-after/`, and `pfbench.py check` runs
+   the functional checks and writes `check.json`. It prints no timings.
 
 ## Outputs (per launch)
 
 | File | Content |
 |---|---|
-| `plan.json` | What was executed (its SHA-256 is in `harness.json`) |
+| `plan.json` | What was executed (its SHA-256 is in `harness.json`), including the launcher's provenance |
 | `frames.csv` | `t_ns,frame_ns,cpu_frame_ns,phase`: one row per frame from the first phase to the last. `frame_ns` is the interval between frame ends (end of `Minecraft.runTick`, after swap and limiter); `cpu_frame_ns` is `Minecraft.getFrameTimeNs()` (render to blit), a diagnostic. `tools/frametimes.py` reads it |
-| `ticks.csv` | One row per client tick: attempts (target, control); created (target, control, untyped, block, vanilla, other); alive per render type (opaque, translucent, terrain, total); client tick ns; integrated server average tick ns; GC count and time; heap used |
+| `ticks.csv` | One row per client tick: attempts (target, control); created (target, control, untyped, block, vanilla, other); alive per render type (opaque, translucent, terrain, total) and the control particles' own live count (`alive_control`); client tick ns; integrated server average tick ns; GC count and time; heap used; cumulative JIT compile time, classes loaded and level saves |
 | `phases.csv` | Per phase: role, configuration, level, requested mode and the mode after the switch, start/end `t_ns`, ticks, rate |
-| `harness.json` | Label, versions, mod list, seed, variant, setup state (world, gamerules, player, options, window), Particle Filter mode per phase, buffer overflow counts, notes |
-| `launch.json` | Launcher side: sequence, scenario and template hashes, Particle Filter jar and config SHA-256, window state |
+| `harness.json` | Label, versions, mod list, every jar in `mods/` with its SHA-256 (read in game), every loaded mod file (nested jar-in-jar files marked), actual JVM arguments, GPU renderer/vendor/driver, seed, variant, setup state (world, gamerules, player, options, window at start and end), Particle Filter mode per phase, buffer overflow counts, notes |
+| `launch.json` | Launcher side: sequence and entry positions, campaign/block, scenario and template hashes, Particle Filter jar and config SHA-256, rendering mods, SHA-256 of every input file before and after, the rendering-environment hash, provenance (git commit, uncommitted paths, harness source hash, launcher and tools hashes), window state |
+| `inputs/`, `inputs-after/` | `options.txt`, `fml.toml`, `particlefilter.json`, `sodium-options.json`, `sodium-extra-options.json` as written before the launch and as saved at quit |
 | `check.json` | Functional check results |
 | `game/gc.log` | JVM GC log (scenario `[jvm]` arguments) |
+
+## From a launch to compare.py
+
+`tools/ingest_harness.py` writes one window per measured phase into a campaign directory:
+`results/<campaign>/runs/<launch-id>--<phase>/{run.json,summary.json}`.
+
+- `summary.json` is `frametimes.py`'s summary of that phase's frames (all of them: the settle before it is a
+  separate phase), plus window issues: `functional_check_failed` or `harness_error` (errors: unusable),
+  `frames_missing` (error), `client_tick_rate_low`, `jit_activity`, `autosave_in_window` (warnings), `gc_in_window`,
+  `classes_loaded` (info), and frametimes' own checks (e.g. `too_few_frames`, `frame_limited`).
+- `run.json` has the configuration, `block`, `launch_in_block`, `position_in_launch`, the `stratum`
+  (level/variant/modset), `workload` (attempts and created per tick and per second, target and control live means,
+  ticks per second), `diagnostics` (GC, JIT, classes, saves, tick times, heap, CPU frame time), `environment` (what
+  paired runs must share; see PLAN.md §2) and `provenance` (jar and config hashes, versions, mods, JVM arguments,
+  GPU, commit).
+- Functional runs are refused unless `--allow-functional` (pipeline tests only); their windows keep the label.
+  `compare.py` refuses them in turn unless `--allow-functional`, and then titles the report "PIPELINE TEST, NOT A
+  RESULT". At a 60 FPS cap with 5 s phases they are also unusable by frametimes' own checks.
+
+## Methodology safeguards
+
+| Concern | What the harness does | How it's verified |
+|---|---|---|
+| Particles from one phase reaching the next measurement | A settle phase follows every switch and must last at least the longest particle life + 2 ticks (target 40 → 43; end_rod up to 71 → 74); `pfbench.py` refuses a shorter plan. Emitter cursors reset at every phase start | Check: no target particle alive in any filtered window, every tick (opaque/terrain queue, or translucent minus `alive_control` for end_rod). Measured: B's end_rods were gone from settle tick 72 |
+| JVM warmup | Warmup cycles every configuration of the launch twice, each in its own mode; fixed heap; GC at each settle start | JIT compile time, class loading and GC per tick; windows flagged `jit_activity` / `classes_loaded` / `gc_in_window` |
+| Configuration order | `campaign` orders entries inside launches and launches inside blocks by Williams design from one seed | `compare.py` shows position counts per configuration; pairs only within a stratum and with equal launch shape |
+| Provenance | Jar hashes from the launcher **and** from inside the game, mod versions, configs before and after, commit and source hashes | Checks: `mods/` held exactly the copied jars; loaded Particle Filter version matches the jar; harness version matches the source; Sodium/Sodium Extra present only in their mod set |
+| Equal rendering environment (Sodium Extra comparison) | One base config for Sodium and Sodium Extra; only the target's entry differs. A rendering-environment hash leaves out exactly that entry | Equal hash across A/C/B/E Sodium launches; check that Sodium Extra kept the entry; `compare.py` excludes pairs whose environment differs |
+| Correctness checks apart from measurement | Checks read the logs after the game quit; performance plans take no screenshots (Runner ignores them) | `check.json` per launch; ingest marks windows of failed launches unusable; label gates in ingest and compare |
 
 ## Design notes and deviations from HARNESS.md
 
 - **Particle Filter comes from `mods/`, not the Gradle classpath.** The launcher copies the release jar into each
-  run's `mods/` folder for B/C/D/C-miss and leaves it out for A. One harness build then serves every configuration,
-  and the jar under test is the one players run (its SHA-256 is recorded). The harness reaches it only through
-  `PfConfig.setMode`/`PfConfig.mode` by reflection, and changes only the mode, never the rules.
+  run's `mods/` folder for B/C/D/C-miss and leaves it out for A and E. One harness build then serves every
+  configuration, and the jar under test is the one players run (its SHA-256 is recorded twice). The harness reaches it
+  only through `PfConfig.setMode`/`PfConfig.mode` by reflection, and changes only the mode, never the rules.
+  `setMode` also saves Particle Filter's config file; that happens at the start of a settle phase, outside windows.
 - **Template world:** created in game by `pfbench.py template` (`WorldOpenFlows.createFreshLevel` with the
   `minecraft:the_void` flat preset, the scenario's seed and gamerules, then time 6000 and clear weather).
   Every launch gets a fresh copy; the template is never opened. Its tree hash is in `run/template/template.json`.
 - **Counters:** `created` is counted at `ParticleEngine.createParticle` RETURN (non-null result) by particle type;
-  untyped particles at `ParticleEngine.add` TAIL. A cancelling HEAD injector (Particle Filter's) returns before
-  either point, so filtered spawns never count. `alive` is the size of each render type's queue, read at the end of
-  `Minecraft.tick` (after `ParticleEngine.tick`). Fixed-lifetime particles are alive in **lifetime + 1** post-tick
-  counts, so the steady state is `rate × 41` at a 40-tick lifetime.
+  untyped particles at `ParticleEngine.add` TAIL. A cancelling HEAD injector (Particle Filter's or Sodium Extra's)
+  returns before either point, so filtered spawns never count. `alive` is the size of each render type's queue, read
+  at the end of `Minecraft.tick` (after `ParticleEngine.tick`). Fixed-lifetime particles are alive in **lifetime + 1**
+  post-tick counts, so the steady state is `rate × 41` at a 40-tick lifetime. `alive_control` counts control
+  particles constructed minus expired; it stays exact below the queue limit (an evicted particle never expires).
 - **Workload:** spawning happens at the start of the client tick (`ClientTickEvent.Pre`). Phases are counted in
   ticks, so every run gets the same number of attempts. Emitters are a 16×16 grid with jitter from
   `java.util.Random(seed)` that stays inside each cell; the target and control walk the grid round-robin from
-  different starting points. The control spawns one block behind the target plane (`plane_z_offset`).
+  different starting points, reset at every phase. The control spawns one block behind the target plane.
 - **Particles:** `pfbench:target` (opaque, red) and `pfbench:control` (translucent, blue) reuse Minecraft's
   `generic_0` sprite at a fixed size, with no motion, physics or randomness. The untyped variant goes straight to
   `ParticleEngine.add`, so it skips vanilla's 32-block and Particles-setting checks, as mods that spawn that way do.
-- **Camera:** the player position and rotation are reset every tick (spectator, HUD hidden). The camera was raised to
-  y 102.38 so the whole emitter plane is in view (FUNCTIONAL.md, frustum check).
+- **Camera:** the player position and rotation are reset every tick (spectator, HUD hidden). The camera sits at
+  y 102.38 so the whole emitter plane is in view (functional-2026-11-09, frustum check).
 - **No early loading window** (`earlyWindowControl = false` in the run's own `config/fml.toml`): the window
-  handoff hung once when the window had been hidden (FUNCTIONAL.md). It also makes the window the same in every run.
+  handoff hung once when the window had been hidden. It also makes the window the same in every run.
 - **No I/O while phases run**, except screenshots in functional plans. Frames and ticks go into preallocated
-  arrays (room for 2,000 FPS); overflow is counted in `harness.json` and fails the check.
+  arrays (room for 2,000 FPS); overflow is counted in `harness.json` and fails the check. Jar hashing happens after
+  the last phase.
+- **Window size** is recorded at start and end and must not change during a launch. It does vary between launches
+  on the hidden workspace (2536×1390 vs 2560×1440 seen with the same procedure), so it is part of the environment
+  that paired runs must share.
 
 ## Not done yet
 
-- Splitting `frames.csv` into per-phase `summary.json` files and writing `run.json` entries (with the workload
-  counters) for `tools/compare.py`. Needed before any campaign; analysis tooling only.
-- Integrating `tools/collect_env.py` and `tools/sample_system.py` into the launcher, and optional MangoHud wrapping.
-- Forge 1.20.1 port; Sodium/Sodium Extra compatibility check (HANDOFF.md, next steps).
+- Integrating `tools/collect_env.py` and `tools/sample_system.py` into the launcher (no `--self-cpu`), optional
+  MangoHud wrapping, and the CPU-/GPU-bound label (`run.json["bound"]` is `unlabelled` until then).
+- A GC-log parser (`game/gc.log`); per-window GC counts come from the MXBeans for now.
+- Forge 1.20.1 port.
 - Phase 2b checks (harness frame log vs MangoHud, hidden-window throttling, fullscreen on DP-1): they compare
   timings, so they wait for the power-limit confirmation.

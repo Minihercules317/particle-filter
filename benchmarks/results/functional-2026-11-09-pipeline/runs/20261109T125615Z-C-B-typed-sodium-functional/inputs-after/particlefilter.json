@@ -1,0 +1,24 @@
+{
+  "hiddenParticles": [
+    "pfbench:target"
+  ],
+  "hiddenBlocks": [],
+  "zones": [
+    {
+      "id": "cc4ca257-a6dc-56c3-9a79-1323d627305c",
+      "name": "Target zone",
+      "world": "pfbench",
+      "dimension": "minecraft:overworld",
+      "x": 0,
+      "y": 90,
+      "z": 14,
+      "width": 33,
+      "height": 30,
+      "length": 9,
+      "particles": [
+        "pfbench:target"
+      ]
+    }
+  ],
+  "mode": "NONE"
+}

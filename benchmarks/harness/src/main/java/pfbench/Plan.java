@@ -31,6 +31,8 @@ public final class Plan {
     /** Functional bring-up only: save a screenshot at the end of phases that ask for one (file I/O). */
     public boolean screenshots;
     public List<Phase> phases = new ArrayList<>();
+    /** Launcher-side provenance (git commit, harness source hash...), copied into harness.json unchanged. */
+    public com.google.gson.JsonObject provenance;
 
     public static final class Scenario {
         public String id;
@@ -74,7 +76,10 @@ public final class Plan {
         public String level;
         /** "settle", "warmup", "measure" or "switch-settle". */
         public String role;
+        /** Functional plans only: a screenshot at the end of the phase. Ignored in performance plans. */
         public boolean screenshot;
+        /** Run a full GC (System.gc()) when the phase starts, so every configuration's window starts from a similar heap. */
+        public boolean gc_at_start;
     }
 
     int totalTicks() {

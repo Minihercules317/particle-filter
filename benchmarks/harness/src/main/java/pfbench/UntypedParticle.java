@@ -11,6 +11,6 @@ import net.minecraft.client.particle.ParticleRenderType;
 public final class UntypedParticle extends HarnessParticle {
     public UntypedParticle(ClientLevel level, double x, double y, double z) {
         super(level, x, y, z, PfBench.targetSprites.get(0, 1), ParticleRenderType.PARTICLE_SHEET_OPAQUE,
-            Runner.targetLifetime, TARGET_COLOR);
+            Runner.targetLifetime, TARGET_COLOR, false);
     }
 }

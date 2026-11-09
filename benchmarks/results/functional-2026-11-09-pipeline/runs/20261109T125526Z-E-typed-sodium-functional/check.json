@@ -1,0 +1,187 @@
+{
+  "label": "functional",
+  "note": "Functional checks of the harness. Not a performance result.",
+  "passed": true,
+  "checks": [
+    {
+      "check": "harness finished without error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "frames.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "phases.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "world is the template (level name pfbench)",
+      "ok": true,
+      "detail": "pfbench"
+    },
+    {
+      "check": "player is a spectator at the camera position",
+      "ok": true,
+      "detail": "[0.5, 102.38, 0.5]"
+    },
+    {
+      "check": "Particles setting is All",
+      "ok": true,
+      "detail": "ALL"
+    },
+    {
+      "check": "window size unchanged from first phase to quit",
+      "ok": true,
+      "detail": "{'width': 2560, 'height': 1440, 'fullscreen': False} -> {'width': 2560, 'height': 1440, 'fullscreen': False}"
+    },
+    {
+      "check": "no frame or tick rows dropped",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "Particle Filter installed as the configuration requires",
+      "ok": true,
+      "detail": "present=False"
+    },
+    {
+      "check": "harness version matches the source tree",
+      "ok": true,
+      "detail": "loaded 0.2.0, source 0.2.0"
+    },
+    {
+      "check": "mods/ held exactly the jars the launcher copied (SHA-256, read in game)",
+      "ok": true,
+      "detail": "in game: ['sodium-extra-neoforge-0.9.5+mc1.21.1.jar', 'sodium-neoforge-0.8.13+mc1.21.1.jar']"
+    },
+    {
+      "check": "sodium loaded only when the mod set includes it",
+      "ok": true,
+      "detail": "loaded=True, modset=sodium"
+    },
+    {
+      "check": "sodium_extra loaded only when the mod set includes it",
+      "ok": true,
+      "detail": "loaded=True, modset=sodium"
+    },
+    {
+      "check": "GPU renderer recorded",
+      "ok": true,
+      "detail": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2"
+    },
+    {
+      "check": "Sodium Extra kept the target entry the launcher wrote",
+      "ok": true,
+      "detail": "pfbench:target = False"
+    },
+    {
+      "check": "ticks.csv has alive_control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has jit_time_ms",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has classes_loaded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has server_saves",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "JIT time is logged and never decreases",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "every settle after a switch is >= 43 ticks (longest particle life + 2)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "warmup ran every measured configuration",
+      "ok": true,
+      "detail": "measured ['E'], warmed ['E']"
+    },
+    {
+      "check": "ticks logged: load-settle",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "ticks logged: warmup",
+      "ok": true,
+      "detail": "120 of 120"
+    },
+    {
+      "check": "ticks logged: 01-E-moderate-settle",
+      "ok": true,
+      "detail": "80 of 80"
+    },
+    {
+      "check": "01-E-moderate-settle: target created == 0",
+      "ok": true,
+      "detail": "attempts 4000, created 0"
+    },
+    {
+      "check": "01-E-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2000, created 2000"
+    },
+    {
+      "check": "ticks logged: 01-E-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "01-E-moderate: target created == 0",
+      "ok": true,
+      "detail": "attempts 5000, created 0"
+    },
+    {
+      "check": "01-E-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "01-E-moderate: no target particle alive (no carry-over)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "01-E-moderate: control alive == 1025 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "01-E-moderate: translucent queue == control only (1025)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "frames.csv parses with tools/frametimes.py",
+      "ok": true,
+      "detail": "1185 rows, 0 skipped, format generic-ns"
+    },
+    {
+      "check": "every phase has frames",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

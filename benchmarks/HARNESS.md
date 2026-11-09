@@ -5,7 +5,7 @@ phases, and logs frame times and particle counters. It is **not** part of Partic
 own Gradle build under `benchmarks/harness/`, has its own mod id (`pfbench`), and is never included in
 release jars, CI release artifacts or CurseForge uploads. Particle Filter gets no benchmark code or hooks.
 
-Status: **built for NeoForge 1.21.1 and functionally validated** (2026-11-09): code and usage in
+Status: **built for NeoForge 1.21.1 and functionally validated** (2026-11-09; analysis pipeline, carry-over and warmup safeguards, provenance and the Sodium mod set added the same day): code and usage in
 [harness/README.md](harness/README.md), which also lists where the implementation deviates from this design and
 why; checks in [results/functional-2026-11-09](results/functional-2026-11-09/FUNCTIONAL.md). Any timing or
 performance measurement waits until the owner confirms the laptop's power-limit problems are fixed.

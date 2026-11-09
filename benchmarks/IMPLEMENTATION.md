@@ -183,5 +183,29 @@ block-hit particles.
   the same Sodium version. That instance runs Sodium 0.8.13; the ATM10 To the Sky instance runs 0.6.13
   without Sodium Extra.
 
+Added 2026-11-09 after downloading both mods into the harness's isolated `run/downloads/` (the owner approved
+the download; nothing in the play instances was touched). The details and the functional checks are in
+[results/functional-2026-11-09-pipeline/SODIUM.md](results/functional-2026-11-09-pipeline/SODIUM.md):
+
+- **Versions:** Sodium 0.8.13 (`mc1.21.1-0.8.13-neoforge`) requires Minecraft 1.21.1 and NeoForge ≥ 21.1.82; Sodium
+  Extra 0.9.5 (`mc1.21.1-0.9.5+neoforge`) requires exactly Sodium 0.8.13 and Minecraft 1.21.1. Its other
+  dependencies (Iris, Reese's Sodium Options, Greenlight) are optional. Both files match Modrinth's SHA-512 and are
+  byte-identical to the copies in the ATM10 instance.
+- **The per-type map is saved as `"other"`** in `config/sodium-extra-options.json` (`ParticleSettings.otherMap`
+  has `@SerializedName("other")`). `isParticleEnabled(id)` returns false if `particles` is off, otherwise
+  `other.getOrDefault(id, true)`. A wrong key is silently ignored, so the harness checks the saved value after
+  every run and counts created particles.
+- **Sodium Extra's `createParticle` HEAD hook runs for every typed spawn in every configuration that has it**
+  (registry lookup + map lookup), whether or not anything is hidden. In the comparator series it is therefore part
+  of the shared baseline (A, B, C and E all run with Sodium Extra installed). The harness's Sodium Extra config holds
+  exactly one entry, the target, `true` everywhere except E (`false`), so the lookup does the same work in every
+  configuration.
+- **Sodium's jar is a jar-in-jar container:** the mod itself plus four Fabric API modules (`fabric-api-base`,
+  `fabric-block-view-api-v2`, `fabric-renderer-api-v1`, `fabric-rendering-data-attachment-v1`) load from
+  `META-INF/jarjar/`. They are part of the Sodium environment and identical in every configuration of the series.
+- Sodium applies NVIDIA workarounds on this machine (`NVIDIA_THREADED_OPTIMIZATIONS_BROKEN`,
+  `NO_ERROR_CONTEXT_UNSUPPORTED`), and Sodium Extra has a Wayland fullscreen-resolution option (off by default).
+  Both are the same in every configuration and recorded (log, config hash).
+
 Particle Core (`byTypeReductions`, `disableParticles`, `maxParticlesPerSheet`) is another candidate
 comparator. Where it intercepts has not been checked yet.

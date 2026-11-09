@@ -1,0 +1,110 @@
+{
+  "run_id": "20261109T125526Z-E-typed-sodium-functional",
+  "label": "functional",
+  "started_utc": "20261109T125526Z",
+  "sequence": "E:moderate",
+  "entries": [
+    {
+      "position": 1,
+      "config": "E",
+      "level": "moderate"
+    }
+  ],
+  "variant": "typed",
+  "scenario_file": "S1-synthetic.toml",
+  "scenario_sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317",
+  "template_sha256_tree": "9f9547b0f3f1c87809f5ed45dd1912f09408237cc9819798ad30b65fe9224b64",
+  "particlefilter": null,
+  "modset": "sodium",
+  "render_mods": {
+    "sodium": {
+      "jar": "sodium-neoforge-0.8.13+mc1.21.1.jar",
+      "sha256": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+      "mod_id": "sodium",
+      "source": "https://modrinth.com/mod/sodium/version/mc1.21.1-0.8.13-neoforge"
+    },
+    "sodium-extra": {
+      "jar": "sodium-extra-neoforge-0.9.5+mc1.21.1.jar",
+      "sha256": "37c33efdee16fc515392fd422b6ec8769cbc1079f6a2eb6cff2072411d511faf",
+      "mod_id": "sodium_extra",
+      "source": "https://modrinth.com/mod/sodium-extra/version/mc1.21.1-0.9.5+neoforge"
+    }
+  },
+  "sodium_extra_hides_target": true,
+  "sodium_configs": {
+    "template_dir": "benchmarks/configs/sodium",
+    "sodium_extra_target": "pfbench:target",
+    "sodium_extra_target_enabled": false
+  },
+  "mods_dir": {
+    "sodium-neoforge-0.8.13+mc1.21.1.jar": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+    "sodium-extra-neoforge-0.9.5+mc1.21.1.jar": "37c33efdee16fc515392fd422b6ec8769cbc1079f6a2eb6cff2072411d511faf"
+  },
+  "inputs_sha256": {
+    "options.txt": "6d37ac931a349ed70ec2dc4fb84adf4a2ca554e2c92da380a18b3d51cfc2e89c",
+    "fml.toml": "e5a10cae57974d3270e34cacc387b6d3c3b5a929dcf763e7175e9178b8e45db7",
+    "sodium-options.json": "59c6ccc02c029e6e87b6ca65c70d65794ea370b0e3b0b79015530641d2e21995",
+    "sodium-extra-options.json": "82cc0ab6b211869332407afc34b1bb09c5a6d51d05a26107dc16e317493f6010"
+  },
+  "render_environment": {
+    "modset": "sodium",
+    "options_txt_sha256": "6d37ac931a349ed70ec2dc4fb84adf4a2ca554e2c92da380a18b3d51cfc2e89c",
+    "render_mods": {
+      "sodium": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+      "sodium-extra": "37c33efdee16fc515392fd422b6ec8769cbc1079f6a2eb6cff2072411d511faf"
+    },
+    "sodium_options_sha256": "59c6ccc02c029e6e87b6ca65c70d65794ea370b0e3b0b79015530641d2e21995",
+    "sodium_extra_options_sha256_without_particle_map": "8c8713ee320ab1c0de85773c8240cd958b551cd3712bbaca34a69c7c89cf8f3a",
+    "sha256": "eac6b42734aaa73b554e4322d060713f03447b181a458905144bd739f4fcd107"
+  },
+  "jvm_args_requested": "-Xms4G -Xmx4G -XX:+UseG1GC -Xlog:gc*:file=gc.log:time,uptime,level,tags",
+  "provenance": {
+    "git_commit": "85cb36f253a7d543cde5a81d5b3639de80bf6a18",
+    "git_dirty_paths": [
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/Counters.java",
+      "benchmarks/harness/src/main/java/pfbench/HarnessParticle.java",
+      "benchmarks/harness/src/main/java/pfbench/PfBench.java",
+      "benchmarks/harness/src/main/java/pfbench/Plan.java",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/harness/src/main/java/pfbench/TickLog.java",
+      "benchmarks/harness/src/main/java/pfbench/UntypedParticle.java",
+      "benchmarks/scenarios/S1-synthetic.toml",
+      "benchmarks/tools/compare.py",
+      "benchmarks/tools/frametimes.py",
+      "benchmarks/configs/sodium/",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/tests/test_pipeline.py"
+    ],
+    "harness_version": "0.2.0",
+    "harness_sources_sha256": "ce4923cff3ff7afe6ec46a33e4102dbdc521b718bf56feb3ec71489bbe27b33f",
+    "launcher_sha256": "ddac4a2e024f7a0e05092814dbf1fcea6ab482ee78f399ce76c1918c6f91c93a",
+    "tools_sha256": "675eb8c653ef3eeef85f6b3215340005b48be452eb08e3c19085c306f035b0fd"
+  },
+  "campaign": null,
+  "hidden_window": true,
+  "window": {
+    "class": "Minecraft NeoForge* 1.21.1",
+    "title": "Minecraft NeoForge* 1.21.1",
+    "size": [
+      2560,
+      1440
+    ],
+    "workspace": {
+      "id": -97,
+      "name": "special:pfbench"
+    },
+    "monitor": 1,
+    "floating": false,
+    "fullscreen": 2
+  },
+  "finished_utc": "20261109T125610Z",
+  "exited_by_itself": true,
+  "inputs_after_sha256": {
+    "options.txt": "6d37ac931a349ed70ec2dc4fb84adf4a2ca554e2c92da380a18b3d51cfc2e89c",
+    "fml.toml": "a2815eae8ee14c2ec55c179a1e02aa48174234dee1c1daf1ffe9c077470c9c01",
+    "sodium-options.json": "44478bef0973f1aa587c0493568a5cbc5426233b611f14bd2be489b5b862fa7f",
+    "sodium-extra-options.json": "82cc0ab6b211869332407afc34b1bb09c5a6d51d05a26107dc16e317493f6010"
+  }
+}

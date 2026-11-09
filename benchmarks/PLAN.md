@@ -45,7 +45,7 @@ from the factor being tested), options, world and camera.
 | **D** | installed | target hidden inside one zone that encloses every emitter (`mode: ZONES`) | spatial filtering, same suppression as C |
 | D-zones-N | installed | as D plus N−1 non-matching zones in the same dimension, matching zone last | zone-count scaling (Q6) |
 | C-rules-N | installed | target + N−1 non-matching global rules | rule-count scaling (Q6) |
-| **E** | not installed | Sodium Extra hides the target type | comparator (Q7); A, B and C are re-run with Sodium for this series |
+| **E** | not installed | Sodium Extra hides the target type | comparator (Q7). Every configuration of this series (A, B, C, E) runs Sodium 0.8.13 + Sodium Extra 0.9.5 with identical configs; only Sodium Extra's entry for the target differs (`false` in E, `true` elsewhere) |
 
 B, C and D can share one config file (`benchmarks/configs/pf-synthetic.json`) holding both the global
 rule and the zone. Only the Active rules mode changes, so the harness can switch between them inside one
@@ -55,6 +55,14 @@ launch.
 *unfiltered* particles (the control type) alive. The harness logs both; `compare.py` rejects pairs that
 differ by more than 2%. If an alternative can't suppress exactly the same set (zones, untyped particles,
 per-block rules for Sodium Extra), there is no comparison for that case, and the report says why.
+
+**Equal environment rule (added 2026-11-09):** paired runs must also share their environment: scenario hash,
+template world, harness build (source hash), Minecraft/NeoForge/Java versions, requested JVM arguments, rendering
+mods and their configs (`render_environment` hash, which leaves out only the filter under test), GPU renderer, window
+size/fullscreen, load level, variant and **launch shape** (how many configurations the launch measured). Each run's
+`run.json["environment"]` carries these; `compare.py` excludes pairs that differ and lists why. The launch-shape key
+means B measured alongside C and D is never paired with A measured alone: their warmups and mode switches differ.
+For Q1 (B vs A), B runs alone, like A (`pfbench.py campaign --configs A,B` does this).
 
 ## 3. Environments
 
@@ -113,7 +121,8 @@ per-block rules for Sodium Extra), there is no comparison for that case, and the
 | MangoHud in the CurseForge Flatpak | same | HUD known to work (Java wrapper). Logging untested. It is a different MangoHud build (Flatpak extension), so record its version. |
 | `nvidia-smi -lms` (via `sample_system.py`) | GPU util, clocks, power, temperature, P-state, throttle reasons | Works |
 | `sample_system.py` (/proc, /sys) | CPU % per game thread, the core each ran on, package temperature, P/E-core clocks, RSS | Works (pilot) |
-| pfbench harness | frame log aligned to phases, attempts/created/alive, tick times, GC | **Built** (NeoForge 1.21.1, `harness/`); functional checks pass; no timing validated yet (phase 2b) |
+| pfbench harness | frame log aligned to phases, attempts/created/alive, tick times, GC, JIT compile time, class loading, server saves | **Built** (NeoForge 1.21.1, `harness/`); functional checks pass; no timing validated yet (phase 2b) |
+| `tools/ingest_harness.py` | harness launch → one `summary.json` + `run.json` per measured window (workload, diagnostics, environment, provenance) for `compare.py` | **Built**, unit-tested on synthetic runs; run end to end on functional runs (whose windows are unusable by design: frame-capped, too short) |
 | JVM unified GC log (`-Xlog:gc*:file=…:time,uptime`) | GC pauses and frequency | Standard JVM feature; parser not written yet |
 | JFR (`jcmd`/`-XX:StartFlightRecording`) | CPU sampling, allocation profiling | Available (Temurin 21); diagnostic runs only |
 | spark (installed in ATM10 To the Sky) | sampling profiler in game | Available there; diagnostic runs only |
@@ -164,8 +173,11 @@ FPS changes with resolution mean GPU-bound. Results are reported per label and n
 | Java and JVM args | same build and arguments in every configuration (dev: Temurin 21.0.12.1+1) | `collect_env.py --java`, command line via `--pid` |
 | Shaders / optimization mods | none (synthetic); as installed (real world) | mod list + SHA-256 per jar |
 | World state | fresh template copy per launch (synthetic); backup copy (real) | world hash recorded |
+| Heap / GC | fixed heap (`-Xms4G -Xmx4G`); `System.gc()` at the start of each settle after a switch (`gc_at_switch`), so each window starts from a similar heap and the previous configuration's garbage is collected outside the window | GC count/time per tick; `gc_in_window` noted per window |
+| Autosave | the integrated server saves every ~6,000 ticks (5 min) | level saves counted per tick (`server_saves`); a window containing one gets a warning |
 | Camera | fixed coordinates and rotation | harness (synthetic); `/tp x y z yaw pitch` (real) |
-| Warmup / JIT | ≥ 60 s with workload running after world load; 15 s settle after each mode switch (≥ 2× particle lifetime) | phases.csv |
+| Warmup / JIT | ≥ 60 s with workload after world load, cycling **every** configuration of the launch (two round-robin rounds, each in its own mode), so no configuration's code path is first compiled inside another's window; then a settle after each switch of at least the longest particle life + 2 ticks (`pfbench.py` refuses less; 15 s in S1) | phases.csv; JIT compile time per tick (a window with > 5 ms of compilation per second gets `jit_activity`; threshold provisional until phase 4) |
+| Carry-over between phases | the settle rule above, plus emitter cursors reset at every phase start (every phase with the same rate spawns the same positions in the same order) | functional check: no target particle alive in any filtered window (all variants, using the control's own live counter where queues are shared) |
 | Background activity | close heavy apps (the env snapshot shows browsers/ChatGPT running during the pilot); no screen recording; no downloads | `top_processes`, `loadavg`, PSI in env snapshots before and after |
 | CPU placement | Hybrid CPU: P-cores 0-7, E-cores 8-23. In the pilot the render thread was on an E-core in ~80% of samples (at a light 60 FPS load) | **Not changed:** the owner prohibits changing CPU affinity (no `taskset`, no pinning; `sample_system.py --self-cpu` stays unused). Placement is recorded per thread (`last_cpu`) and its variance is accepted and reported |
 | Power / thermals | AC power, platform profile as found, same fan state | **Not changed:** the owner prohibits changing firmware, GPU settings or power configuration. `collect_env.py` records AC, platform profile, EPP; package temperature and GPU clocks/throttle reasons per second; 60 s cool-down between launches |
@@ -181,6 +193,14 @@ FPS changes with resolution mean GPU-bound. Results are reported per label and n
   switches) the order follows a Williams design (`tools/schedule.py`, seeded), so each configuration appears in
   each position and after each other configuration equally often. Install-level factors (A vs B, E)
   need separate launches, which alternate in Williams order too (e.g. A B B A B A A B …).
+  `pfbench.py campaign` produces both orders from one seed. Exact balance needs a block count that is a multiple
+  of the Williams row count (n configurations: n rows if n is even, 2n if odd; e.g. 6 or 12 blocks for C/B/D).
+  `compare.py` reports how often each configuration ran in each position and as which launch of its block.
+- **Strata:** runs are compared only within a stratum (load level / variant / mod set); `compare.py` never pools them.
+- **Order effects that balancing doesn't remove:** a carry-over that depends on the *previous* configuration is
+  balanced only with an even number of configurations per launch (Williams first-order balance). JIT profiles are
+  shared across configurations of a launch by design (the warmup trains them on all of them); a residual effect of
+  that sharing is what the within-launch vs separate-launch comparison in phase 4 should look for.
 - **Repetitions:** chosen from the Phase 4 variance study, not guessed. With σ_d = SD of the paired
   difference in mean frame time (% of reference) and h = the wanted 95% CI half-width,
   n ≈ (t₀.₉₇₅,ₙ₋₁ · σ_d / h)², iterated over n. Minimum 8 blocks per comparison regardless. For install-level
@@ -211,12 +231,12 @@ callback objects appear at all, and how much ticking and rendering time filtered
 |---|---|---|---|
 | 0 | Code analysis, tools, pipeline pilot | done | n/a |
 | 1 | Build the pfbench harness (separate Gradle build in `benchmarks/harness/`), NeoForge 1.21.1 | code only | **done 2026-11-09** |
-| 2a | Functional bring-up (allowed now, label as functional): it builds, launches, loads the world, spawns, counters are consistent (A: created = attempts; C: target created = 0, control unchanged), files are written and parse | mostly; screenshot check by eye | **done 2026-11-09** for NeoForge 1.21.1 (`results/functional-2026-11-09`) |
+| 2a | Functional bring-up (allowed now, label as functional): it builds, launches, loads the world, spawns, counters are consistent (A: created = attempts; C: target created = 0, control unchanged), files are written and parse | mostly; screenshot check by eye | **done 2026-11-09** for NeoForge 1.21.1 (`results/functional-2026-11-09`); analysis pipeline, carry-over, warmup, provenance and Sodium checks added the same day (`results/functional-2026-11-09-pipeline`) |
 | 2b | Measurement validation: harness frame log vs MangoHud (means within 1%), hidden vs visible window throttling, fullscreen on DP-1 | yes | **blocked** until power limits are fixed (these compare timings) |
 | 3 | Calibration sweep in A: attempts/tick log-spaced 5 to 5,000; find where FPS drops, where live counts saturate, and when the scene is CPU-bound or GPU-bound. Fix the load levels | yes | **blocked** until power limits are fixed |
 | 4 | Variance study: config B, 5 launches × 6 windows (no pinning); also B0 vs B. Fix window length, warmup, repetitions | yes | **blocked** until power limits are fixed |
 | 5 | Synthetic campaigns: S-overhead (A/B idle + loads), S-filter (B/C/**C-miss**/D × levels), S-scaling (zones, rules), untyped + block-dust variants. C-miss is a required scenario | yes | **blocked** until power limits are fixed, then the owner's go-ahead for long batches |
-| 6 | Comparator: investigating Sodium/Sodium Extra compatibility with the dev client and harness is **approved if kept isolated** (separate run directory, nothing in the play instances). Measuring A/B/C/E with Sodium in all is a performance run | yes | investigation approved; measurement **blocked** |
+| 6 | Comparator: investigating Sodium/Sodium Extra compatibility with the dev client and harness is **approved if kept isolated** (separate run directory, nothing in the play instances). Measuring A/B/C/E with Sodium in all is a performance run | yes | investigation **done 2026-11-09** (download approved by the owner; functional checks pass for A, C/B and E with Sodium); measurement **blocked** |
 | 7 | Real world (ATM10) | n/a | **on hold**: world copies and live-server runs declined; needs a new owner decision |
 | 8 | Forge 1.20.1 harness port; replication of S-overhead and S-filter (subset) | yes | port: no; measurement **blocked** |
 | 9 | Report: `results/<campaign>/report.md` from the tools; review; only then any public wording | partly | **yes** before publishing anything |
@@ -246,6 +266,13 @@ callback objects appear at all, and how much ticking and rendering time filtered
 - **MangoHud quirks found in the pilot:** no log with `no_display`; GPU metrics zero; the log file is
   created at log *start* and the `_summary.csv` at log end (a script that stops at the first file truncates the log,
   which happened in the pilot and was fixed).
+
+- **Client tick rate under heavy load (open question for the owner).** Phases are counted in ticks, so every
+  configuration gets the same attempts *per tick*. If a configuration makes the client fall below 20 ticks per
+  second, its attempts *per second* drop, `compare.py`'s workload check (2% on `spawn_attempts_per_s`) excludes the
+  pair, and `ingest_harness.py` flags `client_tick_rate_low`. That is conservative, but it would also exclude
+  exactly the loads where filtering keeps the game at 20 TPS and the baseline doesn't. Options: compare per-tick
+  workload and report the tick rate as an outcome of its own, or keep excluding. Decide before phase 3.
 
 ## 9. Reporting rules
 

@@ -14,11 +14,14 @@ public class HarnessParticle extends TextureSheetParticle {
     static final float[] CONTROL_COLOR = {0.3f, 0.5f, 1.0f, 0.6f};    // blue, translucent
 
     private final ParticleRenderType renderType;
+    private final boolean control;
 
     public HarnessParticle(ClientLevel level, double x, double y, double z, TextureAtlasSprite sprite,
-                           ParticleRenderType renderType, int lifetime, float[] rgba) {
+                           ParticleRenderType renderType, int lifetime, float[] rgba, boolean control) {
         super(level, x, y, z);
         this.renderType = renderType;
+        this.control = control;
+        if (control) Counters.controlLive++;
         this.lifetime = lifetime;
         this.hasPhysics = false;
         this.gravity = 0.0f;
@@ -36,7 +39,10 @@ public class HarnessParticle extends TextureSheetParticle {
         this.xo = this.x;
         this.yo = this.y;
         this.zo = this.z;
-        if (this.age++ >= this.lifetime) this.remove();
+        if (this.age++ >= this.lifetime) {
+            this.remove();
+            if (control) Counters.controlLive--;
+        }
     }
 
     @Override

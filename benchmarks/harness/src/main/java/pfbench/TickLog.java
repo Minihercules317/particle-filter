@@ -13,6 +13,7 @@ final class TickLog {
         "created_target", "created_control", "created_untyped", "created_block", "created_vanilla", "created_other",
         "alive_opaque", "alive_translucent", "alive_terrain", "alive_total",
         "client_tick_ns", "server_tick_avg_ns", "gc_count", "gc_time_ms", "heap_used_bytes",
+        "alive_control", "jit_time_ms", "classes_loaded", "server_saves",
     };
     private static final int PHASE = 2;
 

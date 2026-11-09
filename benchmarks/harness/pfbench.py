@@ -2,16 +2,22 @@
 """Launcher for the pfbench harness (benchmarks/HARNESS.md). Standard library only (Python 3.11+).
 
 It turns a scenario file into a plan.json, prepares an isolated run directory (options.txt, a fresh copy of the
-template world, Particle Filter's release jar and config when the configuration needs them), starts the harness
-through Gradle, waits for it to quit, and checks the counters.
+template world, Particle Filter's release jar and config, and the rendering mods when the configuration needs them),
+starts the harness through Gradle, waits for it to quit, and checks the counters.
 
   pfbench.py template [--force] [--hide]
       Creates the template void world once (run/template/pfbench), from the scenario's [world] section.
-  pfbench.py run --sequence C:heavy,B:heavy,D:heavy --functional [--variant typed] [--hide]
+  pfbench.py run --sequence C:heavy,B:heavy,D:heavy --functional [--variant typed] [--modset vanilla] [--hide]
       One launch. Each entry is CONFIG:LEVEL (PLAN.md section 2 ids; levels from the scenario's [levels]).
-      All entries of a launch must share an install state: A alone, or B/C/D together, or C-miss alone.
+      All entries of a launch must share an install state: A alone, B/C/D together, C-miss alone, or E alone
+      (E needs --modset sodium).
+  pfbench.py campaign --configs C,B,D,A --levels heavy --blocks 8 --seed 1 [--functional] [--dry-run]
+      Several launches in a counterbalanced (Williams) order: every configuration appears in every position and,
+      for an even count, after every other one equally often, both inside launches and between launches.
   pfbench.py check RUN_DIR
-      Functional checks of a finished run (counters consistent, files parse). Prints no timings.
+      Functional checks of a finished run (counters consistent, files parse, provenance matches). Prints no timings.
+
+Turning finished runs into compare.py input is done by benchmarks/tools/ingest_harness.py.
 
 Everything it writes lives under benchmarks/harness/run/ (gitignored). It never touches a Minecraft
 installation, world or system setting.
@@ -38,34 +44,66 @@ from pathlib import Path
 HARNESS = Path(__file__).resolve().parent
 REPO = HARNESS.parent.parent
 TOOLS = REPO / "benchmarks" / "tools"
+CONFIGS_DIR = REPO / "benchmarks" / "configs"
 RUN_ROOT = HARNESS / "run"
 TEMPLATE_DIR = RUN_ROOT / "template"
+DOWNLOADS = RUN_ROOT / "downloads"
 DEFAULT_SCENARIO = REPO / "benchmarks" / "scenarios" / "S1-synthetic.toml"
 GAME_PATTERN = "net.neoforged.devlaunch.Main"
 DATA_VERSION_1_21_1 = 3955
 TICKS_PER_SECOND = 20
+QUEUE_LIMIT = 16384   # ParticleEngine's EvictingQueue size per render type
 
 sys.path.insert(0, str(TOOLS))
 import make_pf_config  # noqa: E402  (benchmarks/tools)
+import schedule  # noqa: E402
 
-# Configuration id -> (Particle Filter config kind or None for "not installed", Active rules mode)
+# Configuration id -> (Particle Filter config kind or None for "not installed", Active rules mode,
+#                      Sodium Extra hides the target)
 CONFIGS = {
-    "A": (None, None),
-    "B": ("synthetic", "NONE"),
-    "C": ("synthetic", "EVERYWHERE"),
-    "D": ("synthetic", "ZONES"),
-    "C-miss": ("miss", "EVERYWHERE"),
+    "A": (None, None, False),
+    "B": ("synthetic", "NONE", False),
+    "C": ("synthetic", "EVERYWHERE", False),
+    "D": ("synthetic", "ZONES", False),
+    "C-miss": ("miss", "EVERYWHERE", False),
+    "E": (None, None, True),   # PLAN.md Q7: Sodium Extra hides the target type; needs --modset sodium
 }
-# What Particle Filter must match to filter each variant's target, and the ticks.csv column that counts it.
+FILTERED = {"C", "D", "E"}   # configurations in which the target must never be created
+# What a filter must match to hide each variant's target, and the ticks.csv column that counts it.
 VARIANTS = {
     "typed": ("pfbench:target", "created_target"),
     "untyped": ("pfbench.UntypedParticle", "created_untyped"),
     "block_dust": ("minecraft:stone", "created_block"),   # a block rule, not a particle rule
     "vanilla": ("minecraft:end_rod", "created_vanilla"),
 }
-FUNCTIONAL_PHASES = {"settle_after_load": 5, "warmup_with_workload": 5, "settle_after_switch": 3, "measure": 5}
+# Longest lifetime a variant's target can have, in ticks (None: the scenario's fixed target lifetime).
+# From the Minecraft 1.21.1 sources: Particle's default lifetime is (int)(4 / (rand * 0.9 + 0.1)) <= 40, which
+# block dust (TerrainParticle) keeps; EndRodParticle sets 60 + nextInt(12) <= 71.
+VARIANT_MAX_LIFETIME = {"typed": None, "untyped": None, "block_dust": 40, "vanilla": 71}
+# Render-type queue each variant's target lives in (ticks.csv column); vanilla shares the control's queue.
+VARIANT_QUEUE = {"typed": "alive_opaque", "untyped": "alive_opaque", "block_dust": "alive_terrain",
+                 "vanilla": "alive_translucent"}
+# Sodium Extra can only hide typed particles by type id (IMPLEMENTATION.md section 8).
+E_VARIANTS = {"typed", "vanilla"}
+
+# Rendering mods, pinned by SHA-256. Downloaded once by hand from Modrinth into run/downloads/<name>/ (isolated,
+# gitignored) and verified against Modrinth's SHA-512 (results/functional-2026-11-09-pipeline/SODIUM.md).
+RENDER_MODS = {
+    "sodium": {"file": "sodium-neoforge-0.8.13+mc1.21.1.jar", "mod_id": "sodium",
+               "sha256": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+               "source": "https://modrinth.com/mod/sodium/version/mc1.21.1-0.8.13-neoforge"},
+    "sodium-extra": {"file": "sodium-extra-neoforge-0.9.5+mc1.21.1.jar", "mod_id": "sodium_extra",
+                     "sha256": "37c33efdee16fc515392fd422b6ec8769cbc1079f6a2eb6cff2072411d511faf",
+                     "source": "https://modrinth.com/mod/sodium-extra/version/mc1.21.1-0.9.5+neoforge"},
+}
+MODSETS = {"vanilla": [], "sodium": ["sodium", "sodium-extra"]}
+SODIUM_CONFIGS = CONFIGS_DIR / "sodium"   # sodium-options.json, sodium-extra-options.json (shared by every config)
+
+FUNCTIONAL_PHASES = {"settle_after_load": 5, "warmup_with_workload": 6, "settle_after_switch": 4, "measure": 5}
 FUNCTIONAL_OPTIONS = {"maxFps": 60, "fullscreen": False}   # light on the machine; windowed so it can be hidden
 FUNCTIONAL_WINDOW = ["--width", "1280", "--height", "720"]
+FUNCTIONAL_COOLDOWN_S = 5
+HARNESS_SOURCES = ("src", "build.gradle.kts", "settings.gradle.kts", "gradle.properties")
 
 
 def die(message: str) -> None:
@@ -73,18 +111,32 @@ def die(message: str) -> None:
     sys.exit(2)
 
 
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return sha256_bytes(path.read_bytes())
 
 
-def sha256_tree(root: Path) -> str:
-    """Hash of every file's relative path and content, in sorted order."""
+def sha256_tree(root: Path, paths: tuple[str, ...] | None = None) -> str:
+    """Hash of every file's relative path and content, in sorted order (optionally only under `paths`)."""
+    files: list[Path] = []
+    for top in ([root / p for p in paths] if paths else [root]):
+        if top.is_file():
+            files.append(top)
+        elif top.is_dir():
+            files.extend(p for p in top.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
     h = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+    for path in sorted(files):
         h.update(path.relative_to(root).as_posix().encode())
         h.update(b"\0")
         h.update(path.read_bytes())
     return h.hexdigest()
+
+
+def canonical_json(data) -> bytes:
+    return json.dumps(data, sort_keys=True, separators=(",", ":")).encode()
 
 
 def load_scenario(path: Path) -> tuple[dict, str]:
@@ -107,6 +159,33 @@ def remove_tree(path: Path) -> None:
 def game_running() -> bool:
     # pgrep never matches itself, and this process's command line doesn't contain the pattern.
     return subprocess.run(["pgrep", "-f", GAME_PATTERN], capture_output=True).returncode == 0
+
+
+def harness_version() -> str:
+    for line in (HARNESS / "gradle.properties").read_text().splitlines():
+        if line.startswith("harness_version="):
+            return line.split("=", 1)[1].strip()
+    return "unknown"
+
+
+def git(*args: str) -> str:
+    """git's output with trailing whitespace removed (leading spaces are kept: porcelain status needs them)."""
+    r = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True)
+    return r.stdout.rstrip() if r.returncode == 0 else ""
+
+
+def provenance() -> dict:
+    """What produced a run: commit, uncommitted changes that matter, and hashes of the code that ran."""
+    dirty = [line[3:] for line in git("status", "--porcelain", "--", "benchmarks", "src").splitlines()
+             if not line[3:].startswith("benchmarks/harness/run/")]
+    return {
+        "git_commit": git("rev-parse", "HEAD"),
+        "git_dirty_paths": dirty,
+        "harness_version": harness_version(),
+        "harness_sources_sha256": sha256_tree(HARNESS, HARNESS_SOURCES),
+        "launcher_sha256": sha256_file(Path(__file__).resolve()),
+        "tools_sha256": sha256_tree(TOOLS, tuple(p.name for p in sorted(TOOLS.glob("*.py")))),
+    }
 
 
 def options_txt(options: dict) -> str:
@@ -155,6 +234,51 @@ def pf_config(kind: str, variant: str, first_mode: str) -> dict:
     count = 10 if kind == "miss" else 1   # C-miss: 10 rules that never match (configs/pf-c-miss.json)
     return make_pf_config.build(kind, first_mode, count, target)
 
+
+# ---- rendering mods (Sodium / Sodium Extra) ----
+
+def render_mod_jar(name: str) -> Path:
+    spec = RENDER_MODS[name]
+    jar = DOWNLOADS / name / spec["file"]
+    if not jar.exists():
+        die(f"{jar} missing: download {spec['source']} into {jar.parent}/ (see SODIUM.md in the functional record)")
+    if sha256_file(jar) != spec["sha256"]:
+        die(f"{jar}: SHA-256 doesn't match the pinned {spec['sha256']}")
+    return jar
+
+
+def sodium_extra_options(base: dict, target: str, hide: bool) -> dict:
+    """Sodium Extra's options with exactly one per-type entry: the target, hidden (E) or shown (every other
+    configuration). With the entry present in both, its map lookup does the same work; only the value differs.
+    The JSON key is "other" (ParticleSettings.otherMap carries @SerializedName("other") in Sodium Extra 0.9.5)."""
+    data = json.loads(json.dumps(base))
+    data.setdefault("particle_settings", {})["other"] = {target: not hide}
+    return data
+
+
+def normalized_sodium_extra(data: dict) -> dict:
+    """Sodium Extra's options without the per-type particle map, which is the factor being compared."""
+    data = json.loads(json.dumps(data))
+    data.get("particle_settings", {}).pop("other", None)
+    return data
+
+
+def render_environment(game: Path, modset: str) -> dict:
+    """Everything that sets how the game renders, apart from the filter under test. Runs compared with each other
+    must have the same `sha256` (compare.py rejects pairs that don't)."""
+    cfg = game / "config"
+    env = {"modset": modset, "options_txt_sha256": sha256_file(game / "options.txt"),
+           "render_mods": {n: RENDER_MODS[n]["sha256"] for n in MODSETS[modset]}}
+    sodium = cfg / "sodium-options.json"
+    extra = cfg / "sodium-extra-options.json"
+    env["sodium_options_sha256"] = sha256_file(sodium) if sodium.exists() else None
+    env["sodium_extra_options_sha256_without_particle_map"] = (
+        sha256_bytes(canonical_json(normalized_sodium_extra(json.loads(extra.read_text())))) if extra.exists() else None)
+    env["sha256"] = sha256_bytes(canonical_json(env))
+    return env
+
+
+# ---- Gradle, window ----
 
 def gradle(args: list[str], log: Path) -> subprocess.Popen:
     cmd = ["mise", "exec", "--", "./gradlew", "--offline", "--console=plain", "-p", "benchmarks/harness", "runClient", *args]
@@ -247,6 +371,7 @@ def cmd_template(args: argparse.Namespace) -> int:
                   "doWeatherCycle": gamerules.get("doWeatherCycle", False),
                   "doMobSpawning": gamerules.get("doMobSpawning", False),
                   "randomTickSpeed": gamerules.get("randomTickSpeed", 0)},
+        "provenance": provenance(),
     }
     plan_file = work / "plan.json"
     plan_file.write_text(json.dumps(plan, indent=2) + "\n")
@@ -279,6 +404,11 @@ def camera(scenario: dict) -> dict:
 
 # ---- run ----
 
+def install_state(config: str) -> tuple:
+    pf_kind, _, se_hides = CONFIGS[config]
+    return (pf_kind, se_hides)
+
+
 def parse_sequence(text: str, levels: dict) -> list[tuple[str, str]]:
     entries = []
     for item in text.split(","):
@@ -288,32 +418,63 @@ def parse_sequence(text: str, levels: dict) -> list[tuple[str, str]]:
         if level not in levels:
             die(f"unknown level {level!r} (scenario levels: {', '.join(levels)})")
         entries.append((config, level))
-    kinds = {CONFIGS[c][0] for c, _ in entries}
-    if len(kinds) != 1:
-        die("one launch can't mix install states: use A alone, B/C/D together, or C-miss alone")
+    if len({install_state(c) for c, _ in entries}) != 1:
+        die("one launch can't mix install states: use A alone, B/C/D together, C-miss alone, or E alone")
+    if len(set(entries)) != len(entries):
+        die("an entry appears twice in one launch")
     return entries
 
 
+def max_alive_ticks(plan_or_scenario_lifetimes: tuple[int, int], variant: str) -> int:
+    """Post-tick counts a particle of this launch can stay alive for: lifetime + 1 (the tick it's added and
+    `lifetime` more), for the longest-lived of the target and the control."""
+    target_life, control_life = plan_or_scenario_lifetimes
+    life = VARIANT_MAX_LIFETIME[variant] or target_life
+    return max(life, control_life) + 1
+
+
+def min_settle_ticks(lifetimes: tuple[int, int], variant: str) -> int:
+    """Shortest settle after a switch that guarantees no particle from the previous phase survives into the
+    measured window: every particle alive at the switch is gone after max_alive_ticks, plus one tick for
+    particles still waiting in ParticleEngine.particlesToAdd, plus one spare."""
+    return max_alive_ticks(lifetimes, variant) + 2
+
+
 def build_plan(scenario: dict, scenario_sha: str, entries: list[tuple[str, str]], variant: str, functional: bool,
-               run_id: str, out: Path) -> dict:
+               run_id: str, out: Path, prov: dict | None = None) -> dict:
     timing = FUNCTIONAL_PHASES if functional else scenario["phases"]
     levels = scenario["levels"]
-    ticks = {k: int(round(v * TICKS_PER_SECOND)) for k, v in timing.items() if k != "cooldown_between_launches"}
-    first_config, first_level = entries[0]
-    phases = [
-        {"name": "load-settle", "role": "settle", "ticks": ticks["settle_after_load"], "target_per_tick": 0,
-         "control": False, "mode": CONFIGS[first_config][1]},
-        {"name": "warmup", "role": "warmup", "ticks": ticks["warmup_with_workload"],
-         "target_per_tick": levels[first_level], "control": True},
-    ]
+    ticks = {k: int(round(v * TICKS_PER_SECOND)) for k, v in timing.items()
+             if isinstance(v, (int, float)) and not isinstance(v, bool) and k != "cooldown_between_launches"}
+    gc_at_switch = bool(scenario["phases"].get("gc_at_switch", False))
+    e, pt, pc = scenario["emitters"], scenario["particles"]["target"], scenario["particles"]["control"]
+    lifetimes = (pt["lifetime_ticks"], pc["lifetime_ticks"])
+    settle_min = min_settle_ticks(lifetimes, variant)
+    if ticks["settle_after_switch"] < settle_min:
+        die(f"settle_after_switch is {ticks['settle_after_switch']} ticks; variant {variant} needs at least {settle_min} "
+            "so no particle from the previous phase reaches the measured window")
+
+    first_config, _ = entries[0]
+    phases = [{"name": "load-settle", "role": "settle", "ticks": ticks["settle_after_load"], "target_per_tick": 0,
+               "control": False, "mode": CONFIGS[first_config][1]}]
+    # Warmup runs every configuration of the launch (twice, round-robin, when there are several), so the JIT has
+    # compiled every path the measured phases take (filtered, unfiltered, zone checks) before any of them is measured.
+    warm = ticks["warmup_with_workload"]
+    rounds = 2 if len(entries) > 1 else 1
+    segments = [(r, i, c, lv) for r in range(1, rounds + 1) for i, (c, lv) in enumerate(entries, start=1)]
+    seg_ticks = [warm // len(segments)] * len(segments)
+    seg_ticks[-1] += warm - sum(seg_ticks)
+    for (r, i, config, level), n in zip(segments, seg_ticks):
+        name = "warmup" if len(segments) == 1 else f"warmup-r{r}-{i:02d}-{config}"
+        phases.append({"name": name, "role": "warmup", "ticks": n, "target_per_tick": levels[level], "control": True,
+                       "mode": CONFIGS[config][1], "config": config, "level": level})
     for i, (config, level) in enumerate(entries, start=1):
         name = f"{i:02d}-{config}-{level}"
         common = {"target_per_tick": levels[level], "control": True, "config": config, "level": level}
         phases.append({"name": f"{name}-settle", "role": "switch-settle", "ticks": ticks["settle_after_switch"],
-                       "mode": CONFIGS[config][1], **common})
+                       "mode": CONFIGS[config][1], "gc_at_start": gc_at_switch, **common})
         phases.append({"name": name, "role": "measure", "ticks": ticks["measure"], "screenshot": functional, **common})
     total_s = sum(p["ticks"] for p in phases) / TICKS_PER_SECOND
-    e, pt, pc = scenario["emitters"], scenario["particles"]["target"], scenario["particles"]["control"]
     return {
         "format": 1, "kind": "run", "run_id": run_id, "label": "functional" if functional else "performance",
         "output_dir": str(out),
@@ -322,24 +483,51 @@ def build_plan(scenario: dict, scenario_sha: str, entries: list[tuple[str, str]]
         "emitters": {"plane_z": e["plane_z"], "x_range": e["x_range"], "y_range": e["y_range"], "grid": e["grid"]},
         "target_lifetime_ticks": pt["lifetime_ticks"], "control_lifetime_ticks": pc["lifetime_ticks"],
         "control_attempts_per_tick": pc["attempts_per_tick"], "control_z_offset": pc.get("plane_z_offset", 1.0),
+        "min_settle_ticks": settle_min,
         "frame_capacity": int(total_s * 2000) + 10_000,   # room for 2,000 FPS; overflow is counted, never silent
         "screenshots": functional,
         "phases": phases,
+        "provenance": prov or {},
     }
 
 
-def cmd_run(args: argparse.Namespace) -> int:
-    if not args.functional and os.environ.get("PFBENCH_PERFORMANCE_APPROVED") != "1":
+def copy_inputs(game: Path, dest: Path) -> dict:
+    """Copies the files that configure the game into the run directory and returns their SHA-256s."""
+    dest.mkdir(parents=True, exist_ok=True)
+    hashes = {}
+    for rel in ("options.txt", "config/fml.toml", "config/particlefilter.json", "config/sodium-options.json",
+                "config/sodium-extra-options.json"):
+        src = game / rel
+        if src.exists():
+            shutil.copy2(src, dest / src.name)
+            hashes[src.name] = sha256_file(src)
+    return hashes
+
+
+def run_launch(*, scenario_path: Path, sequence: str, variant: str, modset: str, functional: bool, hide: bool,
+               pf_jar_path: str | None = None, run_id: str | None = None, sodium_defaults: bool = False,
+               campaign: dict | None = None) -> tuple[int, Path]:
+    if not functional and os.environ.get("PFBENCH_PERFORMANCE_APPROVED") != "1":
         die("performance runs are blocked until the owner confirms the laptop's power-limit problems are fixed "
             "(benchmarks/HANDOFF.md). Use --functional for bring-up checks.")
-    scenario_path = Path(args.scenario)
     scenario, scenario_sha = load_scenario(scenario_path)
-    entries = parse_sequence(args.sequence, scenario["levels"])
-    if args.variant not in VARIANTS:
-        die(f"unknown variant {args.variant!r}")
-    kind = CONFIGS[entries[0][0]][0]
-    if args.variant == "block_dust" and any(c == "D" for c, _ in entries):
+    entries = parse_sequence(sequence, scenario["levels"])
+    if variant not in VARIANTS:
+        die(f"unknown variant {variant!r}")
+    if modset not in MODSETS:
+        die(f"unknown modset {modset!r} (known: {', '.join(MODSETS)})")
+    pf_kind, _, se_hides = CONFIGS[entries[0][0]]
+    if variant == "block_dust" and any(c == "D" for c, _ in entries):
         die("block_dust can't be filtered by zones (Particle Filter's block rules are global)")
+    if se_hides and modset != "sodium":
+        die("configuration E (Sodium Extra hides the target) needs --modset sodium")
+    if se_hides and variant not in E_VARIANTS:
+        die(f"Sodium Extra can only hide typed particles by type id: E supports {', '.join(sorted(E_VARIANTS))}")
+    if modset == "sodium" and not sodium_defaults and not all(
+            (SODIUM_CONFIGS / f).exists() for f in ("sodium-options.json", "sodium-extra-options.json")):
+        die(f"no Sodium config templates in {SODIUM_CONFIGS}; capture the mods' defaults once with --sodium-defaults")
+    if sodium_defaults and not functional:
+        die("--sodium-defaults is for capturing the mods' default configs in a functional run")
     template = TEMPLATE_DIR / scenario["world"]["template"]
     if not (template / "level.dat").exists():
         die(f"no template world at {template}; run: pfbench.py template")
@@ -347,53 +535,158 @@ def cmd_run(args: argparse.Namespace) -> int:
         die("a dev client is already running; close it first")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_id = args.run_id or f"{stamp}-{'-'.join(c for c, _ in entries)}-{args.variant}" + ("-functional" if args.functional else "")
+    tags = [c for c, _ in entries] + [variant] + ([modset] if modset != "vanilla" else [])
+    run_id = run_id or f"{stamp}-{'-'.join(tags)}" + ("-functional" if functional else "")
     out = RUN_ROOT / "runs" / run_id
     if out.exists():
         die(f"{out} exists; pick another --run-id")
     game = out / "game"
     (game / "saves").mkdir(parents=True)
     shutil.copytree(template, game / "saves" / scenario["world"]["template"])   # fresh copy; the template is never opened
-    prepare_game_dir(game, dict(scenario["options"]) | (FUNCTIONAL_OPTIONS if args.functional else {}))
+    prepare_game_dir(game, dict(scenario["options"]) | (FUNCTIONAL_OPTIONS if functional else {}))
 
-    install = {"particlefilter": None}
-    if kind is not None:
-        jar = Path(args.pf_jar) if args.pf_jar else pf_jar()
+    jars: dict[str, str] = {}   # file name in mods/ -> SHA-256 of what was copied
+    install: dict = {"particlefilter": None, "modset": modset, "render_mods": {}, "sodium_extra_hides_target": se_hides}
+    if pf_kind is not None or modset != "vanilla":
         (game / "mods").mkdir()
+    if pf_kind is not None:
+        jar = Path(pf_jar_path) if pf_jar_path else pf_jar()
         shutil.copy2(jar, game / "mods" / jar.name)
-        cfg = pf_config(kind, args.variant, CONFIGS[entries[0][0]][1])
+        jars[jar.name] = sha256_file(game / "mods" / jar.name)
+        cfg = pf_config(pf_kind, variant, CONFIGS[entries[0][0]][1])
         (game / "config" / "particlefilter.json").write_text(json.dumps(cfg, indent=2) + "\n")
-        install = {"particlefilter": {"jar": jar.name, "sha256": sha256_file(jar), "config_kind": kind,
-                                      "config_sha256": sha256_file(game / "config" / "particlefilter.json")}}
+        install["particlefilter"] = {"jar": jar.name, "sha256": jars[jar.name], "config_kind": pf_kind,
+                                     "config_sha256": sha256_file(game / "config" / "particlefilter.json")}
+    for name in MODSETS[modset]:
+        jar = render_mod_jar(name)
+        shutil.copy2(jar, game / "mods" / jar.name)
+        jars[jar.name] = sha256_file(game / "mods" / jar.name)
+        install["render_mods"][name] = {"jar": jar.name, "sha256": jars[jar.name], "mod_id": RENDER_MODS[name]["mod_id"],
+                                        "source": RENDER_MODS[name]["source"]}
+    if modset == "sodium":
+        if sodium_defaults:
+            install["sodium_configs"] = "mod defaults (capture run: the launcher wrote no Sodium configs)"
+        else:
+            shutil.copy2(SODIUM_CONFIGS / "sodium-options.json", game / "config" / "sodium-options.json")
+            base = json.loads((SODIUM_CONFIGS / "sodium-extra-options.json").read_text())
+            se = sodium_extra_options(base, VARIANTS[variant][0], se_hides)
+            (game / "config" / "sodium-extra-options.json").write_text(json.dumps(se, indent=2) + "\n")
+            install["sodium_configs"] = {"template_dir": str(SODIUM_CONFIGS.relative_to(REPO)),
+                                         "sodium_extra_target": VARIANTS[variant][0],
+                                         "sodium_extra_target_enabled": not se_hides}
 
-    plan = build_plan(scenario, scenario_sha, entries, args.variant, args.functional, run_id, out)
+    prov = provenance()
+    plan = build_plan(scenario, scenario_sha, entries, variant, functional, run_id, out, prov)
     plan_file = out / "plan.json"
     plan_file.write_text(json.dumps(plan, indent=2) + "\n")
     total_s = sum(p["ticks"] for p in plan["phases"]) / TICKS_PER_SECOND
+    inputs = copy_inputs(game, out / "inputs")
 
-    launch = {"run_id": run_id, "label": plan["label"], "started_utc": stamp, "sequence": args.sequence,
-              "variant": args.variant, "scenario_file": scenario_path.name, "scenario_sha256": scenario_sha,
+    launch = {"run_id": run_id, "label": plan["label"], "started_utc": stamp, "sequence": sequence,
+              "entries": [{"position": i, "config": c, "level": lv} for i, (c, lv) in enumerate(entries, start=1)],
+              "variant": variant, "scenario_file": scenario_path.name, "scenario_sha256": scenario_sha,
               "template_sha256_tree": json.loads((TEMPLATE_DIR / "template.json").read_text()).get("sha256_tree")
               if (TEMPLATE_DIR / "template.json").exists() else None,
-              **install, "hidden_window": args.hide}
+              **install, "mods_dir": jars, "inputs_sha256": inputs,
+              "render_environment": render_environment(game, modset),
+              "jvm_args_requested": scenario.get("jvm", {}).get("args", ""),
+              "provenance": prov, "campaign": campaign, "hidden_window": hide}
     gradle_args = [f"-Ppfbench.gameDir={game}", f"-Ppfbench.plan={plan_file}",
                    f"-Ppfbench.world={scenario['world']['template']}",
                    "-Ppfbench.jvmArgs=" + scenario.get("jvm", {}).get("args", "")]
-    if args.functional:
+    if functional:
         gradle_args.append("-Ppfbench.gameArgs=" + " ".join(FUNCTIONAL_WINDOW))
+    (out / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")   # rewritten with the outcome below
     proc = gradle(gradle_args, out / "gradle.log")
     pid = game_pid()
     if pid is None:
         wait_for_exit(proc, 5)
         die(f"the game didn't start; see {out}/gradle.log")
-    launch["window"] = hide_window(pid, out / "window.log") if args.hide else window(pid)
+    launch["window"] = hide_window(pid, out / "window.log") if hide else window(pid)
     finished = wait_for_exit(proc, total_s + 600)
     launch["finished_utc"] = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     launch["exited_by_itself"] = finished
+    launch["inputs_after_sha256"] = copy_inputs(game, out / "inputs-after")   # what the mods saved on exit
     (out / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")
     if not finished:
         print(f"pfbench: timed out after {total_s + 600:.0f} s; see {out}/gradle.log", file=sys.stderr)
-    return check(out)
+    return check(out), out
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    code, _ = run_launch(scenario_path=Path(args.scenario), sequence=args.sequence, variant=args.variant,
+                         modset=args.modset, functional=args.functional, hide=args.hide, pf_jar_path=args.pf_jar,
+                         run_id=args.run_id, sodium_defaults=args.sodium_defaults)
+    return code
+
+
+# ---- campaign ----
+
+def campaign_schedule(configs: list[str], levels: list[str], blocks: int, seed: int) -> list[list[list[tuple[str, str]]]]:
+    """blocks -> launches -> entries. Entries sharing an install state go into one launch, in Williams order
+    (tools/schedule.py); the launches of a block alternate in Williams order too. Seeds differ per group, and every
+    order is reproducible from `seed`."""
+    groups: dict[tuple, list[tuple[str, str]]] = {}
+    for config in configs:
+        for level in levels:
+            groups.setdefault(install_state(config), []).append((config, level))
+    keys = list(groups)
+    labels = ["|".join(f"{c}:{lv}" for c, lv in groups[k]) for k in keys]
+    group_orders = schedule.make_schedule(labels, blocks, seed)
+    inner = {k: schedule.make_schedule([f"{c}:{lv}" for c, lv in groups[k]], blocks, seed + 1 + i)
+             for i, k in enumerate(keys)}
+    out = []
+    for b in range(blocks):
+        launches = []
+        for label in group_orders[b]:
+            k = keys[labels.index(label)]
+            launches.append([tuple(item.rsplit(":", 1)) for item in inner[k][b]])
+        out.append(launches)
+    return out
+
+
+def cmd_campaign(args: argparse.Namespace) -> int:
+    scenario, _ = load_scenario(Path(args.scenario))
+    configs = [c.strip() for c in args.configs.split(",") if c.strip()]
+    levels = [lv.strip() for lv in args.levels.split(",") if lv.strip()]
+    for c in configs:
+        if c not in CONFIGS:
+            die(f"unknown configuration {c!r}")
+    for lv in levels:
+        if lv not in scenario["levels"]:
+            die(f"unknown level {lv!r}")
+    plan = campaign_schedule(configs, levels, args.blocks, args.seed)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    name = args.name or f"campaign-{stamp}"
+    sheet = {"campaign": name, "seed": args.seed, "configs": configs, "levels": levels, "variant": args.variant,
+             "modset": args.modset, "label": "functional" if args.functional else "performance",
+             "blocks": [[",".join(f"{c}:{lv}" for c, lv in launch) for launch in launches] for launches in plan]}
+    for b, launches in enumerate(sheet["blocks"], start=1):
+        print(f"block {b}: " + "  |  ".join(launches))
+    if args.dry_run:
+        return 0
+    if not args.functional and os.environ.get("PFBENCH_PERFORMANCE_APPROVED") != "1":
+        die("performance runs are blocked until the owner confirms the laptop's power-limit problems are fixed "
+            "(benchmarks/HANDOFF.md). Use --functional or --dry-run.")
+    cooldown = FUNCTIONAL_COOLDOWN_S if args.functional else scenario["phases"].get("cooldown_between_launches", 60)
+    sheet_dir = RUN_ROOT / "campaigns"
+    sheet_dir.mkdir(parents=True, exist_ok=True)
+    sheet["launches"] = []
+    failures = 0
+    for b, launches in enumerate(sheet["blocks"], start=1):
+        for li, sequence in enumerate(launches, start=1):
+            if sheet["launches"]:
+                time.sleep(cooldown)
+            run_id = f"{name}-b{b:02d}-l{li}-{sequence.replace(':', '_').replace(',', '-')}"
+            code, out = run_launch(scenario_path=Path(args.scenario), sequence=sequence, variant=args.variant,
+                                   modset=args.modset, functional=args.functional, hide=args.hide, run_id=run_id,
+                                   campaign={"name": name, "block": b, "launch_in_block": li, "seed": args.seed})
+            failures += code != 0
+            sheet["launches"].append({"block": b, "launch_in_block": li, "sequence": sequence, "run_id": run_id,
+                                      "check_passed": code == 0})
+            (sheet_dir / f"{name}.json").write_text(json.dumps(sheet, indent=2) + "\n")
+    print(f"campaign {name}: {len(sheet['launches'])} launches, {failures} with failed checks -> {sheet_dir / (name + '.json')}")
+    return 0 if failures == 0 else 1
 
 
 # ---- functional checks ----
@@ -404,7 +697,8 @@ def read_csv(path: Path) -> list[dict]:
 
 
 def check(run: Path) -> int:
-    """Functional checks only: are the counters consistent and do the files parse? Reports no timing."""
+    """Functional checks only: are the counters consistent, do the files parse, did the run use exactly the files
+    the launcher prepared? Reports no timing. Kept apart from measurement: it reads the logs after the game quit."""
     results: list[dict] = []
 
     def record(name: str, ok: bool, detail: str = "") -> None:
@@ -416,6 +710,7 @@ def check(run: Path) -> int:
         return report(run, results)
     harness = json.loads(harness_file.read_text())
     plan = json.loads((run / "plan.json").read_text())
+    launch = json.loads((run / "launch.json").read_text()) if (run / "launch.json").exists() else {}
     record("harness finished without error", harness.get("ok") is True, harness.get("error") or "")
     for f in ("frames.csv", "ticks.csv", "phases.csv"):
         record(f"{f} written", (run / f).exists())
@@ -429,17 +724,50 @@ def check(run: Path) -> int:
            str(setup.get("player_position")))
     record("Particles setting is All", setup.get("options", {}).get("particles") == "ALL",
            str(setup.get("options", {}).get("particles")))
+    record("window size unchanged from first phase to quit", setup.get("window_at_start") == harness.get("window_at_end"),
+           f"{setup.get('window_at_start')} -> {harness.get('window_at_end')}")
     record("no frame or tick rows dropped", harness.get("frames_dropped_capacity") == 0 and harness.get("ticks_dropped_capacity") == 0)
 
     phases = read_csv(run / "phases.csv")
     configs = {p["config"] for p in phases if p["config"]}
-    pf_expected = configs != {"A"}
+    pf_expected = any(CONFIGS[c][0] is not None for c in configs)
     record("Particle Filter installed as the configuration requires",
            bool(setup.get("particlefilter_present")) == pf_expected, f"present={setup.get('particlefilter_present')}")
     for p in phases:
         if p["mode_requested"] and pf_expected:
             record(f"mode switched: {p['name']}", p["mode_after_start"] == p["mode_requested"],
                    f"requested {p['mode_requested']}, got {p['mode_after_start']}")
+
+    # Provenance: the run used exactly the jars the launcher copied, and the versions it expected.
+    if launch:
+        prov = launch.get("provenance") or {}
+        record("harness version matches the source tree", harness.get("versions", {}).get("pfbench") == prov.get("harness_version"),
+               f"loaded {harness.get('versions', {}).get('pfbench')}, source {prov.get('harness_version')}")
+        folder = {f["file"]: f.get("sha256") for f in harness.get("mods_folder", [])}
+        record("mods/ held exactly the jars the launcher copied (SHA-256, read in game)", folder == launch.get("mods_dir", {}),
+               f"in game: {sorted(folder)}")
+        mod_ids = {m.split(" ", 1)[0] for m in harness.get("mods", [])}
+        if launch.get("particlefilter"):
+            want = launch["particlefilter"]["jar"].split("-")[2].split("+")[0]   # particlefilter-neoforge-<ver>+<mc>.jar
+            got = harness.get("versions", {}).get("particlefilter")
+            record("loaded Particle Filter version matches the jar", got == want, f"loaded {got}, jar {want}")
+        for name, spec in RENDER_MODS.items():
+            want = name in MODSETS[launch.get("modset", "vanilla")]
+            record(f"{spec['mod_id']} loaded only when the mod set includes it", (spec["mod_id"] in mod_ids) == want,
+                   f"loaded={spec['mod_id'] in mod_ids}, modset={launch.get('modset', 'vanilla')}")
+        record("GPU renderer recorded", bool(setup.get("gl", {}).get("renderer")), str(setup.get("gl", {}).get("renderer")))
+        sc = launch.get("sodium_configs")
+        if isinstance(sc, dict):
+            after = run / "inputs-after" / "sodium-extra-options.json"
+            value = None
+            if after.exists():
+                value = json.loads(after.read_text()).get("particle_settings", {}).get("other", {}).get(sc["sodium_extra_target"])
+            record("Sodium Extra kept the target entry the launcher wrote", value == sc["sodium_extra_target_enabled"],
+                   f"{sc['sodium_extra_target']} = {value}")
+
+    if plan.get("label") != "functional":
+        shots = list((run / "game" / "screenshots").glob("*.png")) if (run / "game" / "screenshots").exists() else []
+        record("no screenshots in a performance run", not shots, f"{len(shots)} files")
 
     ticks = read_csv(run / "ticks.csv")
     by_phase: dict[str, list[dict]] = {}
@@ -450,6 +778,22 @@ def check(run: Path) -> int:
     life_t = plan["target_lifetime_ticks"] + 1   # a particle is alive in lifetime+1 consecutive post-tick counts
     life_c = plan["control_lifetime_ticks"] + 1
     rate_c = plan["control_attempts_per_tick"]
+    queue_col = VARIANT_QUEUE[variant]
+    have_control_col = bool(ticks) and "alive_control" in ticks[0]
+    for col in ("alive_control", "jit_time_ms", "classes_loaded", "server_saves"):
+        record(f"ticks.csv has {col}", bool(ticks) and col in ticks[0])
+    if ticks and "jit_time_ms" in ticks[0]:
+        jit = [int(t["jit_time_ms"]) for t in ticks]
+        record("JIT time is logged and never decreases", jit[0] >= 0 and all(b >= a for a, b in zip(jit, jit[1:])))
+
+    # Contamination: every settle after a switch is long enough for the previous phase's particles to expire.
+    settle_min = plan.get("min_settle_ticks") or min_settle_ticks((plan["target_lifetime_ticks"], plan["control_lifetime_ticks"]), variant)
+    short = [p["name"] for p in phases if p["role"] == "switch-settle" and int(p["ticks"]) < settle_min]
+    record(f"every settle after a switch is >= {settle_min} ticks (longest particle life + 2)", not short, ", ".join(short))
+    # Warmup ran every configuration measured in this launch before the first measurement.
+    measured = {p["config"] for p in phases if p["role"] == "measure"}
+    warmed = {p["config"] for p in phases if p["role"] == "warmup" and p["config"]}
+    record("warmup ran every measured configuration", measured <= warmed, f"measured {sorted(measured)}, warmed {sorted(warmed)}")
 
     for p in phases:
         rows = by_phase.get(p["name"], [])
@@ -458,7 +802,7 @@ def check(run: Path) -> int:
             continue
         s = lambda col: sum(int(r[col]) for r in rows)  # noqa: E731
         attempts, created = s("attempts_target"), s(created_col)
-        filtered = p["config"] in ("C", "D")
+        filtered = p["config"] in FILTERED
         expect = 0 if filtered else attempts
         record(f"{p['name']}: target created {'== 0' if filtered else '== attempts'}", created == expect,
                f"attempts {attempts}, created {created}")
@@ -467,18 +811,29 @@ def check(run: Path) -> int:
         if p["role"] != "measure":
             continue
         rate = float(p["target_per_tick"])
-        if variant in ("typed", "untyped") and rate == int(rate):
-            want = 0 if filtered else min(int(rate) * life_t, 16384)
+        want_c = min(int(rate_c) * life_c, QUEUE_LIMIT) if rate_c == int(rate_c) else None
+
+        def target_alive(r: dict) -> int:
+            n = int(r[queue_col])
+            return n - int(r["alive_control"]) if variant == "vanilla" else n   # end_rod shares the control's queue
+
+        if filtered and (variant != "vanilla" or have_control_col):
+            # No target particle may be alive in a filtered window: none created, none left from the previous phase.
+            ok = sum(1 for r in rows if target_alive(r) == 0)
+            record(f"{p['name']}: no target particle alive (no carry-over)", ok == len(rows), f"{ok}/{len(rows)} ticks")
+        elif variant in ("typed", "untyped") and rate == int(rate):
+            want = min(int(rate) * life_t, QUEUE_LIMIT)
             ok = sum(1 for r in rows if int(r["alive_opaque"]) == want)
             record(f"{p['name']}: target alive == {want} every tick", ok == len(rows), f"{ok}/{len(rows)} ticks")
-        if variant != "vanilla" and rate_c == int(rate_c):   # end_rod shares the translucent queue
-            want_c = min(int(rate_c) * life_c, 16384)
-            ok = sum(1 for r in rows if int(r["alive_translucent"]) == want_c)
+        if want_c is not None and have_control_col:
+            ok = sum(1 for r in rows if int(r["alive_control"]) == want_c)
             record(f"{p['name']}: control alive == {want_c} every tick", ok == len(rows), f"{ok}/{len(rows)} ticks")
+        if want_c is not None and variant != "vanilla":
+            ok = sum(1 for r in rows if int(r["alive_translucent"]) == want_c)
+            record(f"{p['name']}: translucent queue == control only ({want_c})", ok == len(rows), f"{ok}/{len(rows)} ticks")
 
     # The frame log must parse with the analysis tool; only row counts are reported here, never timings.
-    sys.path.insert(0, str(TOOLS))
-    import frametimes  # noqa: E402
+    import frametimes  # noqa: E402  (benchmarks/tools)
     try:
         log = frametimes.read_log(run / "frames.csv")
         n = len(log.frametimes_ms)
@@ -516,17 +871,34 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--scenario", default=str(DEFAULT_SCENARIO))
     r.add_argument("--sequence", required=True, help="CONFIG:LEVEL,... e.g. C:heavy,B:heavy,D:heavy")
     r.add_argument("--variant", default="typed", choices=list(VARIANTS))
+    r.add_argument("--modset", default="vanilla", choices=list(MODSETS), help="rendering mods in every configuration")
     r.add_argument("--functional", action="store_true", help="short phases, 60 FPS cap, windowed: bring-up checks only")
     r.add_argument("--hide", action="store_true", help="move the game window to the hidden special workspace")
     r.add_argument("--pf-jar", help="Particle Filter jar (default: the repo's build/libs/<version>/ NeoForge jar)")
     r.add_argument("--run-id")
-    c = sub.add_parser("check", help="functional checks of a finished run")
-    c.add_argument("run_dir")
+    r.add_argument("--sodium-defaults", action="store_true",
+                   help="functional only: don't write Sodium configs, so the mods save their defaults (to capture them)")
+    c = sub.add_parser("campaign", help="several launches in a counterbalanced order")
+    c.add_argument("--scenario", default=str(DEFAULT_SCENARIO))
+    c.add_argument("--configs", required=True, help="e.g. C,B,D,A")
+    c.add_argument("--levels", required=True, help="e.g. heavy or moderate,heavy")
+    c.add_argument("--blocks", type=int, required=True)
+    c.add_argument("--seed", type=int, required=True, help="record it; the whole order follows from it")
+    c.add_argument("--variant", default="typed", choices=list(VARIANTS))
+    c.add_argument("--modset", default="vanilla", choices=list(MODSETS))
+    c.add_argument("--name")
+    c.add_argument("--functional", action="store_true")
+    c.add_argument("--hide", action="store_true")
+    c.add_argument("--dry-run", action="store_true", help="print the launch order only")
+    k = sub.add_parser("check", help="functional checks of a finished run")
+    k.add_argument("run_dir")
     args = p.parse_args(argv)
     if args.command == "template":
         return cmd_template(args)
     if args.command == "run":
         return cmd_run(args)
+    if args.command == "campaign":
+        return cmd_campaign(args)
     return check(Path(args.run_dir).resolve())
 
 

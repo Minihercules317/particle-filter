@@ -1,0 +1,103 @@
+{
+  "run_id": "20261109T125234Z-A-typed-sodium-functional",
+  "label": "functional",
+  "started_utc": "20261109T125234Z",
+  "sequence": "A:moderate",
+  "entries": [
+    {
+      "position": 1,
+      "config": "A",
+      "level": "moderate"
+    }
+  ],
+  "variant": "typed",
+  "scenario_file": "S1-synthetic.toml",
+  "scenario_sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317",
+  "template_sha256_tree": "9f9547b0f3f1c87809f5ed45dd1912f09408237cc9819798ad30b65fe9224b64",
+  "particlefilter": null,
+  "modset": "sodium",
+  "render_mods": {
+    "sodium": {
+      "jar": "sodium-neoforge-0.8.13+mc1.21.1.jar",
+      "sha256": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+      "mod_id": "sodium",
+      "source": "https://modrinth.com/mod/sodium/version/mc1.21.1-0.8.13-neoforge"
+    },
+    "sodium-extra": {
+      "jar": "sodium-extra-neoforge-0.9.5+mc1.21.1.jar",
+      "sha256": "37c33efdee16fc515392fd422b6ec8769cbc1079f6a2eb6cff2072411d511faf",
+      "mod_id": "sodium_extra",
+      "source": "https://modrinth.com/mod/sodium-extra/version/mc1.21.1-0.9.5+neoforge"
+    }
+  },
+  "sodium_extra_hides_target": false,
+  "sodium_configs": "mod defaults (capture run: the launcher wrote no Sodium configs)",
+  "mods_dir": {
+    "sodium-neoforge-0.8.13+mc1.21.1.jar": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+    "sodium-extra-neoforge-0.9.5+mc1.21.1.jar": "37c33efdee16fc515392fd422b6ec8769cbc1079f6a2eb6cff2072411d511faf"
+  },
+  "inputs_sha256": {
+    "options.txt": "6d37ac931a349ed70ec2dc4fb84adf4a2ca554e2c92da380a18b3d51cfc2e89c",
+    "fml.toml": "e5a10cae57974d3270e34cacc387b6d3c3b5a929dcf763e7175e9178b8e45db7"
+  },
+  "render_environment": {
+    "modset": "sodium",
+    "options_txt_sha256": "6d37ac931a349ed70ec2dc4fb84adf4a2ca554e2c92da380a18b3d51cfc2e89c",
+    "render_mods": {
+      "sodium": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d",
+      "sodium-extra": "37c33efdee16fc515392fd422b6ec8769cbc1079f6a2eb6cff2072411d511faf"
+    },
+    "sodium_options_sha256": null,
+    "sodium_extra_options_sha256_without_particle_map": null,
+    "sha256": "91d6802ce39ce75f217d35b0e3efb81389cab193144b9473956bd2cca0f21d26"
+  },
+  "jvm_args_requested": "-Xms4G -Xmx4G -XX:+UseG1GC -Xlog:gc*:file=gc.log:time,uptime,level,tags",
+  "provenance": {
+    "git_commit": "85cb36f253a7d543cde5a81d5b3639de80bf6a18",
+    "git_dirty_paths": [
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/Counters.java",
+      "benchmarks/harness/src/main/java/pfbench/HarnessParticle.java",
+      "benchmarks/harness/src/main/java/pfbench/PfBench.java",
+      "benchmarks/harness/src/main/java/pfbench/Plan.java",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/harness/src/main/java/pfbench/TickLog.java",
+      "benchmarks/harness/src/main/java/pfbench/UntypedParticle.java",
+      "benchmarks/scenarios/S1-synthetic.toml",
+      "benchmarks/tools/compare.py",
+      "benchmarks/tools/frametimes.py",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/tests/test_pipeline.py"
+    ],
+    "harness_version": "0.2.0",
+    "harness_sources_sha256": "be136abec63511c5d71002aacfdfd22600fa7911ffc9d08ab38621f81a9d9bcf",
+    "launcher_sha256": "8c9d48b85b563dee732751d1c869972927756c524a1abf27e02790a18bcc1603",
+    "tools_sha256": "a3a5b3f91d6e70d1bef28d3ae6ca16f77cf7d827ca8bbfff41d02e78ebc79cf3"
+  },
+  "campaign": null,
+  "hidden_window": true,
+  "window": {
+    "class": "Minecraft NeoForge* 1.21.1",
+    "title": "Minecraft NeoForge* 1.21.1",
+    "size": [
+      2536,
+      1390
+    ],
+    "workspace": {
+      "id": -97,
+      "name": "special:pfbench"
+    },
+    "monitor": 1,
+    "floating": false,
+    "fullscreen": 0
+  },
+  "finished_utc": "20261109T125310Z",
+  "exited_by_itself": true,
+  "inputs_after_sha256": {
+    "options.txt": "6d37ac931a349ed70ec2dc4fb84adf4a2ca554e2c92da380a18b3d51cfc2e89c",
+    "fml.toml": "a2815eae8ee14c2ec55c179a1e02aa48174234dee1c1daf1ffe9c077470c9c01",
+    "sodium-options.json": "44478bef0973f1aa587c0493568a5cbc5426233b611f14bd2be489b5b862fa7f",
+    "sodium-extra-options.json": "0890e10174687c70bdc5857a4d7e6e925958d77ba42941718f4c12fb16592749"
+  }
+}

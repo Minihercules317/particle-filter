@@ -1,0 +1,287 @@
+{
+  "label": "functional",
+  "note": "Functional checks of the harness. Not a performance result.",
+  "passed": true,
+  "checks": [
+    {
+      "check": "harness finished without error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "frames.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "phases.csv written",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "world is the template (level name pfbench)",
+      "ok": true,
+      "detail": "pfbench"
+    },
+    {
+      "check": "player is a spectator at the camera position",
+      "ok": true,
+      "detail": "[0.5, 102.38, 0.5]"
+    },
+    {
+      "check": "Particles setting is All",
+      "ok": true,
+      "detail": "ALL"
+    },
+    {
+      "check": "window size unchanged from first phase to quit",
+      "ok": true,
+      "detail": "{'width': 2536, 'height': 1390, 'fullscreen': False} -> {'width': 2536, 'height': 1390, 'fullscreen': False}"
+    },
+    {
+      "check": "no frame or tick rows dropped",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "Particle Filter installed as the configuration requires",
+      "ok": true,
+      "detail": "present=True"
+    },
+    {
+      "check": "mode switched: load-settle",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: warmup-r1-01-C",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: warmup-r1-02-B",
+      "ok": true,
+      "detail": "requested NONE, got NONE"
+    },
+    {
+      "check": "mode switched: warmup-r2-01-C",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: warmup-r2-02-B",
+      "ok": true,
+      "detail": "requested NONE, got NONE"
+    },
+    {
+      "check": "mode switched: 01-C-moderate-settle",
+      "ok": true,
+      "detail": "requested EVERYWHERE, got EVERYWHERE"
+    },
+    {
+      "check": "mode switched: 02-B-moderate-settle",
+      "ok": true,
+      "detail": "requested NONE, got NONE"
+    },
+    {
+      "check": "harness version matches the source tree",
+      "ok": true,
+      "detail": "loaded 0.2.0, source 0.2.0"
+    },
+    {
+      "check": "mods/ held exactly the jars the launcher copied (SHA-256, read in game)",
+      "ok": true,
+      "detail": "in game: ['particlefilter-neoforge-1.2.0+1.21.1.jar', 'sodium-extra-neoforge-0.9.5+mc1.21.1.jar', 'sodium-neoforge-0.8.13+mc1.21.1.jar']"
+    },
+    {
+      "check": "loaded Particle Filter version matches the jar",
+      "ok": true,
+      "detail": "loaded 1.2.0, jar 1.2.0"
+    },
+    {
+      "check": "sodium loaded only when the mod set includes it",
+      "ok": true,
+      "detail": "loaded=True, modset=sodium"
+    },
+    {
+      "check": "sodium_extra loaded only when the mod set includes it",
+      "ok": true,
+      "detail": "loaded=True, modset=sodium"
+    },
+    {
+      "check": "GPU renderer recorded",
+      "ok": true,
+      "detail": "NVIDIA GeForce RTX 5070 Ti Laptop GPU/PCIe/SSE2"
+    },
+    {
+      "check": "Sodium Extra kept the target entry the launcher wrote",
+      "ok": true,
+      "detail": "pfbench:target = True"
+    },
+    {
+      "check": "ticks.csv has alive_control",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has jit_time_ms",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has classes_loaded",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "ticks.csv has server_saves",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "JIT time is logged and never decreases",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "every settle after a switch is >= 43 ticks (longest particle life + 2)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "check": "warmup ran every measured configuration",
+      "ok": true,
+      "detail": "measured ['B', 'C'], warmed ['B', 'C']"
+    },
+    {
+      "check": "ticks logged: load-settle",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "ticks logged: warmup-r1-01-C",
+      "ok": true,
+      "detail": "30 of 30"
+    },
+    {
+      "check": "ticks logged: warmup-r1-02-B",
+      "ok": true,
+      "detail": "30 of 30"
+    },
+    {
+      "check": "ticks logged: warmup-r2-01-C",
+      "ok": true,
+      "detail": "30 of 30"
+    },
+    {
+      "check": "ticks logged: warmup-r2-02-B",
+      "ok": true,
+      "detail": "30 of 30"
+    },
+    {
+      "check": "ticks logged: 01-C-moderate-settle",
+      "ok": true,
+      "detail": "80 of 80"
+    },
+    {
+      "check": "01-C-moderate-settle: target created == 0",
+      "ok": true,
+      "detail": "attempts 4000, created 0"
+    },
+    {
+      "check": "01-C-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2000, created 2000"
+    },
+    {
+      "check": "ticks logged: 01-C-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "01-C-moderate: target created == 0",
+      "ok": true,
+      "detail": "attempts 5000, created 0"
+    },
+    {
+      "check": "01-C-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "01-C-moderate: no target particle alive (no carry-over)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "01-C-moderate: control alive == 1025 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "01-C-moderate: translucent queue == control only (1025)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "ticks logged: 02-B-moderate-settle",
+      "ok": true,
+      "detail": "80 of 80"
+    },
+    {
+      "check": "02-B-moderate-settle: target created == attempts",
+      "ok": true,
+      "detail": "attempts 4000, created 4000"
+    },
+    {
+      "check": "02-B-moderate-settle: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2000, created 2000"
+    },
+    {
+      "check": "ticks logged: 02-B-moderate",
+      "ok": true,
+      "detail": "100 of 100"
+    },
+    {
+      "check": "02-B-moderate: target created == attempts",
+      "ok": true,
+      "detail": "attempts 5000, created 5000"
+    },
+    {
+      "check": "02-B-moderate: control created == attempts",
+      "ok": true,
+      "detail": "attempts 2500, created 2500"
+    },
+    {
+      "check": "02-B-moderate: target alive == 2050 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "02-B-moderate: control alive == 1025 every tick",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "02-B-moderate: translucent queue == control only (1025)",
+      "ok": true,
+      "detail": "100/100 ticks"
+    },
+    {
+      "check": "frames.csv parses with tools/frametimes.py",
+      "ok": true,
+      "detail": "1721 rows, 0 skipped, format generic-ns"
+    },
+    {
+      "check": "every phase has frames",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

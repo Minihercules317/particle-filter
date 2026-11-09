@@ -25,6 +25,16 @@ public final class Counters {
     /** Nanoseconds spent in the last Minecraft.tick(). */
     public static long clientTickNs;
 
+    /**
+     * Control particles constructed minus control particles that expired (not reset per tick). Exact while the
+     * translucent queue is below its 16,384 limit; a particle the queue evicts never expires, so it would stay counted.
+     * Needed for the vanilla variant, whose end_rod particles share the control's translucent queue.
+     */
+    public static long controlLive;
+
+    /** Level saves on the integrated server (NeoForge LevelEvent.Save, server thread): autosaves show up here. */
+    public static final java.util.concurrent.atomic.AtomicLong serverSaves = new java.util.concurrent.atomic.AtomicLong();
+
     static void resetTick() {
         attemptsTarget = attemptsControl = 0;
         createdTarget = createdControl = createdBlock = createdVanilla = createdOther = createdUntyped = 0;

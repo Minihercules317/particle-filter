@@ -1,0 +1,159 @@
+{
+  "format": 1,
+  "kind": "run",
+  "run_id": "20261109T125615Z-C-B-typed-sodium-functional",
+  "label": "functional",
+  "output_dir": "~/Work/particle-filter/benchmarks/harness/run/runs/20261109T125615Z-C-B-typed-sodium-functional",
+  "scenario": {
+    "id": "S1-synthetic",
+    "version": 1,
+    "sha256": "a75f97514b77ee27acbf83aca656508402cdaa79c4c5d632aa1d4fe1183d2317"
+  },
+  "seed": 20261109,
+  "variant": "typed",
+  "camera": {
+    "position": [
+      0.5,
+      102.38,
+      0.5
+    ],
+    "yaw": 0.0,
+    "pitch": 0.0,
+    "hide_hud": true
+  },
+  "emitters": {
+    "plane_z": 14.0,
+    "x_range": [
+      -8.0,
+      8.0
+    ],
+    "y_range": [
+      96.0,
+      112.0
+    ],
+    "grid": 16
+  },
+  "target_lifetime_ticks": 40,
+  "control_lifetime_ticks": 40,
+  "control_attempts_per_tick": 25,
+  "control_z_offset": 1.0,
+  "min_settle_ticks": 43,
+  "frame_capacity": 68000,
+  "screenshots": true,
+  "phases": [
+    {
+      "name": "load-settle",
+      "role": "settle",
+      "ticks": 100,
+      "target_per_tick": 0,
+      "control": false,
+      "mode": "EVERYWHERE"
+    },
+    {
+      "name": "warmup-r1-01-C",
+      "role": "warmup",
+      "ticks": 30,
+      "target_per_tick": 50,
+      "control": true,
+      "mode": "EVERYWHERE",
+      "config": "C",
+      "level": "moderate"
+    },
+    {
+      "name": "warmup-r1-02-B",
+      "role": "warmup",
+      "ticks": 30,
+      "target_per_tick": 50,
+      "control": true,
+      "mode": "NONE",
+      "config": "B",
+      "level": "moderate"
+    },
+    {
+      "name": "warmup-r2-01-C",
+      "role": "warmup",
+      "ticks": 30,
+      "target_per_tick": 50,
+      "control": true,
+      "mode": "EVERYWHERE",
+      "config": "C",
+      "level": "moderate"
+    },
+    {
+      "name": "warmup-r2-02-B",
+      "role": "warmup",
+      "ticks": 30,
+      "target_per_tick": 50,
+      "control": true,
+      "mode": "NONE",
+      "config": "B",
+      "level": "moderate"
+    },
+    {
+      "name": "01-C-moderate-settle",
+      "role": "switch-settle",
+      "ticks": 80,
+      "mode": "EVERYWHERE",
+      "gc_at_start": true,
+      "target_per_tick": 50,
+      "control": true,
+      "config": "C",
+      "level": "moderate"
+    },
+    {
+      "name": "01-C-moderate",
+      "role": "measure",
+      "ticks": 100,
+      "screenshot": true,
+      "target_per_tick": 50,
+      "control": true,
+      "config": "C",
+      "level": "moderate"
+    },
+    {
+      "name": "02-B-moderate-settle",
+      "role": "switch-settle",
+      "ticks": 80,
+      "mode": "NONE",
+      "gc_at_start": true,
+      "target_per_tick": 50,
+      "control": true,
+      "config": "B",
+      "level": "moderate"
+    },
+    {
+      "name": "02-B-moderate",
+      "role": "measure",
+      "ticks": 100,
+      "screenshot": true,
+      "target_per_tick": 50,
+      "control": true,
+      "config": "B",
+      "level": "moderate"
+    }
+  ],
+  "provenance": {
+    "git_commit": "85cb36f253a7d543cde5a81d5b3639de80bf6a18",
+    "git_dirty_paths": [
+      "benchmarks/harness/gradle.properties",
+      "benchmarks/harness/pfbench.py",
+      "benchmarks/harness/src/main/java/pfbench/Counters.java",
+      "benchmarks/harness/src/main/java/pfbench/HarnessParticle.java",
+      "benchmarks/harness/src/main/java/pfbench/PfBench.java",
+      "benchmarks/harness/src/main/java/pfbench/Plan.java",
+      "benchmarks/harness/src/main/java/pfbench/Runner.java",
+      "benchmarks/harness/src/main/java/pfbench/TickLog.java",
+      "benchmarks/harness/src/main/java/pfbench/UntypedParticle.java",
+      "benchmarks/scenarios/S1-synthetic.toml",
+      "benchmarks/tools/compare.py",
+      "benchmarks/tools/frametimes.py",
+      "benchmarks/configs/sodium/",
+      "benchmarks/tools/ingest_harness.py",
+      "benchmarks/tools/tests/test_pipeline.py"
+    ],
+    "harness_version": "0.2.0",
+    "harness_sources_sha256": "ce4923cff3ff7afe6ec46a33e4102dbdc521b718bf56feb3ec71489bbe27b33f",
+    "launcher_sha256": "ddac4a2e024f7a0e05092814dbf1fcea6ab482ee78f399ce76c1918c6f91c93a",
+    "tools_sha256": "675eb8c653ef3eeef85f6b3215340005b48be452eb08e3c19085c306f035b0fd"
+  }
+}

@@ -12,12 +12,20 @@ computed; the report gives the mean difference, its percentage, and a 95% percen
 A difference is only called a speed-up or slow-down when the whole interval lies outside the equivalence
 margin; otherwise the result is "equivalent" (interval inside the margin) or "inconclusive".
 
-Runs whose summary is not usable, or whose workload counters differ from their block partner by more than
-the tolerance, are excluded and listed in the report. Nothing is dropped silently.
+Runs whose summary is not usable, whose workload counters differ from their block partner by more than
+the tolerance, or whose environment (run.json "environment": scenario, harness build, rendering mods and their
+configs, GPU, window, JVM arguments, launch shape...) differs from their partner's, are excluded and listed in the
+report. Nothing is dropped silently.
+
+Runs are compared within a stratum (run.json "stratum", e.g. load level / variant / mod set), never across.
+The report also shows how often each configuration ran in each position, so unbalanced orders are visible.
+
+Only runs labelled "performance" are compared. Functional (bring-up) runs are refused unless --allow-functional
+is given, which is for testing this pipeline; the report then says in its title that it is not a result.
 
 Usage:
   compare.py CAMPAIGN_DIR --reference B [--metric mean_frametime_ms ...] [--margin-pct 1.0]
-             [--workload-tolerance-pct 2.0] [--out report.md] [--csv runs.csv]
+             [--workload-tolerance-pct 2.0] [--out report.md] [--csv runs.csv] [--allow-functional]
 """
 from __future__ import annotations
 
@@ -27,7 +35,7 @@ import json
 import random
 import statistics
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 DEFAULT_METRICS = ("mean_frametime_ms", "p99_frametime_ms", "avg_fps", "low_1pct_fps")
@@ -37,6 +45,9 @@ LOWER_IS_BETTER = {"mean_frametime_ms", "median_frametime_ms", "p95_frametime_ms
 # Workload counters a run.json may carry (from a harness or manual notes). Paired runs must agree on the
 # *unfiltered* workload; see PLAN.md "Workload equivalence".
 WORKLOAD_KEYS = ("spawn_attempts_per_s", "control_particles_live_mean")
+# Environment keys that may legitimately differ between paired runs: none so far. Every other key of
+# run.json["environment"] must be equal (missing on both sides counts as equal).
+ENVIRONMENT_IGNORED: frozenset[str] = frozenset()
 BOOTSTRAP_RESAMPLES = 10_000
 BOOTSTRAP_SEED = 20261109
 
@@ -91,8 +102,70 @@ def _workload_mismatch(a: dict, b: dict, tolerance_pct: float) -> str | None:
     return None
 
 
+def _environment_mismatch(a: dict, b: dict) -> str | None:
+    ea, eb = a.get("environment") or {}, b.get("environment") or {}
+    diffs = [k for k in sorted(set(ea) | set(eb)) if k not in ENVIRONMENT_IGNORED and ea.get(k) != eb.get(k)]
+    if diffs:
+        return "; ".join(f"{k}: {ea.get(k)!r} vs {eb.get(k)!r}" for k in diffs[:3]) + (" ..." if len(diffs) > 3 else "")
+    return None
+
+
+def labels_of(runs: list[dict]) -> set[str]:
+    return {str(r["meta"].get("label", "unlabelled")) for r in runs}
+
+
+def check_labels(runs: list[dict], allow_functional: bool) -> str | None:
+    """None if the runs may be compared, else the reason they may not."""
+    labels = labels_of(runs)
+    if len(labels) > 1:
+        return f"runs with different labels can't be compared: {sorted(labels)}"
+    if labels != {"performance"} and not allow_functional:
+        return (f"runs are labelled {sorted(labels)}, not 'performance'. Functional runs are not performance data; "
+                "use --allow-functional only to test the pipeline")
+    return None
+
+
+def order_balance(runs: list[dict]) -> dict:
+    """stratum -> config -> {"position_in_launch": Counter, "launch_in_block": Counter}."""
+    out: dict = defaultdict(lambda: defaultdict(lambda: {"position_in_launch": Counter(), "launch_in_block": Counter()}))
+    for r in runs:
+        m = r["meta"]
+        cell = out[str(m.get("stratum", "all"))][m.get("config")]
+        if m.get("position_in_launch") is not None:
+            cell["position_in_launch"][int(m["position_in_launch"])] += 1
+        if m.get("launch_in_block") is not None:
+            cell["launch_in_block"][int(m["launch_in_block"])] += 1
+    return out
+
+
+def _unbalanced(counts: Counter) -> bool:
+    if not counts:
+        return False
+    full = [counts.get(k, 0) for k in range(1, max(counts) + 1)]
+    return max(full) - min(full) > 1
+
+
 def compare(runs: list[dict], reference: str, metrics: list[str], margin_pct: float,
             workload_tolerance_pct: float) -> dict:
+    """Compares within each stratum; returns {"strata": {name: report}} plus the excluded list."""
+    strata: dict[str, list[dict]] = defaultdict(list)
+    for r in runs:
+        strata[str(r["meta"].get("stratum", "all"))].append(r)
+    out = {"reference": reference, "margin_pct": margin_pct, "strata": {}, "excluded": []}
+    for name, members in sorted(strata.items()):
+        rep = compare_stratum(members, reference, metrics, margin_pct, workload_tolerance_pct)
+        out["strata"][name] = rep
+        out["excluded"] += [(f"[{name}] {what}", why) for what, why in rep["excluded"]]
+    out["configs"] = sorted({c for s in out["strata"].values() for c in s["configs"]})
+    # One stratum: keep the flat layout older callers use.
+    if len(out["strata"]) == 1:
+        only = next(iter(out["strata"].values()))
+        out["results"] = only["results"]
+    return out
+
+
+def compare_stratum(runs: list[dict], reference: str, metrics: list[str], margin_pct: float,
+                    workload_tolerance_pct: float) -> dict:
     excluded = []
     # block -> config -> list of usable runs (several windows of one config in one block are averaged)
     blocks: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
@@ -127,6 +200,10 @@ def compare(runs: list[dict], reference: str, metrics: list[str], margin_pct: fl
             if mismatch:
                 excluded.append((f"block {block_id} {config}", f"workload differs from {reference}: {mismatch}"))
                 continue
+            env = _environment_mismatch(ref_runs[0]["meta"], cfg_runs[0]["meta"])
+            if env:
+                excluded.append((f"block {block_id} {config}", f"environment differs from {reference}: {env}"))
+                continue
             pairs_used.append(block_id)
             for m in metrics:
                 ref_v = statistics.fmean(x["summary"]["metrics"][m] for x in ref_runs)
@@ -158,12 +235,37 @@ def compare(runs: list[dict], reference: str, metrics: list[str], margin_pct: fl
 
 def to_markdown(report: dict, runs: list[dict], campaign: Path) -> str:
     ref = report["reference"]
-    lines = [f"# Comparison: {campaign.name}", "",
-             f"Reference configuration: **{ref}**. Equivalence margin ±{report['margin_pct']:g}%. "
-             f"Intervals are 95% percentile-bootstrap intervals of the mean paired difference "
-             f"({BOOTSTRAP_RESAMPLES} resamples, seed {BOOTSTRAP_SEED}).", ""]
+    labels = labels_of(runs)
+    title = f"# Comparison: {campaign.name}"
+    lines = [title, ""]
+    if labels != {"performance"}:
+        lines[0] = f"# PIPELINE TEST, NOT A RESULT: {campaign.name}"
+        lines += [f"> These runs are labelled {', '.join(sorted(labels))}. They test the analysis pipeline and must "
+                  "not be quoted as performance results.", ""]
+    lines += [f"Reference configuration: **{ref}**. Equivalence margin ±{report['margin_pct']:g}%. "
+              f"Intervals are 95% percentile-bootstrap intervals of the mean paired difference "
+              f"({BOOTSTRAP_RESAMPLES} resamples, seed {BOOTSTRAP_SEED}). Runs are only compared within a stratum.", ""]
+    for stratum, srep in report["strata"].items():
+        lines += _stratum_markdown(stratum, srep, ref)
+    lines += ["## Order balance", "",
+              "How often each configuration ran in each position inside its launch, and as which launch of its block. "
+              "Counts that differ by more than one between positions are marked: an order effect could then favour "
+              "a configuration.", "",
+              "| Stratum | Config | Position in launch | Launch in block | Balanced |", "|---|---|---|---|---|"]
+    for stratum, by_config in sorted(order_balance(runs).items()):
+        for config, cell in sorted(by_config.items(), key=lambda kv: str(kv[0])):
+            pos, lib = cell["position_in_launch"], cell["launch_in_block"]
+            fmt = lambda c: ", ".join(f"{k}: {v}" for k, v in sorted(c.items())) or "n/a"  # noqa: E731
+            ok = "no" if _unbalanced(pos) or _unbalanced(lib) else "yes"
+            lines.append(f"| {stratum} | {config} | {fmt(pos)} | {fmt(lib)} | {ok} |")
+    lines.append("")
+    return "\n".join(lines) + "\n" + _runs_markdown(report, runs)
+
+
+def _stratum_markdown(stratum: str, report: dict, ref: str) -> list[str]:
+    lines = [f"## Stratum {stratum}", ""]
     for config, res in report["results"].items():
-        lines += [f"## {config} vs {ref}", "", f"Paired blocks: {', '.join(res['blocks']) or 'none'}", "",
+        lines += [f"### {config} vs {ref}", "", f"Paired blocks: {', '.join(res['blocks']) or 'none'}", "",
                   "| Metric | Pairs | Reference mean | Mean diff | Diff % | 95% CI (%) | Verdict |",
                   "|---|---|---|---|---|---|---|"]
         for m, r in res["metrics"].items():
@@ -171,17 +273,24 @@ def to_markdown(report: dict, runs: list[dict], campaign: Path) -> str:
             lines.append(f"| {m} | {r['pairs']} | {r['reference_mean']:.4g} | {r['mean_diff']:+.4g} | "
                          f"{r['mean_diff_pct']:+.2f} | [{lo:+.2f}, {hi:+.2f}] | {r['verdict']} |")
         lines.append("")
-    lines += ["## Every run", "", "| Run | Config | Block | Usable | Avg FPS | Mean ms | p99 ms | 1% low FPS |",
-              "|---|---|---|---|---|---|---|---|"]
+    return lines
+
+
+def _runs_markdown(report: dict, runs: list[dict]) -> str:
+    lines = ["## Every run", "",
+             "| Run | Stratum | Config | Block | Usable | Avg FPS | Mean ms | p99 ms | 1% low FPS | Warnings |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for r in runs:
         s = r["summary"]
+        stratum = r["meta"].get("stratum", "all")
         if s:
             m = s["metrics"]
-            lines.append(f"| {r['dir']} | {r['meta'].get('config')} | {r['meta'].get('block')} | {s['usable']} | "
+            warn = ", ".join(sorted({i["code"] for i in s.get("issues", []) if i["level"] in ("warning", "error")}))
+            lines.append(f"| {r['dir']} | {stratum} | {r['meta'].get('config')} | {r['meta'].get('block')} | {s['usable']} | "
                          f"{m['avg_fps']:.1f} | {m['mean_frametime_ms']:.3f} | {m['p99_frametime_ms']:.3f} | "
-                         f"{m['low_1pct_fps']:.1f} |")
+                         f"{m['low_1pct_fps']:.1f} | {warn} |")
         else:
-            lines.append(f"| {r['dir']} | {r['meta'].get('config')} | {r['meta'].get('block')} | no summary | | | | |")
+            lines.append(f"| {r['dir']} | {stratum} | {r['meta'].get('config')} | {r['meta'].get('block')} | no summary | | | | | |")
     lines += ["", "## Excluded", ""]
     lines += [f"- {what}: {why}" for what, why in report["excluded"]] or ["- none"]
     return "\n".join(lines) + "\n"
@@ -192,12 +301,13 @@ def write_runs_csv(runs: list[dict], path: Path) -> None:
             "low_1pct_fps", "low_0_1pct_fps", "frames", "duration_s"]
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["run", "config", "block", "order", "usable", *keys])
+        w.writerow(["run", "label", "stratum", "config", "block", "order", "usable", *keys])
         for r in runs:
             s = r["summary"]
             m = s["metrics"] if s else {}
-            w.writerow([r["dir"], r["meta"].get("config"), r["meta"].get("block"), r["meta"].get("order"),
-                        s["usable"] if s else "", *[m.get(k, "") for k in keys]])
+            w.writerow([r["dir"], r["meta"].get("label"), r["meta"].get("stratum", "all"), r["meta"].get("config"),
+                        r["meta"].get("block"), r["meta"].get("order"), s["usable"] if s else "",
+                        *[m.get(k, "") for k in keys]])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -209,12 +319,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workload-tolerance-pct", type=float, default=2.0)
     p.add_argument("--out", type=Path, help="write the Markdown report here")
     p.add_argument("--csv", type=Path, help="write one row per run here")
+    p.add_argument("--allow-functional", action="store_true",
+                   help="compare functional (bring-up) runs: for testing this pipeline only, never a result")
     args = p.parse_args(argv)
 
     runs = load_runs(args.campaign)
     if not runs:
         print(f"no runs under {args.campaign / 'runs'}", file=sys.stderr)
         return 1
+    refused = check_labels(runs, args.allow_functional)
+    if refused:
+        print(f"compare.py: {refused}", file=sys.stderr)
+        return 2
     report = compare(runs, args.reference, args.metric or list(DEFAULT_METRICS), args.margin_pct,
                      args.workload_tolerance_pct)
     md = to_markdown(report, runs, args.campaign)

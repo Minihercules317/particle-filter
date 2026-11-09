@@ -1,0 +1,38 @@
+{
+  "campaign": "functional-campaign-test",
+  "seed": 1,
+  "configs": [
+    "C",
+    "B"
+  ],
+  "levels": [
+    "moderate"
+  ],
+  "variant": "typed",
+  "modset": "vanilla",
+  "label": "functional",
+  "blocks": [
+    [
+      "B:moderate,C:moderate"
+    ],
+    [
+      "C:moderate,B:moderate"
+    ]
+  ],
+  "launches": [
+    {
+      "block": 1,
+      "launch_in_block": 1,
+      "sequence": "B:moderate,C:moderate",
+      "run_id": "functional-campaign-test-b01-l1-B_moderate-C_moderate",
+      "check_passed": true
+    },
+    {
+      "block": 2,
+      "launch_in_block": 1,
+      "sequence": "C:moderate,B:moderate",
+      "run_id": "functional-campaign-test-b02-l1-C_moderate-B_moderate",
+      "check_passed": true
+    }
+  ]
+}

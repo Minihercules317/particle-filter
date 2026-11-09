@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import com.mojang.blaze3d.platform.GlUtil;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -32,6 +33,8 @@ import net.minecraft.client.ParticleStatus;
 import net.neoforged.fml.ModList;
 
 import java.io.IOException;
+import java.lang.management.ClassLoadingMXBean;
+import java.lang.management.CompilationMXBean;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
@@ -69,6 +72,9 @@ public final class Runner {
     private final Path out;
     private final Minecraft mc = Minecraft.getInstance();
     private final List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
+    /** Total JIT compilation time: still rising during a measured window means warmup wasn't finished. */
+    private final CompilationMXBean jit = ManagementFactory.getCompilationMXBean();
+    private final ClassLoadingMXBean classes = ManagementFactory.getClassLoadingMXBean();
 
     private State state = State.WAIT_WORLD;
     private boolean templateRequested;
@@ -194,6 +200,10 @@ public final class Runner {
         phaseTick++;
     }
 
+    private boolean functional() {
+        return "functional".equals(plan.label);
+    }
+
     private boolean worldReady() {
         return mc.level != null && mc.player != null && mc.screen == null && mc.getSingleplayerServer() != null;
     }
@@ -214,6 +224,12 @@ public final class Runner {
             setupInfo.addProperty("particlefilter_version", pf.version);
             setupInfo.addProperty("particlefilter_mode_at_load", pf.mode());
         }
+        // The GPU and driver the game renders with: part of the rendering environment every compared run must share.
+        JsonObject gl = new JsonObject();
+        gl.addProperty("renderer", GlUtil.getRenderer());
+        gl.addProperty("vendor", GlUtil.getVendor());
+        gl.addProperty("version", GlUtil.getOpenGLVersion());
+        setupInfo.add("gl", gl);
 
         Random random = new Random(plan.seed);
         Plan.Emitters e = plan.emitters;
@@ -305,7 +321,12 @@ public final class Runner {
         phaseTick = 0;
         targetAcc = 0;
         controlAcc = 0;
+        // Every phase walks the emitter grid from the same starting points, so phases with the same rate spawn the
+        // same positions in the same order, whatever came before them.
+        targetCursor = 0;
+        controlCursor = emitters.length / 2;
         Plan.Phase phase = plan.phases.get(index);
+        if (phase.gc_at_start) System.gc();   // in a settle phase: the pause and the previous phase's garbage stay out of the window
         if (phase.mode != null) {
             if (pf == null) {
                 notes.add("phase " + phase.name + " asks for mode " + phase.mode + " but Particle Filter isn't installed; ignored");
@@ -319,7 +340,7 @@ public final class Runner {
 
     private void endPhase(Plan.Phase phase) {
         phaseEnd[phaseIndex] = System.nanoTime();
-        if (plan.screenshots && phase.screenshot) {
+        if (functional() && plan.screenshots && phase.screenshot) {   // never in performance plans (file I/O)
             Screenshot.grab(mc.gameDirectory, "pfbench-" + plan.run_id + "-" + phaseIndex + "-" + phase.name + ".png",
                 mc.getMainRenderTarget(), message -> { });
         }
@@ -374,7 +395,9 @@ public final class Runner {
             alive.pfbench$alive(ParticleRenderType.TERRAIN_SHEET),
             alive.pfbench$aliveTotal(),
             Counters.clientTickNs, server == null ? -1 : server.getAverageTickTimeNanos(),
-            gcCount, gcTime, rt.totalMemory() - rt.freeMemory());
+            gcCount, gcTime, rt.totalMemory() - rt.freeMemory(),
+            Counters.controlLive, jit.isCompilationTimeMonitoringSupported() ? jit.getTotalCompilationTime() : -1,
+            classes.getTotalLoadedClassCount(), Counters.serverSaves.get());
         Counters.resetTick();
     }
 
@@ -513,6 +536,12 @@ public final class Runner {
         JsonArray mods = new JsonArray();
         ModList.get().getMods().forEach(m -> mods.add(m.getModId() + " " + m.getVersion()));
         j.add("mods", mods);
+        j.add("mods_folder", modsFolder());
+        j.add("mod_files", loadedModFiles());
+        JsonArray jvm = new JsonArray();
+        ManagementFactory.getRuntimeMXBean().getInputArguments().forEach(jvm::add);
+        j.add("jvm_args", jvm);
+        j.add("provenance", plan.provenance);
 
         j.addProperty("seed", plan.seed);
         j.addProperty("variant", plan.variant);
@@ -544,6 +573,48 @@ public final class Runner {
         j.add("notes", n);
         Gson gson = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
         Files.writeString(out.resolve("harness.json"), gson.toJson(j));
+    }
+
+    /**
+     * Every jar in the run's mods/ folder with its SHA-256, computed after the phases (no I/O while they run). The
+     * launcher compares these with the jars it copied. Jars can hold other mods (jar-in-jar: Sodium nests its mod and
+     * four Fabric API modules), so the loaded mod files are listed separately by {@link #loadedModFiles()}.
+     */
+    private JsonArray modsFolder() {
+        JsonArray files = new JsonArray();
+        Path modsDir = mc.gameDirectory.toPath().resolve("mods");
+        if (!Files.isDirectory(modsDir)) return files;
+        try (var stream = Files.list(modsDir)) {
+            stream.filter(Files::isRegularFile).sorted().forEach(file -> {
+                JsonObject f = new JsonObject();
+                f.addProperty("file", file.getFileName().toString());
+                try {
+                    f.addProperty("sha256", sha256(Files.readAllBytes(file)));
+                } catch (Exception e) {
+                    f.addProperty("sha256_error", e.toString());
+                }
+                files.add(f);
+            });
+        } catch (IOException e) {
+            notes.add("couldn't list mods/: " + e);
+        }
+        return files;
+    }
+
+    /** Every mod file NeoForge loaded (including nested jar-in-jar files and the game itself), with its mods. */
+    private JsonArray loadedModFiles() {
+        JsonArray files = new JsonArray();
+        ModList.get().getModFiles().forEach(info -> {
+            JsonObject f = new JsonObject();
+            Path file = info.getFile().getFilePath();
+            f.addProperty("file", file.getFileName() == null ? file.toString() : file.getFileName().toString());
+            f.addProperty("nested", file.getFileSystem() != java.nio.file.FileSystems.getDefault());
+            JsonArray ids = new JsonArray();
+            info.getMods().forEach(m -> ids.add(m.getModId() + " " + m.getVersion()));
+            f.add("mods", ids);
+            files.add(f);
+        });
+        return files;
     }
 
     private JsonObject windowInfo() {

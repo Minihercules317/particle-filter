@@ -12,6 +12,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
@@ -42,6 +43,8 @@ public final class PfBench {
         Runner runner = Runner.fromSystemProperty();
         if (runner != null) {
             NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre event) -> runner.clientTickStart());
+            // Integrated-server saves (autosave every ~5 minutes) cost disk I/O; logged so analysis can flag windows with one.
+            NeoForge.EVENT_BUS.addListener((LevelEvent.Save event) -> Counters.serverSaves.incrementAndGet());
             LOGGER.info("pfbench: plan {} loaded ({})", runner.plan.run_id, runner.plan.kind);
         } else {
             LOGGER.info("pfbench: no plan (system property pfbench.plan); idle");
@@ -52,10 +55,10 @@ public final class PfBench {
         event.registerSpriteSet(TARGET.get(), sprites -> {
             targetSprites = sprites;
             return (type, level, x, y, z, xs, ys, zs) -> new HarnessParticle(level, x, y, z, sprites.get(0, 1),
-                ParticleRenderType.PARTICLE_SHEET_OPAQUE, Runner.targetLifetime, HarnessParticle.TARGET_COLOR);
+                ParticleRenderType.PARTICLE_SHEET_OPAQUE, Runner.targetLifetime, HarnessParticle.TARGET_COLOR, false);
         });
         event.registerSpriteSet(CONTROL.get(), sprites ->
             (type, level, x, y, z, xs, ys, zs) -> new HarnessParticle(level, x, y, z, sprites.get(0, 1),
-                ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT, Runner.controlLifetime, HarnessParticle.CONTROL_COLOR));
+                ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT, Runner.controlLifetime, HarnessParticle.CONTROL_COLOR, true));
     }
 }
