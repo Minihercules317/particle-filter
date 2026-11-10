@@ -7,13 +7,10 @@ import particlefilter.config.Zone;
 import java.util.Collection;
 
 /**
- * Sizes zones to fit particles. Particles are filtered by where they spawn, so a box around the spawn points (plus a
- * margin for points a short scan missed) hides them.
+ * Sizes zones to fit particles. Particles are filtered by where they spawn, so the smallest block-aligned box holding
+ * every recorded spawn point hides them all; a zone is never made bigger than that.
  */
 public final class ZoneFit {
-
-    /** Blocks added on every side, since a short scan may miss spawn points at the edges. */
-    public static final int MARGIN = 1;
 
     /** A block box: blocks [minX, minX + width) and so on. [capped] is true if a side was cut to {@link Zone#MAX_SIZE}. */
     public record Box(int minX, int minY, int minZ, int width, int height, int length, boolean capped) {
@@ -41,14 +38,18 @@ public final class ZoneFit {
 
     private ZoneFit() {}
 
-    /** Smallest box holding [target] (if not null) and every spawn box, plus [MARGIN], each side at most 256 blocks. */
-    public static Box fit(BlockPos target, Collection<AABB> spawns) {
+    /**
+     * Smallest box holding every spawn box, each side at most 256 blocks. A point on a block's lower face belongs to
+     * that block (zones hold [min, max)), so a point at x = 5.0 needs block 5 only. With no spawn boxes it is just
+     * the [fallback] block, or null without one.
+     */
+    public static Box fit(BlockPos fallback, Collection<AABB> spawns) {
         int x0 = Integer.MAX_VALUE, y0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE;
         int x1 = Integer.MIN_VALUE, y1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
-        if (target != null) {
-            x0 = x1 = target.getX();
-            y0 = y1 = target.getY();
-            z0 = z1 = target.getZ();
+        if (spawns.isEmpty() && fallback != null) {
+            x0 = x1 = fallback.getX();
+            y0 = y1 = fallback.getY();
+            z0 = z1 = fallback.getZ();
         }
         for (AABB s : spawns) {
             x0 = Math.min(x0, floor(s.minX));
@@ -59,9 +60,9 @@ public final class ZoneFit {
             z1 = Math.max(z1, floor(s.maxZ));
         }
         if (x0 == Integer.MAX_VALUE) return null;
-        int[] x = axis(x0 - MARGIN, x1 + MARGIN);
-        int[] y = axis(y0 - MARGIN, y1 + MARGIN);
-        int[] z = axis(z0 - MARGIN, z1 + MARGIN);
+        int[] x = axis(x0, x1);
+        int[] y = axis(y0, y1);
+        int[] z = axis(z0, z1);
         return new Box(x[0], y[0], z[0], x[1], y[1], z[1], x[2] + y[2] + z[2] > 0);
     }
 

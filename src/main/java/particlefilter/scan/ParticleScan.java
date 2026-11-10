@@ -20,8 +20,8 @@ import java.util.Optional;
  * most frequent first; typed particles are keyed by particle type id, particles created without a type by class name.
  * Particles that are already hidden are recorded too, so they can be shown again from the results.
  *
- * The "Here" column hides particles in one zone: an existing zone around the scanned block, or a new one sized to the
- * spawn points of the particles switched on there. See {@link DiagnosticScan} for the scan of everything around the
+ * The "Here" column hides particles in one zone: an existing zone at the scanned block, or a new one just big enough
+ * for the spawn points of the particles switched on there. See {@link DiagnosticScan} for the scan of everything around the
  * player.
  */
 public final class ParticleScan {
@@ -134,10 +134,15 @@ public final class ParticleScan {
 
     // ---------------------------------------------------------------- Here
 
-    /** Zones here containing the scanned block, smallest first. */
+    /**
+     * Zones here containing or touching the scanned block: those containing it first, then smallest first. Fitted
+     * zones only cover where particles spawned, which is often next to the block rather than in it.
+     */
     public static List<Zone> zonesAtTarget() {
         if (target == null) return List.of();
-        return PfConfig.zonesHere().stream().filter(z -> z.contains(target)).sorted(Comparator.comparingLong(Zone::volume)).toList();
+        AABB around = new AABB(target).inflate(1);
+        return PfConfig.zonesHere().stream().filter(z -> z.box().intersects(around))
+            .sorted(Comparator.comparing((Zone z) -> !z.contains(target)).thenComparingLong(Zone::volume)).toList();
     }
 
     /** The zone Here hides particles in, or null when switching one on will create a zone. */
@@ -207,13 +212,13 @@ public final class ParticleScan {
         DiagnosticScan.stopFitting(zone);
     }
 
-    /** The box a new zone would start from: the scanned block and the margin around it. */
+    /** Marks the scanned block, where a new zone is made, before any particle is switched on. */
     public static AABB newZonePreview() {
         if (target == null) return null;
         return fittedBox(List.of()).aabb();
     }
 
-    /** Box holding the scanned block and the spawn points of [particles], plus the margin. */
+    /** Smallest box holding the spawn points of [particles]; just the scanned block if none were recorded. */
     private static ZoneFit.Box fittedBox(Collection<String> particles) {
         List<AABB> spawns = new ArrayList<>();
         for (String particle : particles) {
