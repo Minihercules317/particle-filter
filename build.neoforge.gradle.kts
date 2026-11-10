@@ -52,6 +52,10 @@ tasks {
     // Unit tests run as part of `build`, once per version; a failing test fails the build.
     test {
         useJUnitPlatform()
+        // Minecraft's logging setup writes logs/ into the working directory, so keep that inside build/.
+        val testRunDir = layout.buildDirectory.dir("test-run").get().asFile
+        workingDir = testRunDir
+        doFirst { testRunDir.mkdirs() }
     }
 
     processResources {
