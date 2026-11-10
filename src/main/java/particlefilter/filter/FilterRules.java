@@ -8,7 +8,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import particlefilter.ParticleFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import particlefilter.config.FilterMode;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
@@ -25,14 +26,17 @@ import java.util.Set;
  */
 public final class FilterRules {
 
-    private record ZoneBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, Set<String> particles) {
+    /** Same name as {@code ParticleFilter.LOGGER}; kept here so compiling runs without the game (unit tests). */
+    private static final Logger LOGGER = LoggerFactory.getLogger("Particle Filter");
+
+    record ZoneBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, Set<String> particles) {
         boolean contains(double x, double y, double z) {
             return x >= minX && x < maxX && y >= minY && y < maxY && z >= minZ && z < maxZ;
         }
     }
 
-    private record Snapshot(Set<String> particles, List<ZoneBox> zones,
-                            Set<ResourceLocation> blockIds, Set<String> blockNamespaces, List<TagKey<Block>> blockTags) {
+    record Snapshot(Set<String> particles, List<ZoneBox> zones,
+                    Set<ResourceLocation> blockIds, Set<String> blockNamespaces, List<TagKey<Block>> blockTags) {
         static final Snapshot EMPTY = new Snapshot(Set.of(), List.of(), Set.of(), Set.of(), List.of());
 
         boolean hasParticleRules() {
@@ -41,6 +45,14 @@ public final class FilterRules {
 
         boolean hasBlockRules() {
             return !blockIds.isEmpty() || !blockNamespaces.isEmpty() || !blockTags.isEmpty();
+        }
+
+        boolean hidesParticle(String particle, double x, double y, double z) {
+            if (particles.contains(particle)) return true;
+            for (ZoneBox zone : zones) {
+                if (zone.contains(x, y, z) && zone.particles.contains(particle)) return true;
+            }
+            return false;
         }
     }
 
@@ -94,9 +106,17 @@ public final class FilterRules {
     /** Recompiles the rules, leaving out the kinds that the current {@link FilterMode} switches off. */
     public static void rebuild() {
         FilterMode mode = showAll ? FilterMode.NONE : PfConfig.mode();
+        snapshot = compile(mode, PfConfig.hiddenParticles(), PfConfig.hiddenBlocks(), mode.zones ? PfConfig.zonesHere() : List.of());
+    }
+
+    /**
+     * The rules [mode] keeps, from the switched-on entries: particles hidden everywhere, block entries, and the zones
+     * in the current world and dimension.
+     */
+    static Snapshot compile(FilterMode mode, List<String> hiddenParticles, List<String> hiddenBlocks, List<Zone> zonesHere) {
         List<ZoneBox> zones = new ArrayList<>();
         if (mode.zones) {
-            for (Zone zone : PfConfig.zonesHere()) {
+            for (Zone zone : zonesHere) {
                 if (zone.particles.isEmpty()) continue;
                 zones.add(new ZoneBox(zone.minX(), zone.minY(), zone.minZ(),
                     zone.minX() + zone.width, zone.minY() + zone.height, zone.minZ() + zone.length, Set.copyOf(zone.particles)));
@@ -105,22 +125,22 @@ public final class FilterRules {
         Set<ResourceLocation> ids = new HashSet<>();
         Set<String> namespaces = new HashSet<>();
         List<TagKey<Block>> tags = new ArrayList<>();
-        for (String raw : mode.global ? PfConfig.hiddenBlocks() : List.<String>of()) {
+        for (String raw : mode.global ? hiddenBlocks : List.<String>of()) {
             String entry = raw.trim();
             if (entry.startsWith("#")) {
                 ResourceLocation tag = ResourceLocation.tryParse(entry.substring(1));
                 if (tag != null) tags.add(TagKey.create(Registries.BLOCK, tag));
-                else ParticleFilter.LOGGER.warn("Ignoring invalid block tag: {}", entry);
+                else LOGGER.warn("Ignoring invalid block tag: {}", entry);
             } else if (entry.endsWith(":*")) {
                 namespaces.add(entry.substring(0, entry.length() - 2));
             } else {
                 ResourceLocation id = ResourceLocation.tryParse(entry);
                 if (id != null) ids.add(id);
-                else ParticleFilter.LOGGER.warn("Ignoring invalid block id: {}", entry);
+                else LOGGER.warn("Ignoring invalid block id: {}", entry);
             }
         }
-        Set<String> particles = mode.global ? Set.copyOf(PfConfig.hiddenParticles()) : Set.of();
-        snapshot = new Snapshot(particles, List.copyOf(zones), Set.copyOf(ids), Set.copyOf(namespaces), List.copyOf(tags));
+        Set<String> particles = mode.global ? Set.copyOf(hiddenParticles) : Set.of();
+        return new Snapshot(particles, List.copyOf(zones), Set.copyOf(ids), Set.copyOf(namespaces), List.copyOf(tags));
     }
 
     public static boolean hasParticleRules() {
@@ -129,12 +149,7 @@ public final class FilterRules {
 
     /** True if [particle] (type id or class name) is hidden everywhere, or in a zone containing the point. */
     public static boolean isParticleHidden(String particle, double x, double y, double z) {
-        Snapshot s = snapshot;
-        if (s.particles.contains(particle)) return true;
-        for (ZoneBox zone : s.zones) {
-            if (zone.contains(x, y, z) && zone.particles.contains(particle)) return true;
-        }
-        return false;
+        return snapshot.hidesParticle(particle, x, y, z);
     }
 
     /** True if this block's breaking, mining and block-dust particles are hidden. */
