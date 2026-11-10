@@ -10,8 +10,11 @@ import particlefilter.filter.FilterRules;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Persistent settings in config/particlefilter.json. Only used on the client thread; particle spawning reads the
@@ -77,17 +80,41 @@ public final class PfConfig {
 
     public static void load(Path path) {
         file = path;
-        if (Files.exists(file)) {
-            try {
-                Data loaded = parse(Files.readString(file));
-                if (loaded != null) data = loaded;
-            } catch (Exception e) {
-                LOGGER.error("Couldn't read {}; starting with an empty config", file, e);
-            }
-        }
+        data = read(file);
         assignColors(data.zones);
         save(); // writes defaults on first run and upgrades older formats
         FilterRules.rebuild();
+    }
+
+    /**
+     * The settings in [file], or the defaults if it is missing or empty. Saving replaces the file, so one that can't
+     * be read (a typo from editing it by hand, say) is first copied next to it as particlefilter.broken-<time>.json.
+     */
+    static Data read(Path file) {
+        if (!Files.exists(file)) return new Data();
+        try {
+            Data loaded = parse(Files.readString(file));
+            return loaded != null ? loaded : new Data();
+        } catch (Exception e) {
+            try {
+                Path copy = brokenCopyPath(file);
+                Files.copy(file, copy);
+                LOGGER.error("Couldn't read {}; saved it as {} and started with an empty config", file, copy.getFileName(), e);
+            } catch (IOException copyError) {
+                LOGGER.error("Couldn't read {} or save a copy of it; starting with an empty config", file, e);
+            }
+            return new Data();
+        }
+    }
+
+    /** A free name next to [file]: particlefilter.broken-20261110-123100.json, then -2, -3... in the same second. */
+    private static Path brokenCopyPath(Path file) {
+        String name = file.getFileName().toString();
+        String base = name.endsWith(".json") ? name.substring(0, name.length() - 5) : name;
+        String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT));
+        Path copy = file.resolveSibling(base + ".broken-" + stamp + ".json");
+        for (int n = 2; Files.exists(copy); n++) copy = file.resolveSibling(base + ".broken-" + stamp + "-" + n + ".json");
+        return copy;
     }
 
     /** The settings in [json], with defaults filled in and values put in range; null for an empty file. */
