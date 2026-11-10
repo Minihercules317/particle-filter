@@ -18,7 +18,11 @@ A client-side Minecraft mod, built from one source for NeoForge 1.21.1 (Java 21)
 - CurseForge upload: `scripts/publish-curseforge.sh [--dry-run]` (token in `~/.config/curseforge/token`). CI does it instead if the `CURSEFORGE_TOKEN` secret is set.
 
 ## Testing
-There are no unit tests; behaviour is checked in game. To check GUI or behaviour yourself, add a temporary dev self-test hook run via `./gradlew :<mc>-<loader>:runClient`: gate it on an env var, take screenshots with Minecraft's `Screenshot.grab`, and move the window to a hidden Hyprland special workspace. **Delete the hook before committing.** The owner tests releases in their ATM10 instance.
+- Unit tests (JUnit 5) are in `src/test/java/particlefilter/`, in the same packages as the code they test. `build` runs them once per version, so CI runs them on every push and pull request, and a failing test blocks a tagged release. Just the tests: `mise exec -- ./gradlew test` (one version: `:1.20.1-forge:test`); report in `versions/<mc>-<loader>/build/reports/tests/test/index.html`.
+- They run without the game. Minecraft's plain classes (`AABB`, `BlockPos`, `ResourceLocation`) work; anything needing the game started (registries, `Minecraft.getInstance()`, rendering, `ParticleFilter` and its keybinds) doesn't. Keep logic testable by passing it plain inputs (`PfConfig.parse`, `PfConfig.assignColors`, `FilterRules.compile`); code under test logs through its own `LoggerFactory.getLogger("Particle Filter")`, not `ParticleFilter.LOGGER`. On 1.20.1 even making a `TagKey` loads the registries, so such tests go inside `//? if >1.20.1 {`.
+- Covered: `ZoneFit`, `Zone`, `FilterMode` (and its en_us.json names), reading configs (old formats, colors, unreadable files) and compiling `FilterRules`. Not covered, so checked in game: the menu, scans, the mixin, and block tags on 1.20.1.
+- A bug fix starts with a test that fails without the fix. A behaviour change updates the tests describing it in the same commit; never weaken a test just to make it pass.
+- Everything else is checked in game. To check GUI or behaviour yourself, add a temporary dev self-test hook run via `./gradlew :<mc>-<loader>:runClient`: gate it on an env var, take screenshots with Minecraft's `Screenshot.grab`, and move the window to a hidden Hyprland special workspace. **Delete the hook before committing.** The owner tests releases in their ATM10 instance.
 - The owner's ATM10 instance (a CurseForge `java` process) may be running during dev runs; only ever stop the dev client you started.
 - For a refactor meant to change no pixels, screenshot the same deterministic setup (fixed zones, camera, GUI scale, mouse parked) in a build of the commit before and after, and compare the images pixel by pixel.
 
@@ -37,6 +41,7 @@ There are no unit tests; behaviour is checked in game. To check GUI or behaviour
   - `scan/`: `ParticleScan` (Scan page: around the crosshair), `DiagnosticScan` (Diagnostic page: everything within render distance), `SpawnRecorder` (spawn points), `ZoneFit` (sizes zones made by Here)
   - `render/ZoneRenderer`: zone outlines in the world
   - `gui/`: `ParticleFilterScreen` is the window shell (sidebar, header, tabs) and each page is a class in `gui/page/` (`Page`, `ResultsPage` shared by `ScanPage` and `DiagnosticPage`, `HiddenPage`, `ZonesPage`); `ZoneEditScreen` is the zone editor drawer, `GuideScreen` the help; `PfScreen` is their base with the shared helpers and constants; `Theme` holds colors and drawing helpers; `widget/*` the controls (`ScrollPanel` is the list)
+- `src/test/java/particlefilter/`: unit tests, one `<Class>Test` per class tested
 - `CHANGELOG.md`: one `## <version>` section per release (CI and the CurseForge script read it)
 - `docs/images/`: README/CurseForge gallery images; `docs/compare/`: the before/after slider served by GitHub Pages; `docs/index.html`: the homepage (GitHub Pages from main)
 - `~/Work/notes/curseforge-description.md` and `curseforge-gallery.md`: CurseForge page text and captions (outside the repo)
