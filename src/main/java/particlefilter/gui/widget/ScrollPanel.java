@@ -12,6 +12,7 @@ import particlefilter.gui.Theme;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntSupplier;
 
 /**
  * A smoothly scrolling column of rows. Each row paints itself and holds widgets placed relative to its corner.
@@ -25,21 +26,37 @@ public class ScrollPanel extends ContainerWidget {
     }
 
     public static final class Row {
-        private record Placed(AbstractWidget widget, int x, int y) {}
+        /** [y] is {@link #CENTERED} for widgets kept vertically centered as the row's height changes. */
+        private record Placed(AbstractWidget widget, int x, int y) {
+            int top(int rowHeight) {
+                return y == CENTERED ? (rowHeight - widget.getHeight()) / 2 : y;
+            }
+        }
 
-        private final int height;
+        private static final int CENTERED = Integer.MIN_VALUE;
+
+        private final IntSupplier height;
         private final Painter painter;
         private final List<Placed> placed = new ArrayList<>();
         private Component tooltip;
 
         public Row(int height, Painter painter) {
+            this(() -> height, painter);
+        }
+
+        /** A row whose height is read every frame, for text that wraps differently as it changes. */
+        public Row(IntSupplier height, Painter painter) {
             this.height = height;
             this.painter = painter;
         }
 
+        public int height() {
+            return height.getAsInt();
+        }
+
         /** Adds [widget] [x] pixels from the row's left edge, vertically centered. */
         public Row add(AbstractWidget widget, int x) {
-            return add(widget, x, (height - widget.getHeight()) / 2);
+            return add(widget, x, CENTERED);
         }
 
         public Row add(AbstractWidget widget, int x, int y) {
@@ -91,6 +108,13 @@ public class ScrollPanel extends ContainerWidget {
         setScrollAmount(scroll);
     }
 
+    /** Moves the top edge to [y] and sets the height, e.g. when wrapped text above the panel gains a line. */
+    public void setBounds(int y, int height) {
+        setY(y);
+        this.height = height;
+        setScrollAmount(targetScroll);
+    }
+
     public boolean isEmpty() {
         return rows.isEmpty();
     }
@@ -106,7 +130,7 @@ public class ScrollPanel extends ContainerWidget {
 
     private int contentHeight() {
         int total = 0;
-        for (Row row : rows) total += row.height + gap;
+        for (Row row : rows) total += row.height() + gap;
         return Math.max(0, total - gap);
     }
 
@@ -122,8 +146,9 @@ public class ScrollPanel extends ContainerWidget {
     private void layout() {
         int top = getY() - (int) Math.round(scroll);
         for (Row row : rows) {
-            for (Row.Placed p : row.placed) p.widget.setPosition(getX() + p.x, top + p.y);
-            top += row.height + gap;
+            int h = row.height();
+            for (Row.Placed p : row.placed) p.widget.setPosition(getX() + p.x, top + p.top(h));
+            top += h + gap;
         }
     }
 
@@ -143,16 +168,17 @@ public class ScrollPanel extends ContainerWidget {
         g.enableScissor(getX(), getY(), getX() + getWidth(), getY() + getHeight());
         int top = getY() - (int) Math.round(scroll);
         for (Row row : rows) {
-            if (top + row.height >= getY() && top < getY() + getHeight()) {
-                boolean hovered = mouseInside && mouseX < getX() + contentWidth() && mouseY >= top && mouseY < top + row.height;
+            int h = row.height();
+            if (top + h >= getY() && top < getY() + getHeight()) {
+                boolean hovered = mouseInside && mouseX < getX() + contentWidth() && mouseY >= top && mouseY < top + h;
                 if (hovered) hoveredRow = row;
-                row.painter.paint(g, getX(), top, contentWidth(), row.height, hovered);
+                row.painter.paint(g, getX(), top, contentWidth(), h, hovered);
                 for (Row.Placed p : row.placed) {
                     p.widget.render(g, mouseX, mouseY, partialTick);
                     if (p.widget.isHovered()) overWidget = true;
                 }
             }
-            top += row.height + gap;
+            top += h + gap;
         }
         g.disableScissor();
         renderScrollbar(g, mouseX, mouseY);
@@ -247,11 +273,11 @@ public class ScrollPanel extends ContainerWidget {
             for (Row.Placed p : row.placed) {
                 if (p.widget != widget) continue;
                 if (top < targetScroll) targetScroll = top;
-                else if (top + row.height > targetScroll + getHeight()) targetScroll = top + row.height - getHeight();
+                else if (top + row.height() > targetScroll + getHeight()) targetScroll = top + row.height() - getHeight();
                 targetScroll = clampScroll(targetScroll);
                 return;
             }
-            top += row.height + gap;
+            top += row.height() + gap;
         }
     }
 

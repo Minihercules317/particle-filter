@@ -4,6 +4,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import particlefilter.ParticleFilter;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
@@ -11,7 +12,6 @@ import particlefilter.gui.widget.FlatButton;
 import particlefilter.gui.widget.FlatButton.Style;
 import particlefilter.gui.widget.ScrollPanel.Row;
 import particlefilter.gui.widget.TextField;
-import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
 import particlefilter.scan.ParticleScan;
 
@@ -37,6 +37,8 @@ public class ZoneEditScreen extends PfScreen {
     private boolean confirmingDelete;
     private int dx, dw;
     private int titleX;
+    /** Lines the zone's name takes at the top; the list below moves down when it wraps further while typing. */
+    private int titleLines;
 
     public ZoneEditScreen(Screen parent, Zone zone) {
         super(Component.translatable("particlefilter.zone.title"), parent);
@@ -55,7 +57,8 @@ public class ZoneEditScreen extends PfScreen {
         FlatButton back = backButton(dx + 10, 9);
         titleX = back.getX() + back.getWidth() + 8;
 
-        addPanel(dx + 10, 34, dw - 14, height - 34 - 38, 2);
+        titleLines = titleLines();
+        addPanel(dx + 10, panelTop(), dw - 14, height - panelTop() - 38, 2);
         int w = panel.contentWidth();
         List<Row> rows = new ArrayList<>();
 
@@ -73,21 +76,39 @@ public class ZoneEditScreen extends PfScreen {
         rows.add(fieldRow("particlefilter.zone.center_x", null, zone.x, -COORD_LIMIT, COORD_LIMIT, v -> zone.x = v));
         rows.add(fieldRow("particlefilter.zone.bottom_y", null, zone.y, -COORD_LIMIT, COORD_LIMIT, v -> zone.y = v));
         rows.add(fieldRow("particlefilter.zone.center_z", null, zone.z, -COORD_LIMIT, COORD_LIMIT, v -> zone.z = v));
+        // Side by side when both labels fit, otherwise one above the other at full width.
+        Component onMe = Component.translatable("particlefilter.zone.center_on_me");
+        Component onTarget = Component.translatable("particlefilter.zone.center_on_crosshair");
         int half = (w - 4) / 2;
-        Row moveRow = new Row(24, (g, x, y, rw, h, hovered) -> {});
-        moveRow.add(new FlatButton(Style.SECONDARY, Component.translatable("particlefilter.zone.center_on_me"), 0, 0, half, 18, () -> {
+        boolean stacked = Math.max(font.width(onMe), font.width(onTarget)) + 6 > half;
+        int buttonWidth = stacked ? w : half;
+        FlatButton meButton = new FlatButton(Style.SECONDARY, onMe, 0, 0, buttonWidth, 18, () -> {
             if (minecraft.player == null) return;
             BlockPos feet = minecraft.player.blockPosition();
             moveTo(feet.getX(), feet.getY(), feet.getZ());
-        }).tooltip(Component.translatable("particlefilter.zone.center_on_me.tooltip")), 0);
-        moveRow.add(active(new FlatButton(Style.SECONDARY, Component.translatable("particlefilter.zone.center_on_crosshair"), 0, 0, half, 18,
+        }).tooltip(Component.translatable("particlefilter.zone.center_on_me.tooltip"));
+        FlatButton targetButton = active(new FlatButton(Style.SECONDARY, onTarget, 0, 0, buttonWidth, 18,
             () -> ParticleFilter.targetedBlock().ifPresent(pos -> moveTo(pos.getX(), pos.getY() - zone.height / 2, pos.getZ())))
-            .tooltip(Component.translatable("particlefilter.zone.center_on_crosshair.tooltip")), ParticleFilter.targetedBlock().isPresent()), w - half);
-        rows.add(moveRow);
+            .tooltip(Component.translatable("particlefilter.zone.center_on_crosshair.tooltip")), ParticleFilter.targetedBlock().isPresent());
+        if (stacked) {
+            rows.add(new Row(22, (g, x, y, rw, h, hovered) -> {}).add(meButton, 0, 3));
+            rows.add(new Row(21, (g, x, y, rw, h, hovered) -> {}).add(targetButton, 0, 1));
+        } else {
+            rows.add(new Row(24, (g, x, y, rw, h, hovered) -> {}).add(meButton, 0).add(targetButton, w - half));
+        }
 
-        // Read each frame so they follow the fields below while typing.
-        rows.add(new Row(16, (g, x, y, rw, h, hovered) -> {
-            Theme.text(g, font, Theme.caps("particlefilter.zone.size", zone.sizeText()), x + 2, y + 6, Theme.TEXT_FAINT);
+        // Read each frame so they follow the fields below while typing. The volume goes on the right, or below the
+        // size when they don't fit on one line.
+        rows.add(new Row(() -> {
+            List<FormattedCharSequence> lines = sizeLines(w);
+            return 6 + textHeight(lines == null ? 1 : lines.size()) + 2;
+        }, (g, x, y, rw, h, hovered) -> {
+            List<FormattedCharSequence> lines = sizeLines(rw);
+            if (lines != null) {
+                drawLines(g, lines, x + 2, y + 6, Theme.TEXT_DIM);
+                return;
+            }
+            Theme.text(g, font, sizeLabel(), x + 2, y + 6, Theme.TEXT_FAINT);
             String volume = volumeText(zone);
             Theme.text(g, font, volume, x + rw - 2 - font.width(volume), y + 6, Theme.TEXT_DIM);
         }));
@@ -101,24 +122,10 @@ public class ZoneEditScreen extends PfScreen {
         }
         Set<String> listed = new LinkedHashSet<>(zone.particles);
         listed.addAll(zone.disabledParticles);
-        int switchX = w - 44 - 2 - 8 - Toggle.WIDTH;
         for (String particle : listed) {
-            String shown = Theme.fit(font, ParticleScan.displayName(particle), switchX - 19 - 8);
-            int color = particle.contains(":") ? Theme.TYPED : Theme.UNTYPED;
-            Row row = new Row(20, (g, x, y, rw, h, hovered) -> {
-                boolean on = zone.particles.contains(particle);
-                Theme.rect(g, x, y, rw, h, 3, hovered ? Theme.CARD_HOVER : Theme.CARD);
-                Theme.dot(g, x + 8, y + (h - 5) / 2, 5, on ? color : Theme.fade(color, 0.35f));
-                Theme.text(g, font, shown, x + 19, y + (h - 8) / 2, on ? Theme.TEXT : Theme.TEXT_FAINT);
-            });
-            if (!particle.equals(ParticleScan.displayName(particle))) row.tooltip(Component.literal(particle));
-            row.add(new Toggle(0, 0, zone.particles.contains(particle), Component.literal(shown), on -> PfConfig.setZoneEntryOn(zone, particle, on))
-                .tooltip(Component.translatable("particlefilter.entry.switch.tooltip")), switchX);
-            row.add(rowButton(Style.GHOST, Component.translatable("particlefilter.delete"), 44, () -> {
-                PfConfig.setHiddenInZone(zone, particle, false);
-                refreshNextTick();
-            }).tooltip(Component.translatable("particlefilter.entry.delete.tooltip")), w - 46);
-            rows.add(row);
+            rows.add(entryRow(ParticleScan.displayName(particle), particle, particle.contains(":") ? Theme.TYPED : Theme.UNTYPED, false,
+                () -> zone.particles.contains(particle), on -> PfConfig.setZoneEntryOn(zone, particle, on),
+                () -> PfConfig.setHiddenInZone(zone, particle, false), null));
         }
         setRows(rows);
 
@@ -136,8 +143,39 @@ public class ZoneEditScreen extends PfScreen {
         button(Style.PRIMARY, Component.translatable("gui.done"), dx + dw - 10 - 72, footerY, 72, 20, this::onClose);
     }
 
+    /** Top of the list, below the zone's name. */
+    private int panelTop() {
+        return 34 + (titleLines - 1) * LINE;
+    }
+
+    private int titleWidth() {
+        return width - 10 - titleX - 10;
+    }
+
+    private int titleLines() {
+        return wrap(zone.name, titleWidth()).size();
+    }
+
+    private String sizeLabel() {
+        return Theme.caps("particlefilter.zone.size", zone.sizeText());
+    }
+
+    /**
+     * The size and volume shown above the size fields: null when both fit on one line in [width] px, otherwise the
+     * size and then the volume, each wrapped onto lines of their own.
+     */
+    private List<FormattedCharSequence> sizeLines(int width) {
+        String size = sizeLabel();
+        String volume = volumeText(zone);
+        int room = width - 4;
+        if (font.width(size) + 8 + font.width(volume) <= room) return null;
+        List<FormattedCharSequence> lines = new ArrayList<>(wrap(colored(size, Theme.TEXT_FAINT), room));
+        lines.addAll(wrap(colored(volume, Theme.TEXT_DIM), room));
+        return lines;
+    }
+
     /** "220 blocks affected". */
-    static String volumeText(Zone zone) {
+    public static String volumeText(Zone zone) {
         return Component.translatable(zone.volume() == 1 ? "particlefilter.zone.volume_one" : "particlefilter.zone.volume",
             Zone.formatCount(zone.volume())).getString();
     }
@@ -162,15 +200,16 @@ public class ZoneEditScreen extends PfScreen {
         int w = panel.contentWidth();
         Component label = Component.translatable(key);
         Component tooltip = Component.translatable(key + ".tooltip", Zone.MIN_SIZE, Zone.MAX_SIZE);
-        Row row = new Row(FIELD_ROW, (g, x, y, rw, h, hovered) -> {
-            int room = rw - SPINNER_WIDTH - 8;
-            String text = Theme.fit(font, label.getString(), room);
-            int textY = y + (h - 8) / 2;
-            Theme.text(g, font, text, x + 2, textY, Theme.TEXT_DIM);
-            if (hint != null) {
-                int hintX = x + 2 + font.width(text) + 5;
-                Theme.text(g, font, Theme.fit(font, hint.get(), x + 2 + room - hintX), hintX, textY, Theme.TEXT_FAINT);
-            }
+        // Label and hint wrap left of the spinner; the row grows to fit them.
+        int room = w - SPINNER_WIDTH - 8;
+        Supplier<List<FormattedCharSequence>> lines = () -> {
+            Component text = colored(label.getString(), Theme.TEXT_DIM);
+            if (hint != null) text = Component.empty().append(text).append(" ").append(colored(hint.get(), Theme.TEXT_FAINT));
+            return wrap(text, room);
+        };
+        Row row = new Row(() -> Math.max(FIELD_ROW, textHeight(lines.get().size()) + 14), (g, x, y, rw, h, hovered) -> {
+            List<FormattedCharSequence> shown = lines.get();
+            drawLines(g, shown, x + 2, y + (h - textHeight(shown.size())) / 2, Theme.TEXT_DIM);
         });
         row.tooltip(tooltip);
         spinner(row, w - SPINNER_WIDTH, value, min, max, tooltip, v -> {
@@ -205,6 +244,11 @@ public class ZoneEditScreen extends PfScreen {
         int y = 13;
         int color = Theme.zoneColor(zone);
         Theme.dot(g, titleX, y + 1, 6, color);
-        Theme.text(g, font, Theme.fit(font, zone.name, width - 10 - titleX - 10), titleX + 10, y, color);
+        List<FormattedCharSequence> name = wrap(zone.name, titleWidth());
+        drawLines(g, name, titleX + 10, y, color);
+        if (name.size() != titleLines) { // the name was edited onto more or fewer lines
+            titleLines = name.size();
+            panel.setBounds(panelTop(), height - panelTop() - 38);
+        }
     }
 }

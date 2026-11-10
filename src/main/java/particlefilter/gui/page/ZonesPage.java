@@ -1,0 +1,114 @@
+package particlefilter.gui.page;
+
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
+import particlefilter.config.PfConfig;
+import particlefilter.config.Zone;
+import particlefilter.gui.ParticleFilterScreen;
+import particlefilter.gui.PfScreen.Piece;
+import particlefilter.gui.Theme;
+import particlefilter.gui.ZoneEditScreen;
+import particlefilter.gui.widget.FlatButton.Style;
+import particlefilter.gui.widget.ScrollPanel.Row;
+import particlefilter.gui.widget.Toggle;
+import particlefilter.render.ZoneRenderer;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static particlefilter.gui.PfScreen.LINE;
+import static particlefilter.gui.PfScreen.textHeight;
+
+/** The zones in this world, to edit, delete or create. */
+public class ZonesPage extends Page {
+
+    /** Zone whose Delete button was pressed once and now waits for confirmation. */
+    private Zone confirmingDelete;
+
+    public ZonesPage(ParticleFilterScreen screen) {
+        super(screen);
+    }
+
+    @Override
+    public Component title() {
+        return Component.translatable("particlefilter.zones.title");
+    }
+
+    @Override
+    public Component subtitle() {
+        return Component.translatable("particlefilter.zones.subtitle");
+    }
+
+    @Override
+    public int actionsWidth() {
+        return 96;
+    }
+
+    @Override
+    public void shown() {
+        confirmingDelete = null;
+    }
+
+    @Override
+    public void init() {
+        int cx = screen.cx(), cw = screen.cw(), bodyTop = screen.bodyTop(), bodyBottom = screen.bodyBottom();
+        var minecraft = screen.minecraft();
+        screen.button(Style.PRIMARY, Component.translatable("particlefilter.zones.new"), screen.actionsRight() - 96, screen.wy() + 12, 96, 20, () -> {
+            if (minecraft.player == null) return;
+            Zone zone = PfConfig.createZone(minecraft.player.blockPosition().above(PfConfig.NEW_ZONE_DEPTH_BELOW));
+            if (zone != null) minecraft.setScreen(new ZoneEditScreen(screen, zone));
+        }).tooltip(Component.translatable("particlefilter.zones.new.tooltip"));
+
+        screen.addPanel(cx, bodyTop, cw, bodyBottom - bodyTop - 24, 3);
+        List<Row> rows = new ArrayList<>();
+        int w = screen.panel().contentWidth();
+        // Name and details wrap in the space left of the buttons; the buttons stay centered as the row grows.
+        int textWidth = w - 108 - 8 - 10;
+        for (Zone zone : PfConfig.zonesHere()) {
+            var name = screen.wrap(zone.name, textWidth);
+            var details = screen.wrapPieces(List.of(
+                new Piece(zone.sizeText(), Theme.TEXT_DIM),
+                new Piece(ZoneEditScreen.volumeText(zone), Theme.TEXT_DIM),
+                new Piece(zone.coordsText(), Theme.TEXT_DIM),
+                new Piece(Component.translatable("particlefilter.zones.details_hidden", zone.particles.size()).getString(), Theme.TEXT_DIM)),
+                Theme.TEXT_DIM, textWidth);
+            int detailsY = 6 + name.size() * LINE + 2;
+            int color = Theme.zoneColor(zone);
+            Row row = new Row(detailsY + textHeight(details.size()) + 6, (g, x, y, rw, h, hovered) -> {
+                Theme.rect(g, x, y, rw, h, 3, hovered ? Theme.CARD_HOVER : Theme.CARD);
+                Theme.rect(g, x, y + 5, 3, h - 10, 1, color);
+                screen.drawLines(g, name, x + 10, y + 6, Theme.TEXT);
+                screen.drawLines(g, details, x + 10, y + detailsY, Theme.TEXT_DIM);
+                if (hovered) ZoneRenderer.highlighted = zone;
+            });
+            row.tooltip(Component.translatable("particlefilter.zones.row.tooltip", zone.sizeText(), ZoneEditScreen.volumeText(zone),
+                zone.coordsText(), zone.particles.size()));
+            row.add(screen.rowButton(Style.SECONDARY, Component.translatable("particlefilter.edit"), 44,
+                () -> minecraft.setScreen(new ZoneEditScreen(screen, zone))), w - 108);
+            boolean confirming = zone == confirmingDelete;
+            row.add(screen.rowButton(Style.DANGER, Component.translatable(confirming ? "particlefilter.confirm" : "particlefilter.delete"), 56, () -> {
+                if (confirmingDelete == zone) {
+                    PfConfig.deleteZone(zone);
+                    confirmingDelete = null;
+                } else {
+                    confirmingDelete = zone;
+                }
+                screen.refreshNextTick();
+            }).selected(confirming), w - 60);
+            rows.add(row);
+        }
+        screen.setRows(rows);
+
+        screen.addRenderableWidget(Toggle.labelled(cx, bodyBottom - 13, ZoneRenderer.alwaysShow, Component.translatable("particlefilter.zones.always_show"),
+            on -> ZoneRenderer.alwaysShow = on)).tooltip(Component.translatable("particlefilter.zones.always_show.tooltip"));
+    }
+
+    @Override
+    public void render(GuiGraphics g, int mouseX, int mouseY) {
+        int cx = screen.cx(), cw = screen.cw();
+        if (screen.panel().isEmpty()) {
+            screen.drawEmptyState(g, Component.translatable("particlefilter.zones.empty"), Component.translatable("particlefilter.zones.empty.body"),
+                cx + cw / 2, (screen.bodyTop() + screen.bodyBottom()) / 2 - 20, cw);
+        }
+    }
+}

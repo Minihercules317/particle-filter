@@ -109,7 +109,7 @@
 
   "particlefilter.zones.title": "Zones",
   "particlefilter.zones.subtitle": "Areas where chosen particles are hidden",
-  "particlefilter.zones.details": "%s — %s · %s · %s hidden",
+  "particlefilter.zones.details_hidden": "%s hidden",
   "particlefilter.zones.row.tooltip": "Size %s — %s\nCenter %s\n%s hidden here",
   "particlefilter.zones.empty": "No zones in this world yet",
   "particlefilter.zones.empty.body": "Scan somewhere and switch on Here, or create a zone around you with New zone.",
