@@ -39,20 +39,22 @@ Screenshots are from All the Mods 10: To the Sky.
 
 ## Features
 
-- **Scan:** look at where the particles are coming from (or just stand near them) and press Scan. For 5 seconds the mod records every particle spawned within 6 blocks, then lists them by particle ID (e.g. `minecraft:flame`, `ae2:energy_fx`) with how many appeared. Particles that mods spawn without a type are listed by class name.
-- **Hide everywhere** or **hide here** with a switch per particle. "Here" adds it to the zone around the scanned spot, creating a 9×5×9 zone if there isn't one (previewed in the world before you commit).
-- **Zones** are boxes with a name, a position (center X/Z, bottom Y) and a size (width × height × length, 1-256 blocks). Edit them by typing or with −/+, or snap them to your position or crosshair; the outline updates live in the world. Zones belong to one server (or singleplayer world) and dimension.
+- **Scan:** look at where the particles are coming from (or just stand near them) and press Scan. For a few seconds (3 by default, adjustable from 1 to 60) the mod records every particle spawned within 6 blocks, then lists them by particle ID (e.g. `minecraft:flame`, `ae2:energy_fx`) with how many appeared. Particles that mods spawn without a type are listed by class name. Particles you've already hidden are listed too, so you can show them again from here.
+- **Diagnostic:** its own page (or `/particles diagnostic`) that records every particle around you within render distance, split into those **still appearing** and those **your rules already hide**, with how close each came. That shows what's left once your rules are in place. Its Here switch gives each particle its own zone fitted to where it spawned; a particle whose zone would sit entirely inside another's shares that zone. Minecraft usually doesn't create particles more than 32 blocks from the player, so farther ones won't appear.
+- **Hide everywhere** or **hide here** with a switch per particle. "Here" adds it to the zone around the scanned spot. If there isn't one, it creates a zone sized to fit where those particles appeared, plus a block of margin (previewed in the world before you commit). The line under the results says which zone Here uses, and a button switches to a new zone even inside an existing one.
+- **Zones** are boxes with a name, a position (center X/Z, bottom Y) and a size (Side 1 × height × Side 2, 1-256 blocks each, with the number of blocks affected). The editor labels each side with the way it runs from where you're facing (left–right or front–back). Edit them by typing or with −/+, or snap them to your position or crosshair; the outline updates live in the world. Each zone gets its own outline color, and touching or overlapping zones never share one. Zones belong to one server (or singleplayer world) and dimension.
 - **Block particles:** hide the breaking, mining and block-dust (sprinting/landing) particles of specific blocks, whole mods (`geore:*`), or block tags (`#c:ores`). A keybind toggles the block you're looking at.
-- **One list of everything hidden**, showing whether each entry is hidden everywhere, in which zone, or for block breaking, with one-click unhide.
+- **One list of everything hidden**, showing whether each entry is hidden everywhere, in which zone (with its coordinates), or for block breaking. Switch an entry off to see the particle again without losing it, or delete it.
 - **Active rules:** switch between applying all your rules, only the everywhere ones (including block particles), only zones, or none, from the menu or a keybind. Handy for comparing before and after; your rules are kept either way. There's also a **Hold to Show All Particles** keybind that pauses every rule only while held.
 - Filtering happens at the particle engine, so it works however a mod spawns its particles, and hidden particles are never created (a small CPU saving rather than drawing them invisibly).
 
 ## Usage
 
-Open the menu with **`/particles`**, the **Open Particle Filter** keybind, or the Config button in the Mods list. The sidebar has three pages and the Active rules switch:
+Open the menu with **`/particles`**, the **Open Particle Filter** keybind, or the Config button in the Mods list. It reopens on the page you last used until you leave the world or server. The **?** button at the top opens a short quick start guide. The sidebar has four pages and the Active rules switch:
 
 - **Scan:** look at where the unwanted particles are coming from, press **Scan**, and switch on **Everywhere** or **Here** next to each particle you want gone. The game keeps running while the menu is open, so the scan collects while you wait.
-- **Hidden:** everything hidden and where. Unhide anything, or type an ID to hide it directly (Enter hides it as a particle).
+- **Diagnostic:** press **Diagnose** to list every particle around you, split into still appearing and already hidden, and hide what's left everywhere or in fitted zones.
+- **Hidden:** everything hidden and where. Switch entries off and on, delete them (or a whole zone), or type an ID to hide it directly (Enter hides it as a particle).
 - **Zones:** zones in your current world. Hover a zone to highlight it, **Edit** to change its name, position, size and contents in a side panel (the world stays visible so you can watch the outline move), or create a new one around you.
 - **Active rules:** **All**, **Everywhere only**, **Zones only**, or **None (show all)**. Entries that are switched off show as *Paused* on the Hidden page.
 
@@ -60,8 +62,9 @@ Commands (client-side only; nothing is sent to the server):
 
 | Command | Does |
 |---|---|
-| `/particles` | Opens the menu on the last page used |
+| `/particles` | Opens the menu on the last page used in this world or server |
 | `/particles scan` | Starts a scan at your crosshair and opens the Scan page |
+| `/particles diagnostic` | Starts a diagnostic of everything around you and opens the Diagnostic page |
 | `/particles hidden` | Opens the Hidden page |
 | `/particles zones` | Opens the Zones page |
 
@@ -85,7 +88,7 @@ Settings are stored in `config/particlefilter.json`.
 **Minihercules317 (project owner): idea, design decisions, testing. No code.**
 
 - Found the problem in their own modpack (breaking particles from GeOre ores and particle spam from AE2 growth accelerators) and asked for a way to hide specific particles rather than all of them.
-- Asked for or decided on each feature: a menu reached by clicking the scan results, hiding particles only inside an area, seeing those areas in the world, outlines that update live while resizing, typing sizes instead of picking presets, naming and moving zones, one list showing everything hidden and where, one command for everything, zones measured by width, height and length instead of a radius, a way to cycle between which rules apply, and a modern menu redesign.
+- Asked for or decided on each feature: a menu reached by clicking the scan results, hiding particles only inside an area, seeing those areas in the world, outlines that update live while resizing, typing sizes instead of picking presets, naming and moving zones, one list showing everything hidden and where, one command for everything, zones measured by width, height and length instead of a radius, a way to cycle between which rules apply, and a modern menu redesign. For the usability update after 1.2.0: zones sized to fit the scanned particles, an adjustable scan duration, making a new zone from a scan inside an existing one, a diagnostic page that separates particles still appearing from hidden ones and makes one fitted zone per particle (shared when one lies inside another), switching hidden entries off instead of only deleting them, zone coordinates on the Hidden page, Side 1 and Side 2 with direction labels and a block count, distinct colors for overlapping zones, reopening the last menu during a session, clearer Back buttons, a quick start guide, and slimmer switches.
 - Decided to turn the work into a standalone mod instead of a fork, named it, asked for a cleaner and more intuitive GUI, and chose to publish it.
 - Tested every version in game and reported problems, with screenshots.
 - Drew the mod icon.
