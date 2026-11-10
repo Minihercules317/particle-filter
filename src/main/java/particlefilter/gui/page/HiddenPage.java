@@ -33,7 +33,7 @@ public class HiddenPage extends Page {
 
     /** Width of the Hide particle and Hide block buttons right of the id box. */
     private static final int ADD_BUTTON_WIDTH = 80;
-    /** Gap between the id box and each of those buttons. */
+    /** Gap between the id box and each of those buttons, and between a zone heading's Edit and Delete zone. */
     private static final int BUTTON_GAP = 4;
     /** Space between the id box and the list below it. */
     private static final int LIST_GAP = 8;
@@ -43,6 +43,14 @@ public class HiddenPage extends Page {
     private static final int ZONE_EDIT_WIDTH = 36;
     /** Width of a zone heading's Delete zone button. */
     private static final int ZONE_DELETE_WIDTH = 70;
+    /** Gap between Delete zone and the heading's right edge, as for the Delete buttons of entries. */
+    private static final int ZONE_BUTTONS_RIGHT = 2;
+    /** Smallest gap between a zone heading's text and its buttons. */
+    private static final int ZONE_TEXT_GAP = 8;
+    /** Gap between a heading's last line and its Paused pill. */
+    private static final int PILL_GAP = 6;
+    /** Width {@link Theme#pill} adds around its text. */
+    private static final int PILL_PADDING = 8;
 
     private TextField idInput;
     private String idInputText = "";
@@ -158,7 +166,7 @@ public class HiddenPage extends Page {
 
     /** Room the Paused pill takes after a heading's last line, counting the gap before it. */
     private int pausedRoom(String pausedText) {
-        return screen.font().width(pausedText) + 14;
+        return PILL_GAP + screen.font().width(pausedText) + PILL_PADDING;
     }
 
     /** Section label, with a Paused pill while Active rules leaves this kind of rule out. */
@@ -170,7 +178,7 @@ public class HiddenPage extends Page {
         int lastWidth = font.width(shown.get(shown.size() - 1));
         Row row = new Row(SECTION_TOP + textHeight(shown.size()) + 6, (g, x, y, w, h, hovered) -> {
             screen.drawLines(g, shown, x + 2, y + SECTION_TOP, Theme.TEXT_FAINT);
-            if (paused) Theme.pill(g, font, pausedText, x + 8 + lastWidth, y + lastY - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
+            if (paused) Theme.pill(g, font, pausedText, x + 2 + lastWidth + PILL_GAP, y + lastY - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
         });
         if (paused) row.tooltip(pausedTip);
         return row;
@@ -181,12 +189,14 @@ public class HiddenPage extends Page {
         var font = screen.font();
         int w = screen.panel().contentWidth();
         String pausedText = Theme.caps("particlefilter.paused");
-        // Width kept clear at the right for Edit and Delete zone, each with a gap.
-        int buttons = (here ? ZONE_EDIT_WIDTH + 4 : 0) + ZONE_DELETE_WIDTH + 4;
+        // Delete zone at the right, Edit left of it in this world; the text keeps clear of the leftmost button.
+        int deleteX = w - ZONE_BUTTONS_RIGHT - ZONE_DELETE_WIDTH;
+        int editX = deleteX - BUTTON_GAP - ZONE_EDIT_WIDTH;
+        int buttonsX = here ? editX : deleteX;
         int color = Theme.zoneColor(zone);
         int nameColor = here ? color : Theme.fade(color, 0.6f);
         // "ZONE · name · x, y, z", wrapped left of the buttons; the Paused pill follows the last line.
-        int room = w - buttons - DOT_TEXT_X - 2 - (paused ? pausedRoom(pausedText) : 0);
+        int room = buttonsX - ZONE_TEXT_GAP - DOT_TEXT_X - (paused ? pausedRoom(pausedText) : 0);
         var shown = screen.wrapPieces(List.of(
             new Piece(Theme.caps(here ? "particlefilter.hidden.section_zone" : "particlefilter.hidden.section_zone_elsewhere"), nameColor),
             new Piece(zone.name, nameColor),
@@ -198,7 +208,7 @@ public class HiddenPage extends Page {
         Row row = new Row(SECTION_TOP + textHeight(shown.size()) + 8, (g, x, y, rw, h, hovered) -> {
             Theme.dot(g, x + DOT_X, y + SECTION_TOP + 1, DOT_SIZE, color);
             screen.drawLines(g, shown, x + DOT_TEXT_X, y + SECTION_TOP, Theme.TEXT_FAINT);
-            if (paused) Theme.pill(g, font, pausedText, x + DOT_TEXT_X + lastWidth + 8, y + lastY - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
+            if (paused) Theme.pill(g, font, pausedText, x + DOT_TEXT_X + lastWidth + PILL_GAP, y + lastY - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
             if (hovered && here) ZoneRenderer.highlighted = zone;
         });
         Component where = Component.translatable("particlefilter.hidden.zone_where", zone.coordsText(), zone.sizeText(),
@@ -206,7 +216,7 @@ public class HiddenPage extends Page {
         row.tooltip(paused ? Component.empty().append(where).append("\n").append(pausedTip) : where);
         if (here) {
             row.add(screen.rowButton(Style.GHOST, Component.translatable("particlefilter.edit"), ZONE_EDIT_WIDTH,
-                () -> screen.minecraft().setScreen(new ZoneEditScreen(screen, zone))), w - buttons, buttonY);
+                () -> screen.minecraft().setScreen(new ZoneEditScreen(screen, zone))), editX, buttonY);
         }
         boolean confirming = zone == confirmingDelete;
         row.add(screen.rowButton(Style.DANGER, Component.translatable(confirming ? "particlefilter.confirm" : "particlefilter.zone.delete"), ZONE_DELETE_WIDTH, () -> {
@@ -217,7 +227,7 @@ public class HiddenPage extends Page {
                 confirmingDelete = zone;
             }
             screen.refreshNextTick();
-        }).selected(confirming).tooltip(Component.translatable("particlefilter.zone.delete.tooltip")), w - ZONE_DELETE_WIDTH - 2, buttonY);
+        }).selected(confirming).tooltip(Component.translatable("particlefilter.zone.delete.tooltip")), deleteX, buttonY);
         return row;
     }
 
