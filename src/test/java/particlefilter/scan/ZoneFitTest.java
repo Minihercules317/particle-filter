@@ -177,4 +177,45 @@ class ZoneFitTest {
         assertTrue(grown.sameBlocks(full));
         assertTrue(grown.capped());
     }
+
+    // ---- growNear: only spots joined to the zone ----
+
+    private static final int NEAR = 2;
+
+    @Test
+    void growNearTakesInSpotsNextToTheZone() {
+        // The zone covers x 0..3; a spot at x 5 is 2 blocks out.
+        ZoneFit.Box grown = ZoneFit.growNear(ZONE, List.of(new BlockPos(5, 65, 1)), NEAR);
+
+        assertEquals(new ZoneFit.Box(0, 64, 0, 6, 3, 4, false), grown);
+    }
+
+    @Test
+    void growNearLeavesASeparateSourceOut() {
+        // One spot right next to the zone, another source 50 blocks away.
+        ZoneFit.Box grown = ZoneFit.growNear(ZONE, List.of(new BlockPos(4, 64, 0), new BlockPos(54, 64, 0)), NEAR);
+
+        assertEquals(new ZoneFit.Box(0, 64, 0, 5, 3, 4, false), grown);
+    }
+
+    @Test
+    void growNearIgnoresSpotsJustTooFar() {
+        ZoneFit.Box grown = ZoneFit.growNear(ZONE, List.of(new BlockPos(6, 64, 0)), NEAR);
+
+        assertTrue(grown.sameBlocks(ZONE));
+    }
+
+    @Test
+    void growNearFollowsAChainOfSpots() {
+        // Each spot is within 2 blocks of the one before, so the whole trail joins the zone.
+        ZoneFit.Box grown = ZoneFit.growNear(ZONE, List.of(new BlockPos(9, 64, 0), new BlockPos(7, 64, 0), new BlockPos(5, 64, 0)), NEAR);
+
+        assertEquals(10, grown.width());
+    }
+
+    @Test
+    void growNearWithNothingNearbyChangesNothing() {
+        assertTrue(ZoneFit.growNear(ZONE, List.of(), NEAR).sameBlocks(ZONE));
+        assertTrue(ZoneFit.growNear(ZONE, List.of(new BlockPos(1, 65, 1)), NEAR).sameBlocks(ZONE));
+    }
 }

@@ -1,5 +1,9 @@
 package particlefilter.scan;
 
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import it.unimi.dsi.fastutil.longs.LongSets;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -14,12 +18,20 @@ import java.util.Map;
  */
 final class SpawnRecorder {
 
-    /** Spawn points of one particle: how many, the box they fill, and the closest one to the center. */
-    record Spawns(int count, AABB box, double nearest) {
+    /** Most distinct blocks remembered per particle and kind; spawns in further blocks still count and widen the box. */
+    static final int MAX_BLOCKS = 1024;
+
+    /**
+     * Spawn points of one particle: how many, the box they fill, the closest one to the center, and the blocks they
+     * were in (as {@link BlockPos#asLong}, at most [MAX_BLOCKS]).
+     */
+    record Spawns(int count, AABB box, double nearest, LongSet blocks) {
         static Spawns merge(Spawns a, Spawns b) {
             if (a == null) return b;
             if (b == null) return a;
-            return new Spawns(a.count + b.count, a.box.minmax(b.box), Math.min(a.nearest, b.nearest));
+            LongSet blocks = new LongOpenHashSet(a.blocks);
+            blocks.addAll(b.blocks);
+            return new Spawns(a.count + b.count, a.box.minmax(b.box), Math.min(a.nearest, b.nearest), LongSets.unmodifiable(blocks));
         }
     }
 
@@ -35,6 +47,7 @@ final class SpawnRecorder {
         double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, minZ = Double.MAX_VALUE;
         double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
         double nearestSq = Double.MAX_VALUE;
+        final LongSet blocks = new LongOpenHashSet();
 
         void add(double x, double y, double z, double distSq) {
             count++;
@@ -45,10 +58,12 @@ final class SpawnRecorder {
             maxY = Math.max(maxY, y);
             maxZ = Math.max(maxZ, z);
             nearestSq = Math.min(nearestSq, distSq);
+            if (blocks.size() < MAX_BLOCKS) blocks.add(BlockPos.asLong((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)));
         }
 
         Spawns build() {
-            return count == 0 ? null : new Spawns(count, new AABB(minX, minY, minZ, maxX, maxY, maxZ), Math.sqrt(nearestSq));
+            return count == 0 ? null : new Spawns(count, new AABB(minX, minY, minZ, maxX, maxY, maxZ), Math.sqrt(nearestSq),
+                LongSets.unmodifiable(new LongOpenHashSet(blocks)));
         }
     }
 

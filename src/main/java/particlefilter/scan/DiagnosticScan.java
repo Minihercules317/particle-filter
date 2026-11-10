@@ -1,6 +1,8 @@
 package particlefilter.scan;
 
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import particlefilter.ParticleFilter;
 import particlefilter.config.PfConfig;
@@ -26,7 +28,8 @@ import java.util.Set;
 public final class DiagnosticScan {
 
     /** One particle in one section: how many spawned, the box they fill, and how close the nearest came. */
-    public record Result(String particle, boolean typed, int count, AABB spawns, double nearest) {}
+    /** [blocks]: the blocks it spawned in, as {@link BlockPos#asLong} (at most {@link SpawnRecorder#MAX_BLOCKS}). */
+    public record Result(String particle, boolean typed, int count, AABB spawns, double nearest, LongSet blocks) {}
 
     private static final SpawnRecorder recorder = new SpawnRecorder();
     private static int ticksLeft;
@@ -121,8 +124,8 @@ public final class DiagnosticScan {
         List<Result> hiddenList = new ArrayList<>();
         Map<String, AABB> fit = new LinkedHashMap<>();
         for (SpawnRecorder.Recorded r : recorder.collect()) {
-            if (r.shown() != null) shownList.add(new Result(r.particle(), r.typed(), r.shown().count(), r.shown().box(), r.shown().nearest()));
-            if (r.hidden() != null) hiddenList.add(new Result(r.particle(), r.typed(), r.hidden().count(), r.hidden().box(), r.hidden().nearest()));
+            if (r.shown() != null) shownList.add(new Result(r.particle(), r.typed(), r.shown().count(), r.shown().box(), r.shown().nearest(), r.shown().blocks()));
+            if (r.hidden() != null) hiddenList.add(new Result(r.particle(), r.typed(), r.hidden().count(), r.hidden().box(), r.hidden().nearest(), r.hidden().blocks()));
             fit.put(r.particle(), (r.shown() != null ? r.shown() : r.hidden()).box());
         }
         Comparator<Result> byCount = (a, b) -> Integer.compare(b.count(), a.count());
@@ -176,27 +179,29 @@ public final class DiagnosticScan {
         }
     }
 
-    /** How far from a zone a particle may appear and still count as leaking out of it, in blocks. */
-    private static final double NEAR_ZONE = 2;
+    /** How far outside a zone (or the spots already joined to it) a particle may appear and still be taken in, in blocks. */
+    private static final int NEAR_ZONE = 2;
 
     /** A zone that hides a particle but misses some spots where it appeared, and the box covering them too. */
     public record Growth(Zone zone, ZoneFit.Box box) {}
 
     /**
-     * For a particle that appeared despite the rules: a zone in this world that hides it and lies at most
-     * [NEAR_ZONE] blocks from where it appeared, with the box that zone would grow to so it covers those spots too.
-     * Of several such zones, the one growing least. Null if there is none, or the particle came from farther away.
-     * Zones this diagnostic still fits are left to it.
+     * For a particle that appeared despite the rules: a zone in this world that hides it, with the box it would grow to
+     * so it also covers the spots where the particle appeared next to it ({@link ZoneFit#growNear}: within
+     * [NEAR_ZONE] blocks, or that close to other such spots). Spots farther away are a separate source and stay out.
+     * Of several such zones, the one growing least. Null if there is none. Zones this diagnostic still fits are left
+     * to it.
      */
     public static Growth growthFor(String particle) {
         Result appeared = appearing.stream().filter(r -> r.particle().equals(particle)).findFirst().orElse(null);
         if (appeared == null) return null;
+        List<BlockPos> blocks = new ArrayList<>();
+        appeared.blocks().forEach((long b) -> blocks.add(BlockPos.of(b)));
         Growth best = null;
         for (Zone zone : PfConfig.zonesHere()) {
             if (!zone.particles.contains(particle) || managedIds.contains(zone.id)) continue;
-            if (!zone.box().intersects(appeared.spawns().inflate(NEAR_ZONE))) continue;
             ZoneFit.Box current = ZoneFit.Box.of(zone);
-            ZoneFit.Box grown = ZoneFit.grow(current, List.of(appeared.spawns()));
+            ZoneFit.Box grown = ZoneFit.growNear(current, blocks, NEAR_ZONE);
             if (grown.sameBlocks(current)) continue;
             if (best == null || grown.volume() - current.volume() < best.box.volume() - best.zone.volume()) best = new Growth(zone, grown);
         }

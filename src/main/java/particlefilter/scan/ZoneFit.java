@@ -4,7 +4,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import particlefilter.config.Zone;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * Sizes zones to fit particles. Particles are filtered by where they spawn, so the smallest block-aligned box holding
@@ -90,6 +93,38 @@ public final class ZoneFit {
             x1 = Math.max(x1, floor(s.maxX));
             y1 = Math.max(y1, floor(s.maxY));
             z1 = Math.max(z1, floor(s.maxZ));
+        }
+        int[] x = axis(x0, x1, box.minX, box.minX + box.width - 1);
+        int[] y = axis(y0, y1, box.minY, box.minY + box.height - 1);
+        int[] z = axis(z0, z1, box.minZ, box.minZ + box.length - 1);
+        return new Box(x[0], y[0], z[0], x[1], y[1], z[1], x[2] + y[2] + z[2] > 0);
+    }
+
+    /**
+     * [box] grown to take in each block of [blocks] that lies at most [near] blocks outside it, then each block that
+     * close to what it took in, and so on: spots joined to the box, but not a separate group farther away. Never
+     * loses a block of [box]; past 256 blocks a side is cut as in {@link #grow}.
+     */
+    public static Box growNear(Box box, Collection<BlockPos> blocks, int near) {
+        int x0 = box.minX, y0 = box.minY, z0 = box.minZ;
+        int x1 = box.minX + box.width - 1, y1 = box.minY + box.height - 1, z1 = box.minZ + box.length - 1;
+        List<BlockPos> left = new ArrayList<>(blocks);
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (Iterator<BlockPos> it = left.iterator(); it.hasNext(); ) {
+                BlockPos p = it.next();
+                if (p.getX() < x0 - near || p.getX() > x1 + near || p.getY() < y0 - near || p.getY() > y1 + near
+                    || p.getZ() < z0 - near || p.getZ() > z1 + near) continue;
+                x0 = Math.min(x0, p.getX());
+                y0 = Math.min(y0, p.getY());
+                z0 = Math.min(z0, p.getZ());
+                x1 = Math.max(x1, p.getX());
+                y1 = Math.max(y1, p.getY());
+                z1 = Math.max(z1, p.getZ());
+                it.remove();
+                grew = true;
+            }
         }
         int[] x = axis(x0, x1, box.minX, box.minX + box.width - 1);
         int[] y = axis(y0, y1, box.minY, box.minY + box.height - 1);
