@@ -4,6 +4,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import particlefilter.config.PfConfig;
+import particlefilter.config.Zone;
 import particlefilter.gui.ParticleFilterScreen;
 import particlefilter.gui.PfScreen;
 import particlefilter.gui.Theme;
@@ -11,6 +12,7 @@ import particlefilter.gui.widget.FlatButton;
 import particlefilter.gui.widget.ScrollPanel.Row;
 import particlefilter.gui.widget.Toggle;
 import particlefilter.scan.ParticleScan;
+import particlefilter.scan.ZoneFit;
 
 import static particlefilter.gui.PfScreen.CARD_DOT_X;
 import static particlefilter.gui.PfScreen.CARD_RADIUS;
@@ -41,6 +43,12 @@ abstract class ResultsPage extends Page {
     private static final int COUNT_GAP = 8;
     /** Smallest gap between a result row's name and its count. */
     private static final int NAME_GAP = 7;
+    /** Width of a grow notice's Grow to fit button. */
+    private static final int GROW_WIDTH = 72;
+    /** Gap between a grow notice's text and its button, and between the button and the card's right edge. */
+    private static final int GROW_GAP = 8;
+    /** Space above a grow notice's text, and the same below. */
+    private static final int GROW_TEXT_Y = 6;
 
     protected FlatButton scanButton;
     protected int shownScanGeneration;
@@ -135,6 +143,33 @@ abstract class ResultsPage extends Page {
             Theme.text(g, font, countText, x + countRight - font.width(countText), y + (h - 8) / 2, Theme.TEXT_DIM);
             if (value != null) Theme.centered(g, font, value, x + firstX + COLUMN / 2, y + (h - 8) / 2, Theme.TEXT_DIM);
         }).tooltip(Component.translatable(typed ? "particlefilter.particle.typed.tooltip" : "particlefilter.particle.untyped.tooltip", particle));
+    }
+
+    /**
+     * A notice card saying a zone misses some spots where its particles appeared: a warning dot and [text] wrapped
+     * beside a Grow to fit button with [tip]. [grow] runs on click, then the page is rebuilt. [whileHovered] runs every
+     * frame the card is hovered, to outline the grown zone.
+     */
+    protected Row growRow(Component text, Component tip, Runnable grow, Runnable whileHovered) {
+        int buttonX = screen.panel().contentWidth() - GROW_WIDTH - GROW_GAP;
+        var lines = screen.wrap(text, buttonX - CARD_TEXT_X - GROW_GAP);
+        Row row = new Row(PfScreen.textHeight(lines.size()) + 2 * GROW_TEXT_Y, (g, x, y, w, h, hovered) -> {
+            Theme.rect(g, x, y, w, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
+            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, Theme.WARNING);
+            screen.drawLines(g, lines, x + CARD_TEXT_X, y + GROW_TEXT_Y, Theme.TEXT);
+            if (hovered) whileHovered.run();
+        });
+        row.add(screen.rowButton(FlatButton.Style.SECONDARY, Component.translatable("particlefilter.grow"), GROW_WIDTH, () -> {
+            grow.run();
+            screen.refreshNextTick();
+        }).tooltip(tip), buttonX);
+        return row;
+    }
+
+    /** Tooltip of a Grow to fit button: the zone's size now and after, and a warning if it hits the size limit. */
+    protected static Component growTooltip(Zone zone, ZoneFit.Box grown) {
+        Component tip = Component.translatable("particlefilter.grow.tooltip", zone.name, zone.sizeText(), grown.sizeText());
+        return grown.capped() ? Component.empty().append(tip).append("\n").append(Component.translatable("particlefilter.grow.capped", Zone.MAX_SIZE)) : tip;
     }
 
     protected static Toggle everywhereToggle(String particle) {

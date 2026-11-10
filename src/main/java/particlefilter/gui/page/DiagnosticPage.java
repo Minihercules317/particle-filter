@@ -101,7 +101,17 @@ public class DiagnosticPage extends ResultsPage {
         int most = java.util.stream.Stream.concat(appearing.stream(), hidden.stream()).mapToInt(DiagnosticScan.Result::count).max().orElse(1);
         rows.add(screen.sectionRow(Theme.caps("particlefilter.diagnostic.section_appearing", appearing.size())));
         if (appearing.isEmpty()) rows.add(screen.hintRow(Component.translatable("particlefilter.diagnostic.none_appearing"), screen.panel().contentWidth()));
-        for (DiagnosticScan.Result r : appearing) rows.add(diagnosticRow(r, most, false));
+        for (DiagnosticScan.Result r : appearing) {
+            rows.add(diagnosticRow(r, most, false));
+            DiagnosticScan.Growth growth = DiagnosticScan.growthFor(r.particle());
+            if (growth != null) {
+                rows.add(growRow(Component.translatable("particlefilter.diagnostic.grow_notice", growth.zone().name, ParticleScan.displayName(r.particle())),
+                    growTooltip(growth.zone(), growth.box()), () -> DiagnosticScan.grow(growth), () -> {
+                        ZoneRenderer.highlighted = growth.zone();
+                        ZoneRenderer.preview = growth.box().aabb();
+                    }));
+            }
+        }
         if (!hidden.isEmpty()) {
             rows.add(screen.sectionRow(Theme.caps("particlefilter.diagnostic.section_hidden", hidden.size())));
             for (DiagnosticScan.Result r : hidden) rows.add(diagnosticRow(r, most, true));

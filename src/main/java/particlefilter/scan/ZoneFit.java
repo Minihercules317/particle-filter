@@ -19,6 +19,15 @@ public final class ZoneFit {
                 && minX + width >= o.minX + o.width && minY + height >= o.minY + o.height && minZ + length >= o.minZ + o.length;
         }
 
+        /** True if both cover the same blocks. */
+        public boolean sameBlocks(Box o) {
+            return minX == o.minX && minY == o.minY && minZ == o.minZ && width == o.width && height == o.height && length == o.length;
+        }
+
+        public String sizeText() {
+            return width + " × " + height + " × " + length;
+        }
+
         public long volume() {
             return (long) width * height * length;
         }
@@ -66,11 +75,41 @@ public final class ZoneFit {
         return new Box(x[0], y[0], z[0], x[1], y[1], z[1], x[2] + y[2] + z[2] > 0);
     }
 
+    /**
+     * Smallest box holding [box] and every spawn box: what a zone grows to so it also covers [spawns]. It never loses
+     * a block of [box]; a side that would pass 256 blocks keeps [box] and as much of the middle of the rest as fits.
+     * Spawn points on a block's lower face belong to that block, as in {@link #fit}.
+     */
+    public static Box grow(Box box, Collection<AABB> spawns) {
+        int x0 = box.minX, y0 = box.minY, z0 = box.minZ;
+        int x1 = box.minX + box.width - 1, y1 = box.minY + box.height - 1, z1 = box.minZ + box.length - 1;
+        for (AABB s : spawns) {
+            x0 = Math.min(x0, floor(s.minX));
+            y0 = Math.min(y0, floor(s.minY));
+            z0 = Math.min(z0, floor(s.minZ));
+            x1 = Math.max(x1, floor(s.maxX));
+            y1 = Math.max(y1, floor(s.maxY));
+            z1 = Math.max(z1, floor(s.maxZ));
+        }
+        int[] x = axis(x0, x1, box.minX, box.minX + box.width - 1);
+        int[] y = axis(y0, y1, box.minY, box.minY + box.height - 1);
+        int[] z = axis(z0, z1, box.minZ, box.minZ + box.length - 1);
+        return new Box(x[0], y[0], z[0], x[1], y[1], z[1], x[2] + y[2] + z[2] > 0);
+    }
+
     /** {min, size, capped} for blocks [lo, hi]; too long a side is cut to its middle 256 blocks. */
     private static int[] axis(int lo, int hi) {
         int size = hi - lo + 1;
         if (size <= Zone.MAX_SIZE) return new int[] {lo, size, 0};
         return new int[] {lo + (size - Zone.MAX_SIZE) / 2, Zone.MAX_SIZE, 1};
+    }
+
+    /** Like {@link #axis(int, int)}, but a cut side still holds blocks [keepLo, keepHi]. */
+    private static int[] axis(int lo, int hi, int keepLo, int keepHi) {
+        int[] a = axis(lo, hi);
+        if (a[2] == 0) return a;
+        a[0] = Math.max(keepHi - Zone.MAX_SIZE + 1, Math.min(keepLo, a[0]));
+        return a;
     }
 
     private static int floor(double v) {

@@ -13,6 +13,7 @@ import particlefilter.gui.widget.ScrollPanel.Row;
 import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
 import particlefilter.scan.ParticleScan;
+import particlefilter.scan.ZoneFit;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,8 @@ public class ScanPage extends ResultsPage {
     private static final int FOOTER_BUTTONS_WIDTH = HERE_WIDTH + BUTTON_GAP + EDIT_ZONE_WIDTH;
 
     private FlatButton editZoneButton;
+    /** Set while the grow notice is hovered (the list paints before {@link #render}), to outline the grown zone. */
+    private boolean growHovered;
 
     public ScanPage(ParticleFilterScreen screen) {
         super(screen);
@@ -124,6 +127,12 @@ public class ScanPage extends ResultsPage {
     private List<Row> scanRows() {
         List<Row> rows = new ArrayList<>();
         boolean here = ParticleScan.target() != null;
+        ZoneFit.Box grown = here ? ParticleScan.growBox() : null;
+        Zone zone = ParticleScan.hereZone();
+        if (grown != null && zone != null) {
+            rows.add(growRow(Component.translatable("particlefilter.scan.grow_notice", zone.name), growTooltip(zone, grown),
+                ParticleScan::growHereZone, () -> growHovered = true));
+        }
         int most = ParticleScan.results().stream().mapToInt(ParticleScan.Result::count).max().orElse(1);
         for (ParticleScan.Result result : ParticleScan.results()) {
             String particle = result.particle();
@@ -186,5 +195,10 @@ public class ScanPage extends ResultsPage {
         Component tip = zone == null ? Component.translatable(key + ".tooltip")
             : Component.translatable(key + ".tooltip", zone.name, zone.sizeText(), ZoneEditScreen.volumeText(zone));
         renderFooterLine(g, mouseX, mouseY, color, here, tip, cw - FOOTER_BUTTONS_WIDTH - 16);
+        if (growHovered) {
+            ZoneFit.Box grown = ParticleScan.growBox();
+            if (grown != null) ZoneRenderer.preview = grown.aabb();
+            growHovered = false;
+        }
     }
 }

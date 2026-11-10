@@ -176,6 +176,41 @@ public final class DiagnosticScan {
         }
     }
 
+    /** How far from a zone a particle may appear and still count as leaking out of it, in blocks. */
+    private static final double NEAR_ZONE = 2;
+
+    /** A zone that hides a particle but misses some spots where it appeared, and the box covering them too. */
+    public record Growth(Zone zone, ZoneFit.Box box) {}
+
+    /**
+     * For a particle that appeared despite the rules: a zone in this world that hides it and lies at most
+     * [NEAR_ZONE] blocks from where it appeared, with the box that zone would grow to so it covers those spots too.
+     * Of several such zones, the one growing least. Null if there is none, or the particle came from farther away.
+     * Zones this diagnostic still fits are left to it.
+     */
+    public static Growth growthFor(String particle) {
+        Result appeared = appearing.stream().filter(r -> r.particle().equals(particle)).findFirst().orElse(null);
+        if (appeared == null) return null;
+        Growth best = null;
+        for (Zone zone : PfConfig.zonesHere()) {
+            if (!zone.particles.contains(particle) || managedIds.contains(zone.id)) continue;
+            if (!zone.box().intersects(appeared.spawns().inflate(NEAR_ZONE))) continue;
+            ZoneFit.Box current = ZoneFit.Box.of(zone);
+            ZoneFit.Box grown = ZoneFit.grow(current, List.of(appeared.spawns()));
+            if (grown.sameBlocks(current)) continue;
+            if (best == null || grown.volume() - current.volume() < best.box.volume() - best.zone.volume()) best = new Growth(zone, grown);
+        }
+        return best;
+    }
+
+    /** Grows the zone in [growth]; it keeps that size, as if edited by hand. */
+    public static void grow(Growth growth) {
+        if (growth == null || PfConfig.zoneById(growth.zone().id) == null) return;
+        ParticleScan.stopFitting(growth.zone());
+        growth.box().applyTo(growth.zone());
+        PfConfig.changed();
+    }
+
     /** Called when the player edits [zone] by hand, so it keeps its size and particles from now on. */
     static void stopFitting(Zone zone) {
         if (zone != null) managedIds.remove(zone.id);

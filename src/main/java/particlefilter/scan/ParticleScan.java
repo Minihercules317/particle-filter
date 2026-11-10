@@ -206,6 +206,33 @@ public final class ParticleScan {
         PfConfig.changed();
     }
 
+    /**
+     * The box Here's zone would grow to so it also covers every spot where its switched-on particles appeared in this
+     * scan. Null when nothing appeared outside it, when Here makes a new zone, or while the zone already keeps fitting.
+     */
+    public static ZoneFit.Box growBox() {
+        Zone zone = hereZone();
+        if (zone == null || isFitting(zone)) return null;
+        List<AABB> spawns = new ArrayList<>();
+        for (String particle : zone.particles) {
+            Result r = result(particle);
+            if (r != null) spawns.add(r.spawns());
+        }
+        ZoneFit.Box current = ZoneFit.Box.of(zone);
+        ZoneFit.Box grown = ZoneFit.grow(current, spawns);
+        return grown.sameBlocks(current) ? null : grown;
+    }
+
+    /** Grows Here's zone to {@link #growBox()}; it keeps that size, as if edited by hand. */
+    public static void growHereZone() {
+        Zone zone = hereZone();
+        ZoneFit.Box box = growBox();
+        if (zone == null || box == null) return;
+        stopFitting(zone);
+        box.applyTo(zone);
+        PfConfig.changed();
+    }
+
     /** Called when the player edits [zone] by hand, so no scan resizes it any more. */
     public static void stopFitting(Zone zone) {
         if (isFitting(zone)) fittedZoneId = null;

@@ -110,4 +110,71 @@ class ZoneFitTest {
         assertEquals(box, ZoneFit.Box.of(zone));
         assertEquals(60, box.volume());
     }
+
+    // ---- grow: an existing zone also covering new spawn points ----
+
+    private static final ZoneFit.Box ZONE = new ZoneFit.Box(0, 64, 0, 4, 3, 4, false);
+
+    @Test
+    void growWithSpawnsInsideChangesNothing() {
+        ZoneFit.Box grown = ZoneFit.grow(ZONE, List.of(point(0.5, 64.5, 0.5), point(3.9, 66.9, 3.9)));
+
+        assertTrue(grown.sameBlocks(ZONE));
+    }
+
+    @Test
+    void growWithNoSpawnsChangesNothing() {
+        assertTrue(ZoneFit.grow(ZONE, List.of()).sameBlocks(ZONE));
+    }
+
+    @Test
+    void growReachesSpawnsOutsideOnEverySide() {
+        ZoneFit.Box grown = ZoneFit.grow(ZONE, List.of(point(-1.5, 63.5, 1.5), point(5.5, 67.5, 4.0)));
+
+        assertEquals(new ZoneFit.Box(-2, 63, 0, 8, 5, 5, false), grown);
+    }
+
+    @Test
+    void growNeverShrinks() {
+        // Only one corner has spawns; the rest of the zone stays.
+        ZoneFit.Box grown = ZoneFit.grow(ZONE, List.of(point(0.5, 64.5, 0.5)));
+
+        assertTrue(grown.sameBlocks(ZONE));
+        assertTrue(ZoneFit.grow(ZONE, List.of(point(10.5, 64.5, 0.5))).contains(ZONE));
+    }
+
+    @Test
+    void growOnTheUpperFaceTakesTheNextBlock() {
+        // The zone holds x in [0, 4); a spawn at x = 4.0 is in block 4.
+        ZoneFit.Box grown = ZoneFit.grow(ZONE, List.of(point(4.0, 64.5, 0.5)));
+
+        assertEquals(5, grown.width());
+    }
+
+    @Test
+    void growPastTheLimitKeepsTheWholeZone() {
+        // Spawns 400 blocks east: the side is cut to 256, but the zone at 0..3 stays inside.
+        ZoneFit.Box grown = ZoneFit.grow(ZONE, List.of(point(400.5, 64.5, 0.5)));
+
+        assertEquals(new ZoneFit.Box(0, 64, 0, Zone.MAX_SIZE, 3, 4, true), grown);
+    }
+
+    @Test
+    void growPastTheLimitOnBothSidesKeepsTheMiddleAroundTheZone() {
+        // Blocks -200..203 are 404 long; their middle 256 start at -126, which still holds the zone.
+        ZoneFit.Box grown = ZoneFit.grow(ZONE, List.of(point(-199.5, 64.5, 0.5), point(203.5, 64.5, 0.5)));
+
+        assertEquals(new ZoneFit.Box(-126, 64, 0, Zone.MAX_SIZE, 3, 4, true), grown);
+        assertTrue(grown.contains(ZONE));
+    }
+
+    @Test
+    void zoneAlreadyAtTheLimitStaysPut() {
+        ZoneFit.Box full = new ZoneFit.Box(0, 64, 0, Zone.MAX_SIZE, 3, 4, false);
+
+        ZoneFit.Box grown = ZoneFit.grow(full, List.of(point(300.5, 64.5, 0.5)));
+
+        assertTrue(grown.sameBlocks(full));
+        assertTrue(grown.capped());
+    }
 }
