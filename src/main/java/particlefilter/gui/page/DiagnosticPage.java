@@ -9,6 +9,7 @@ import particlefilter.gui.PfScreen;
 import particlefilter.gui.Theme;
 import particlefilter.gui.widget.FlatButton.Style;
 import particlefilter.gui.widget.ScrollPanel.Row;
+import particlefilter.gui.widget.Slider;
 import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
 import particlefilter.scan.DiagnosticScan;
@@ -19,9 +20,6 @@ import java.util.List;
 
 /** Records every particle around you, both those still appearing and those your rules hide. */
 public class DiagnosticPage extends ResultsPage {
-
-    /** Gap between the footer line and the source distance label right of it. */
-    private static final int FOOTER_GAP = 12;
 
     public DiagnosticPage(ParticleFilterScreen screen) {
         super(screen);
@@ -87,30 +85,82 @@ public class DiagnosticPage extends ResultsPage {
         screen.setRows(diagnosticRows());
         shownScanGeneration = DiagnosticScan.generation();
 
-        if (!screen.panel().isEmpty()) { // with the footer line, which the empty states leave out
-            screen.addSpinner(sourceSpinnerX(), sourceSpinnerY(), DURATION_WIDTH, PfConfig.sourceDistance(),
+        mergeSlider = null;
+        if (showsControls()) {
+            int bottomRowY = screen.bodyBottom() - PfScreen.SMALL_BUTTON_HEIGHT;
+            int distanceY = oneControlRow() ? bottomRowY : bottomRowY - CONTROL_ROW;
+            screen.addSpinner(screen.cx() + distanceLabelWidth() + DURATION_GAP, distanceY, DURATION_WIDTH, PfConfig.sourceDistance(),
                 PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE,
                 Component.translatable("particlefilter.diagnostic.source_distance.tooltip", PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE),
                 blocks -> {
                     DiagnosticScan.setSourceDistance(blocks);
                     screen.refreshNextTick(); // previews, notices and zones follow the new distance
                 });
+            mergeSlider = screen.addRenderableWidget(new Slider(mergeX() + mergeLabelWidth() + DURATION_GAP, bottomRowY + (PfScreen.SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
+                SLIDER_WIDTH, PfConfig.mergePercent(), PfConfig.MIN_MERGE_PERCENT, PfConfig.MAX_MERGE_PERCENT,
+                Component.translatable("particlefilter.diagnostic.merge"), percent -> {
+                    DiagnosticScan.setMergePercent(percent);
+                    screen.refreshNextTick();
+                }).tooltip(Component.translatable("particlefilter.diagnostic.merge.tooltip", Zone.MAX_SIZE)));
         }
     }
 
-    /** Left edge of the source distance spinner at the bottom right, before "blocks". */
-    private int sourceSpinnerX() {
-        return screen.cx() + screen.cw() - screen.font().width(Component.translatable("particlefilter.diagnostic.source_distance_unit")) - UNIT_GAP - DURATION_WIDTH;
+    // ---------------------------------------------------------------- Controls row: source distance and merge share
+
+    /** Height of a row of controls at the bottom, with the gap above it. */
+    private static final int CONTROL_ROW = PfScreen.SMALL_BUTTON_HEIGHT + 4;
+    /** Smallest gap between the distance and merge controls when they share a row. */
+    private static final int CONTROLS_GAP = 16;
+    /** Width of the merge slider. */
+    private static final int SLIDER_WIDTH = 80;
+
+    private Slider mergeSlider;
+
+    /** The controls show with results, under the Here line. */
+    private static boolean showsControls() {
+        return !DiagnosticScan.appearing().isEmpty() || !DiagnosticScan.hidden().isEmpty();
     }
 
-    /** Top of the source distance spinner, centered on the footer line. */
-    private int sourceSpinnerY() {
-        return screen.bodyBottom() - FOOTER_LINE - (PfScreen.SMALL_BUTTON_HEIGHT - 8) / 2;
+    private int distanceLabelWidth() {
+        return screen.font().width(Component.translatable("particlefilter.diagnostic.source_distance"));
     }
 
-    /** Left edge of "Same source within", before the spinner. */
-    private int sourceLabelX() {
-        return sourceSpinnerX() - DURATION_GAP - screen.font().width(Component.translatable("particlefilter.diagnostic.source_distance"));
+    private int mergeLabelWidth() {
+        return screen.font().width(Component.translatable("particlefilter.diagnostic.merge"));
+    }
+
+    /** "Same source within [− n +] blocks". */
+    private int distanceWidth() {
+        return distanceLabelWidth() + DURATION_GAP + DURATION_WIDTH + UNIT_GAP + screen.font().width(Component.translatable("particlefilter.diagnostic.source_distance_unit"));
+    }
+
+    /** "Merge zones sharing [slider] 100%", sized for the widest value. */
+    private int mergeWidth() {
+        return mergeLabelWidth() + DURATION_GAP + SLIDER_WIDTH + UNIT_GAP + screen.font().width(percentText(PfConfig.MAX_MERGE_PERCENT));
+    }
+
+    /** True if both controls fit side by side; otherwise the distance goes on a row above the merge slider. */
+    private boolean oneControlRow() {
+        return distanceWidth() + CONTROLS_GAP + mergeWidth() <= screen.cw();
+    }
+
+    /** Height the controls take at the bottom. */
+    private int controlsHeight() {
+        return showsControls() ? (oneControlRow() ? 1 : 2) * CONTROL_ROW : 0;
+    }
+
+    /** Left edge of the merge control: right-aligned beside the distance, or at the left on its own row. */
+    private int mergeX() {
+        return oneControlRow() ? screen.cx() + screen.cw() - mergeWidth() : screen.cx();
+    }
+
+    private static String percentText(int percent) {
+        return percent + "%";
+    }
+
+    @Override
+    protected int listBottom() {
+        return super.listBottom() - controlsHeight();
     }
 
     private int renderDistanceBlocks() {
@@ -208,14 +258,26 @@ public class DiagnosticPage extends ResultsPage {
         }
         renderColumnLabels(g, "particlefilter.scan.col_nearest", "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
         boolean capped = DiagnosticScan.anyCapped();
-        int labelX = sourceLabelX();
         renderFooterLine(g, mouseX, mouseY, capped ? Theme.WARNING : Theme.NEW_ZONE,
             Component.translatable(capped ? "particlefilter.diagnostic.here_capped" : "particlefilter.diagnostic.here_line"),
             Component.translatable("particlefilter.diagnostic.here_line.tooltip", DiagnosticScan.MAX_SOURCES, Zone.MAX_SIZE),
-            labelX - FOOTER_GAP - cx - DOT_TEXT_X);
+            cw - 4, screen.bodyBottom() - FOOTER_LINE - controlsHeight());
+        renderControlLabels(g);
+    }
+
+    /** The labels and units around the distance spinner and the merge slider. */
+    private void renderControlLabels(GuiGraphics g) {
+        if (!showsControls()) return;
         var font = screen.font();
-        int textY = screen.bodyBottom() - FOOTER_LINE;
-        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance"), labelX, textY, Theme.TEXT_DIM);
-        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance_unit"), sourceSpinnerX() + DURATION_WIDTH + UNIT_GAP, textY, Theme.TEXT_DIM);
+        int bottomTextY = screen.bodyBottom() - PfScreen.SMALL_BUTTON_HEIGHT + (PfScreen.SMALL_BUTTON_HEIGHT - 8) / 2;
+        int distanceTextY = oneControlRow() ? bottomTextY : bottomTextY - CONTROL_ROW;
+        int cx = screen.cx();
+        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance"), cx, distanceTextY, Theme.TEXT_DIM);
+        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance_unit"),
+            cx + distanceLabelWidth() + DURATION_GAP + DURATION_WIDTH + UNIT_GAP, distanceTextY, Theme.TEXT_DIM);
+        int mergeX = mergeX();
+        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.merge"), mergeX, bottomTextY, Theme.TEXT_DIM);
+        int percent = mergeSlider != null ? mergeSlider.intValue() : PfConfig.mergePercent();
+        Theme.text(g, font, percentText(percent), mergeX + mergeLabelWidth() + DURATION_GAP + SLIDER_WIDTH + UNIT_GAP, bottomTextY, Theme.TEXT);
     }
 }

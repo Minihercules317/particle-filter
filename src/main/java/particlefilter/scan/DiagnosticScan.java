@@ -23,9 +23,9 @@ import java.util.Set;
  *
  * Its Here column makes one zone per source of a particle: the spots where it appeared (or, if it only appeared hidden,
  * where it spawned) split into groups at most {@link PfConfig#sourceDistance()} blocks apart ({@link ZoneFit#sources}),
- * the busiest [MAX_SOURCES] of them. When one source's box lies entirely inside another's they share the larger zone.
- * These zones are regrouped whenever a particle is switched on or off or the distance changes, until the player edits
- * one by hand or runs a new diagnostic.
+ * the busiest [MAX_SOURCES] of them. Boxes overlapping by at least {@link PfConfig#mergePercent()} of the smaller one
+ * merge into one zone around both ({@link ZoneFit#merge}). These zones are regrouped whenever a particle is switched on
+ * or off or either setting changes, until the player edits one by hand or runs a new diagnostic.
  */
 public final class DiagnosticScan {
 
@@ -185,6 +185,12 @@ public final class DiagnosticScan {
         if (!managedZones().isEmpty()) regroup(null);
     }
 
+    /** Changes how much zones must overlap to merge, and regroups this diagnostic's zones. */
+    public static void setMergePercent(int percent) {
+        PfConfig.setMergePercent(percent);
+        if (!managedZones().isEmpty()) regroup(null);
+    }
+
     /** Zones from diagnostics in this world that list [particle], switched on or off. */
     public static List<Zone> zonesFor(String particle) {
         List<Zone> zones = new ArrayList<>();
@@ -205,8 +211,8 @@ public final class DiagnosticScan {
     }
 
     /**
-     * Hides [particle] in one fitted zone per source (shared where one source's box is inside another's), or removes it
-     * from every diagnostic zone listing it.
+     * Hides [particle] in one fitted zone per source (merged with zones it overlaps enough), or removes it from every
+     * diagnostic zone listing it.
      */
     public static void setHiddenHere(String particle, boolean hide) {
         List<Zone> zones = zonesFor(particle);
@@ -276,8 +282,8 @@ public final class DiagnosticScan {
 
     /**
      * Rebuilds the zones this diagnostic manages from the particles they list (plus [added]): each particle gets a box
-     * per source; a box inside another joins that one. Zones are reused where they overlap a group's box (then where
-     * they list one of its particles), created when needed, and deleted when no longer needed.
+     * per source, and boxes overlapping enough merge ({@link ZoneFit#merge}). Zones are reused where they overlap a
+     * group's box (then where they list one of its particles), created when needed, and deleted when no longer needed.
      */
     private static void regroup(String added) {
         List<Zone> managed = managedZones();
@@ -298,20 +304,15 @@ public final class DiagnosticScan {
             else if (fallback.containsKey(particle)) members.add(new Member(particle, on, ZoneFit.Box.of(fallback.get(particle))));
         });
         members.sort(Comparator.comparingLong((Member m) -> m.box.volume()).reversed());
-
-        List<List<Member>> groups = new ArrayList<>();
-        for (Member m : members) {
-            List<Member> container = groups.stream().filter(g -> g.get(0).box.contains(m.box)).findFirst().orElse(null);
-            if (container != null) container.add(m);
-            else groups.add(new ArrayList<>(List.of(m)));
-        }
+        List<ZoneFit.Merged> merged = ZoneFit.merge(members.stream().map(Member::box).toList(), PfConfig.mergePercent());
 
         List<Zone> unused = new ArrayList<>(managed);
         capped = false;
-        for (List<Member> group : groups) {
-            ZoneFit.Box box = group.get(0).box;
+        for (ZoneFit.Merged zoneGroup : merged) {
+            List<Member> group = zoneGroup.members().stream().map(members::get).toList();
+            ZoneFit.Box box = zoneGroup.box();
             capped |= box.capped();
-            Zone zone = reusable(unused, group);
+            Zone zone = reusable(unused, group, box);
             if (zone == null) {
                 zone = PfConfig.createZone(box.minX(), box.minY(), box.minZ(), box.width(), box.height(), box.length());
                 if (zone == null) return;
@@ -336,11 +337,11 @@ public final class DiagnosticScan {
     }
 
     /**
-     * The unused zone to keep for [group], so zones keep their names and colors: the one overlapping its box most, else
-     * one listing its largest particle, else one listing any of its particles. Null if none, so a zone is created.
+     * The unused zone to keep for [group] in [groupBox], so zones keep their names and colors: the one overlapping it
+     * most, else one listing its largest particle, else one listing any of its particles. Null if none: make a zone.
      */
-    private static Zone reusable(List<Zone> unused, List<Member> group) {
-        AABB box = group.get(0).box.aabb();
+    private static Zone reusable(List<Zone> unused, List<Member> group, ZoneFit.Box groupBox) {
+        AABB box = groupBox.aabb();
         Zone best = null;
         double bestOverlap = 0;
         for (Zone zone : unused) {

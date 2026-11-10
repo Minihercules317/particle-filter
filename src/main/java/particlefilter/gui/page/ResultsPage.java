@@ -206,9 +206,13 @@ abstract class ResultsPage extends Page {
 
     /** The line under a result list: a colored dot and text, with [tip] (the full explanation) while hovered. */
     protected void renderFooterLine(GuiGraphics g, int mouseX, int mouseY, int color, Component text, Component tip, int maxWidth) {
+        renderFooterLine(g, mouseX, mouseY, color, text, tip, maxWidth, screen.bodyBottom() - FOOTER_LINE);
+    }
+
+    /** Like {@link #renderFooterLine(GuiGraphics, int, int, int, Component, Component, int)}, with its text at [y]. */
+    protected void renderFooterLine(GuiGraphics g, int mouseX, int mouseY, int color, Component text, Component tip, int maxWidth, int y) {
         var font = screen.font();
         int cx = screen.cx();
-        int y = screen.bodyBottom() - FOOTER_LINE;
         String shown = Theme.fit(font, text.getString(), maxWidth);
         Theme.dot(g, cx + DOT_X, y + 1, DOT_SIZE, color);
         Theme.text(g, font, shown, cx + DOT_TEXT_X, y, Theme.TEXT_DIM);

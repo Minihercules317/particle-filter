@@ -193,6 +193,61 @@ public final class ZoneFit {
         return sources;
     }
 
+    /** One group of boxes merged into one zone: the box around them all and their indexes in the input. */
+    public record Merged(Box box, List<Integer> members) {}
+
+    /**
+     * Groups overlapping boxes: two groups merge when the blocks they share are at least [percent]% of the smaller
+     * one's blocks, into the box around both, unless that box would pass 256 blocks a side. Repeats until nothing more
+     * merges, so a box can join through others. At 100% a box merges only into one that holds it entirely. Groups come
+     * out in the order of their first box.
+     */
+    public static List<Merged> merge(List<Box> boxes, int percent) {
+        List<Box> groupBoxes = new ArrayList<>(boxes);
+        List<List<Integer>> members = new ArrayList<>();
+        for (int i = 0; i < boxes.size(); i++) members.add(new ArrayList<>(List.of(i)));
+        boolean merged = true;
+        while (merged) {
+            merged = false;
+            outer:
+            for (int i = 0; i < groupBoxes.size(); i++) {
+                for (int j = i + 1; j < groupBoxes.size(); j++) {
+                    Box union = union(groupBoxes.get(i), groupBoxes.get(j));
+                    if (union == null || !sharesEnough(groupBoxes.get(i), groupBoxes.get(j), percent)) continue;
+                    groupBoxes.set(i, union);
+                    members.get(i).addAll(members.get(j));
+                    groupBoxes.remove(j);
+                    members.remove(j);
+                    merged = true;
+                    break outer;
+                }
+            }
+        }
+        List<Merged> groups = new ArrayList<>();
+        for (int i = 0; i < groupBoxes.size(); i++) groups.add(new Merged(groupBoxes.get(i), List.copyOf(members.get(i))));
+        return groups;
+    }
+
+    /** True if [a] and [b] share blocks, at least [percent]% of the smaller one's. */
+    static boolean sharesEnough(Box a, Box b, int percent) {
+        long shared = (long) overlap(a.minX, a.width, b.minX, b.width) * overlap(a.minY, a.height, b.minY, b.height)
+            * overlap(a.minZ, a.length, b.minZ, b.length);
+        return shared > 0 && shared * 100 >= (long) percent * Math.min(a.volume(), b.volume());
+    }
+
+    private static int overlap(int minA, int sizeA, int minB, int sizeB) {
+        return Math.max(0, Math.min(minA + sizeA, minB + sizeB) - Math.max(minA, minB));
+    }
+
+    /** The box around [a] and [b]; null if it would pass 256 blocks a side. */
+    private static Box union(Box a, Box b) {
+        int x0 = Math.min(a.minX, b.minX), y0 = Math.min(a.minY, b.minY), z0 = Math.min(a.minZ, b.minZ);
+        int x1 = Math.max(a.minX + a.width, b.minX + b.width), y1 = Math.max(a.minY + a.height, b.minY + b.height);
+        int z1 = Math.max(a.minZ + a.length, b.minZ + b.length);
+        if (x1 - x0 > Zone.MAX_SIZE || y1 - y0 > Zone.MAX_SIZE || z1 - z0 > Zone.MAX_SIZE) return null;
+        return new Box(x0, y0, z0, x1 - x0, y1 - y0, z1 - z0, a.capped || b.capped);
+    }
+
     private static int find(int[] parent, int i) {
         while (parent[i] != i) {
             parent[i] = parent[parent[i]];

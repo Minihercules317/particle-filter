@@ -43,6 +43,11 @@ public final class PfConfig {
     public static final int MAX_SOURCE_DISTANCE = 32;
     public static final int DEFAULT_SOURCE_DISTANCE = 6;
 
+    /** How much of the smaller of two Diagnostic zones must overlap the other for them to merge, in percent. */
+    public static final int MIN_MERGE_PERCENT = 1;
+    public static final int MAX_MERGE_PERCENT = 100;
+    public static final int DEFAULT_MERGE_PERCENT = 50;
+
     /** The saved settings, as stored in the file. */
     static final class Data {
         List<String> hiddenParticles = new ArrayList<>();
@@ -56,6 +61,7 @@ public final class PfConfig {
         Integer scanSeconds = DEFAULT_SCAN_SECONDS;
         Integer diagnosticSeconds = DEFAULT_SCAN_SECONDS;
         Integer sourceDistance = DEFAULT_SOURCE_DISTANCE;
+        Integer mergePercent = DEFAULT_MERGE_PERCENT;
 
         /** Fills defaults for fields missing from older or hand-edited files and puts values back in range. */
         void normalize() {
@@ -73,6 +79,8 @@ public final class PfConfig {
             diagnosticSeconds = clampScanSeconds(diagnosticSeconds);
             if (sourceDistance == null) sourceDistance = DEFAULT_SOURCE_DISTANCE;
             sourceDistance = clampSourceDistance(sourceDistance);
+            if (mergePercent == null) mergePercent = DEFAULT_MERGE_PERCENT;
+            mergePercent = clampMergePercent(mergePercent);
             zones.forEach(Zone::normalize);
         }
     }
@@ -198,6 +206,20 @@ public final class PfConfig {
 
     private static int clampSourceDistance(int blocks) {
         return Math.max(MIN_SOURCE_DISTANCE, Math.min(MAX_SOURCE_DISTANCE, blocks));
+    }
+
+    /** Diagnostic zones merge when at least this percent of the smaller one overlaps the other. */
+    public static int mergePercent() {
+        return data.mergePercent;
+    }
+
+    public static void setMergePercent(int percent) {
+        data.mergePercent = clampMergePercent(percent);
+        save();
+    }
+
+    private static int clampMergePercent(int percent) {
+        return Math.max(MIN_MERGE_PERCENT, Math.min(MAX_MERGE_PERCENT, percent));
     }
 
     // ---- entry lists: hide adds or switches on, remove deletes, setOn moves between the on and off lists ----

@@ -28,6 +28,7 @@ class PfConfigTest {
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.scanSeconds);
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.diagnosticSeconds);
         assertEquals(PfConfig.DEFAULT_SOURCE_DISTANCE, data.sourceDistance);
+        assertEquals(PfConfig.DEFAULT_MERGE_PERCENT, data.mergePercent);
     }
 
     @Test
@@ -129,6 +130,12 @@ class PfConfigTest {
         assertEquals(PfConfig.MIN_SOURCE_DISTANCE, PfConfig.parse("{\"sourceDistance\": 0}").sourceDistance);
         assertEquals(PfConfig.MAX_SOURCE_DISTANCE, PfConfig.parse("{\"sourceDistance\": 500}").sourceDistance);
         assertEquals(10, PfConfig.parse("{\"sourceDistance\": 10}").sourceDistance);
+    }
+
+    @Test
+    void mergePercentIsPutInRange() {
+        assertEquals(PfConfig.MIN_MERGE_PERCENT, PfConfig.parse("{\"mergePercent\": 0}").mergePercent);
+        assertEquals(PfConfig.MAX_MERGE_PERCENT, PfConfig.parse("{\"mergePercent\": 150}").mergePercent);
     }
 
     @Test

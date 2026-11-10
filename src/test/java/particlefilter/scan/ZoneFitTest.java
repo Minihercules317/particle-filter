@@ -294,4 +294,56 @@ class ZoneFitTest {
         assertEquals(Zone.MAX_SIZE, source.box().width());
         assertTrue(source.box().capped());
     }
+
+    // ---- merge: zones sharing enough of the smaller one become one ----
+
+    private static ZoneFit.Box box(int minX, int width) {
+        return new ZoneFit.Box(minX, 64, 0, width, 4, 4, false);
+    }
+
+    @Test
+    void boxInsideAnotherMergesEvenAt100Percent() {
+        List<ZoneFit.Merged> merged = ZoneFit.merge(List.of(box(0, 10), box(2, 3)), 100);
+
+        assertEquals(List.of(new ZoneFit.Merged(box(0, 10), List.of(0, 1))), merged);
+    }
+
+    @Test
+    void halfOverlapMergesAt50ButNotAbove() {
+        // 4 of the smaller box's 8 columns are shared: 50%.
+        List<ZoneFit.Box> boxes = List.of(box(0, 8), box(4, 8));
+
+        assertEquals(List.of(new ZoneFit.Merged(box(0, 12), List.of(0, 1))), ZoneFit.merge(boxes, 50));
+        assertEquals(2, ZoneFit.merge(boxes, 51).size());
+    }
+
+    @Test
+    void percentIsOfTheSmallerBox() {
+        // The small box is entirely inside, but it is only a sliver of the big one.
+        assertEquals(1, ZoneFit.merge(List.of(box(0, 100), box(10, 1)), 100).size());
+    }
+
+    @Test
+    void boxesThatOnlyTouchNeverMerge() {
+        assertEquals(2, ZoneFit.merge(List.of(box(0, 4), box(4, 4)), 1).size());
+    }
+
+    @Test
+    void mergingCarriesOnThroughTheMergedBox() {
+        // A and B share 36% of A, so they merge at 30%. C sits in a corner of the box around them, touching neither
+        // A nor B, so it only joins through the merged box.
+        ZoneFit.Box a = new ZoneFit.Box(0, 0, 0, 10, 10, 1, false);
+        ZoneFit.Box b = new ZoneFit.Box(4, 4, 0, 10, 10, 1, false);
+        ZoneFit.Box c = new ZoneFit.Box(10, 0, 0, 4, 4, 1, false);
+
+        List<ZoneFit.Merged> merged = ZoneFit.merge(List.of(a, b, c), 30);
+
+        assertEquals(List.of(new ZoneFit.Merged(new ZoneFit.Box(0, 0, 0, 14, 14, 1, false), List.of(0, 1, 2))), merged);
+        assertEquals(2, ZoneFit.merge(List.of(a, c), 30).size());
+    }
+
+    @Test
+    void mergeNeverPassesTheSizeLimit() {
+        assertEquals(2, ZoneFit.merge(List.of(box(0, 200), box(150, 200)), 1).size());
+    }
 }
