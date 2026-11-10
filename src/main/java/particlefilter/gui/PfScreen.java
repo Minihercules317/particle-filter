@@ -105,14 +105,39 @@ public abstract class PfScreen extends Screen {
      * every value typed or stepped that is within [min, max]; anything else is ignored until corrected.
      */
     protected void spinner(ScrollPanel.Row row, int x, int value, int min, int max, Component tooltip, IntConsumer onValue) {
-        TextField box = new TextField(font, 0, 0, SPINNER_WIDTH - 36, 16, tooltip).tooltip(tooltip);
+        List<AbstractWidget> parts = spinnerParts(SPINNER_WIDTH, value, min, max, tooltip, onValue);
+        row.add(parts.get(0), x);
+        row.add(parts.get(1), x + 18);
+        row.add(parts.get(2), x + SPINNER_WIDTH - 16);
+    }
+
+    /** Like {@link #spinner} but added straight to the screen, [width] px wide, with its top left at (x, y). */
+    protected void addSpinner(int x, int y, int width, int value, int min, int max, Component tooltip, IntConsumer onValue) {
+        List<AbstractWidget> parts = spinnerParts(width, value, min, max, tooltip, onValue);
+        parts.get(0).setPosition(x, y);
+        parts.get(1).setPosition(x + 18, y);
+        parts.get(2).setPosition(x + width - 16, y);
+        parts.forEach(this::addRenderableWidget);
+    }
+
+    /** −, the number box and +, in that order, not yet placed. */
+    private List<AbstractWidget> spinnerParts(int width, int value, int min, int max, Component tooltip, IntConsumer onValue) {
+        TextField box = new TextField(font, 0, 0, width - 36, 16, tooltip).tooltip(tooltip);
         box.setMaxLength(9);
         box.setFilter(s -> s.matches(min < 0 ? "-?\\d*" : "\\d*"));
         box.setValue(Integer.toString(value));
         box.setResponder(s -> parse(s, min, max, onValue));
-        row.add(new FlatButton(FlatButton.Style.SECONDARY, Component.literal("−"), 0, 0, 16, 16, () -> step(box, -1, min, max)), x);
-        row.add(box, x + 18);
-        row.add(new FlatButton(FlatButton.Style.SECONDARY, Component.literal("+"), 0, 0, 16, 16, () -> step(box, 1, min, max)), x + SPINNER_WIDTH - 16);
+        return List.of(
+            new FlatButton(FlatButton.Style.SECONDARY, Component.literal("−"), 0, 0, 16, 16, () -> step(box, -1, min, max)),
+            box,
+            new FlatButton(FlatButton.Style.SECONDARY, Component.literal("+"), 0, 0, 16, 16, () -> step(box, 1, min, max)));
+    }
+
+    /** A clearly labelled "← Back" button that returns to the previous screen. */
+    protected FlatButton backButton(int x, int y) {
+        Component label = Component.translatable("particlefilter.back_button");
+        return button(FlatButton.Style.SECONDARY, label, x, y, font.width(label) + 14, 16, this::onClose)
+            .tooltip(Component.translatable("particlefilter.back.tooltip"));
     }
 
     private static void parse(String text, int min, int max, IntConsumer onValue) {

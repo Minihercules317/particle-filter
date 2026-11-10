@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -19,14 +18,21 @@ import java.util.List;
  *
  * Particle entries are particle type ids ("ae2:energy_fx") or, for particles a mod creates without a type, the
  * particle's class name. Block entries are block ids, "namespace:*", or "#tag".
+ *
+ * Every kind of entry has two lists: switched on (applied) and switched off (kept in the menu but not applied).
+ * Off entries live in separate fields so versions that don't know them never hide them.
  */
 public final class PfConfig {
 
-    /** Default size of zones created from a scan; the scanned block sits 2 blocks above the zone's bottom. */
+    /** Size of zones made with New zone; the block at the player's feet is the bottom layer. */
     public static final int NEW_ZONE_WIDTH = 9;
     public static final int NEW_ZONE_HEIGHT = 5;
     public static final int NEW_ZONE_LENGTH = 9;
     public static final int NEW_ZONE_DEPTH_BELOW = 2;
+
+    public static final int MIN_SCAN_SECONDS = 1;
+    public static final int MAX_SCAN_SECONDS = 60;
+    public static final int DEFAULT_SCAN_SECONDS = 3;
 
     private static final class Data {
         List<String> hiddenParticles = new ArrayList<>();
@@ -34,6 +40,11 @@ public final class PfConfig {
         List<Zone> zones = new ArrayList<>();
         /** Added in 1.1.0; older files lack it and older versions ignore it. */
         FilterMode mode = FilterMode.ALL;
+        /** Added after 1.2.0, like the fields below: entries switched off in the menu. */
+        List<String> disabledParticles = new ArrayList<>();
+        List<String> disabledBlocks = new ArrayList<>();
+        Integer scanSeconds = DEFAULT_SCAN_SECONDS;
+        Integer diagnosticSeconds = DEFAULT_SCAN_SECONDS;
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -53,6 +64,14 @@ public final class PfConfig {
                     if (loaded.hiddenBlocks == null) loaded.hiddenBlocks = new ArrayList<>();
                     if (loaded.zones == null) loaded.zones = new ArrayList<>();
                     if (loaded.mode == null) loaded.mode = FilterMode.ALL; // missing or unknown value
+                    if (loaded.disabledParticles == null) loaded.disabledParticles = new ArrayList<>();
+                    if (loaded.disabledBlocks == null) loaded.disabledBlocks = new ArrayList<>();
+                    loaded.disabledParticles.removeAll(loaded.hiddenParticles);
+                    loaded.disabledBlocks.removeAll(loaded.hiddenBlocks);
+                    if (loaded.scanSeconds == null) loaded.scanSeconds = DEFAULT_SCAN_SECONDS;
+                    loaded.scanSeconds = clampScanSeconds(loaded.scanSeconds);
+                    if (loaded.diagnosticSeconds == null) loaded.diagnosticSeconds = DEFAULT_SCAN_SECONDS;
+                    loaded.diagnosticSeconds = clampScanSeconds(loaded.diagnosticSeconds);
                     loaded.zones.forEach(Zone::normalize);
                     data = loaded;
                 }
@@ -60,6 +79,7 @@ public final class PfConfig {
                 ParticleFilter.LOGGER.error("Couldn't read {}; starting with an empty config", file, e);
             }
         }
+        assignColors();
         save(); // writes defaults on first run and upgrades older formats
         FilterRules.rebuild();
     }
@@ -74,6 +94,7 @@ public final class PfConfig {
 
     /** Saves and recompiles the filter rules. Call after any change, including direct edits to a {@link Zone}. */
     public static void changed() {
+        assignColors();
         save();
         FilterRules.rebuild();
     }
@@ -89,20 +110,76 @@ public final class PfConfig {
         changed();
     }
 
+    // ---- scanning ----
+
+    public static int scanSeconds() {
+        return data.scanSeconds;
+    }
+
+    public static void setScanSeconds(int seconds) {
+        data.scanSeconds = clampScanSeconds(seconds);
+        save();
+    }
+
+    public static int diagnosticSeconds() {
+        return data.diagnosticSeconds;
+    }
+
+    public static void setDiagnosticSeconds(int seconds) {
+        data.diagnosticSeconds = clampScanSeconds(seconds);
+        save();
+    }
+
+    private static int clampScanSeconds(int seconds) {
+        return Math.max(MIN_SCAN_SECONDS, Math.min(MAX_SCAN_SECONDS, seconds));
+    }
+
+    // ---- entry lists: hide adds or switches on, remove deletes, setOn moves between the on and off lists ----
+
+    private static void hide(List<String> on, List<String> off, String entry) {
+        off.remove(entry);
+        if (!on.contains(entry)) on.add(entry);
+        changed();
+    }
+
+    private static void remove(List<String> on, List<String> off, String entry) {
+        on.remove(entry);
+        off.remove(entry);
+        changed();
+    }
+
+    private static void setOn(List<String> on, List<String> off, String entry, boolean active) {
+        if (!on.contains(entry) && !off.contains(entry)) return; // deleted meanwhile
+        on.remove(entry);
+        off.remove(entry);
+        (active ? on : off).add(entry);
+        changed();
+    }
+
     // ---- particles hidden everywhere ----
 
     public static List<String> hiddenParticles() {
         return List.copyOf(data.hiddenParticles);
     }
 
+    /** Particles listed under Everywhere but switched off. */
+    public static List<String> disabledParticles() {
+        return List.copyOf(data.disabledParticles);
+    }
+
     public static boolean isHiddenEverywhere(String particle) {
         return data.hiddenParticles.contains(particle);
     }
 
+    /** Hiding adds [particle] (or switches it back on); showing deletes the entry. */
     public static void setHiddenEverywhere(String particle, boolean hidden) {
-        data.hiddenParticles.remove(particle);
-        if (hidden) data.hiddenParticles.add(particle);
-        changed();
+        if (hidden) hide(data.hiddenParticles, data.disabledParticles, particle);
+        else remove(data.hiddenParticles, data.disabledParticles, particle);
+    }
+
+    /** Switches an Everywhere entry on or off, keeping it listed. */
+    public static void setEverywhereOn(String particle, boolean on) {
+        setOn(data.hiddenParticles, data.disabledParticles, particle, on);
     }
 
     // ---- block breaking/mining/dust particles ----
@@ -111,20 +188,34 @@ public final class PfConfig {
         return List.copyOf(data.hiddenBlocks);
     }
 
+    public static List<String> disabledBlocks() {
+        return List.copyOf(data.disabledBlocks);
+    }
+
+    /** True if [entry] is listed and switched on. */
     public static boolean hasBlockEntry(String entry) {
         return data.hiddenBlocks.contains(entry);
     }
 
+    /** Hiding adds [entry] (or switches it back on); showing deletes the entry. */
     public static void setBlockHidden(String entry, boolean hidden) {
-        data.hiddenBlocks.remove(entry);
-        if (hidden) data.hiddenBlocks.add(entry);
-        changed();
+        if (hidden) hide(data.hiddenBlocks, data.disabledBlocks, entry);
+        else remove(data.hiddenBlocks, data.disabledBlocks, entry);
+    }
+
+    public static void setBlockOn(String entry, boolean on) {
+        setOn(data.hiddenBlocks, data.disabledBlocks, entry, on);
     }
 
     // ---- zones ----
 
     public static List<Zone> zones() {
         return List.copyOf(data.zones);
+    }
+
+    public static Zone zoneById(String id) {
+        if (id == null) return null;
+        return data.zones.stream().filter(z -> z.id.equals(id)).findFirst().orElse(null);
     }
 
     public static boolean isInCurrentWorld(Zone zone) {
@@ -137,36 +228,38 @@ public final class PfConfig {
         return data.zones.stream().filter(PfConfig::isInCurrentWorld).toList();
     }
 
-    /** Smallest zone here containing [pos]: where "hide in zone" adds to. */
-    public static Zone zoneAt(BlockPos pos) {
-        return zonesHere().stream().filter(z -> z.contains(pos))
-            .min(Comparator.comparingLong(z -> (long) z.width * z.height * z.length)).orElse(null);
-    }
-
-    public static boolean isHiddenInZoneAt(BlockPos pos, String particle) {
-        return zonesHere().stream().anyMatch(z -> z.contains(pos) && z.particles.contains(particle));
-    }
-
-    /** A default-sized zone around [pos] in the current world, without adding it. Null when not in a world. */
-    public static Zone defaultZoneAround(BlockPos pos) {
+    /** A new zone in the current world, not yet added. Null when not in a world. */
+    private static Zone newZone() {
         if (FilterRules.currentWorld() == null) return null;
         Zone zone = new Zone();
         zone.world = FilterRules.currentWorld();
         zone.dimension = FilterRules.currentDimension();
+        zone.name = nextZoneName();
+        return zone;
+    }
+
+    /** Creates and adds a default-sized zone around [pos], [NEW_ZONE_DEPTH_BELOW] blocks below it. Null when not in a world. */
+    public static Zone createZone(BlockPos pos) {
+        Zone zone = newZone();
+        if (zone == null) return null;
         zone.x = pos.getX();
         zone.y = pos.getY() - NEW_ZONE_DEPTH_BELOW;
         zone.z = pos.getZ();
         zone.width = NEW_ZONE_WIDTH;
         zone.height = NEW_ZONE_HEIGHT;
         zone.length = NEW_ZONE_LENGTH;
-        zone.name = nextZoneName();
-        return zone;
+        return add(zone);
     }
 
-    /** Creates and adds a default-sized zone around [pos]. Null when not in a world. */
-    public static Zone createZone(BlockPos pos) {
-        Zone zone = defaultZoneAround(pos);
+    /** Creates and adds a zone covering the given blocks. Null when not in a world. */
+    public static Zone createZone(int minX, int minY, int minZ, int width, int height, int length) {
+        Zone zone = newZone();
         if (zone == null) return null;
+        zone.setBox(minX, minY, minZ, width, height, length);
+        return add(zone);
+    }
+
+    private static Zone add(Zone zone) {
         data.zones.add(zone);
         changed();
         return zone;
@@ -184,26 +277,56 @@ public final class PfConfig {
         changed();
     }
 
-    public static void setHiddenInZone(Zone zone, String particle, boolean hidden) {
-        zone.particles.remove(particle);
-        if (hidden) zone.particles.add(particle);
-        changed();
+    public static boolean isHiddenInZone(Zone zone, String particle) {
+        return zone.particles.contains(particle);
     }
 
+    /** Hiding adds [particle] to [zone] (or switches it back on); showing deletes the entry. */
+    public static void setHiddenInZone(Zone zone, String particle, boolean hidden) {
+        if (hidden) hide(zone.particles, zone.disabledParticles, particle);
+        else remove(zone.particles, zone.disabledParticles, particle);
+    }
+
+    public static void setZoneEntryOn(Zone zone, String particle, boolean on) {
+        setOn(zone.particles, zone.disabledParticles, particle, on);
+    }
+
+    // ---- outline colors ----
+
     /**
-     * Hides or shows [particle] around [pos]. Hiding adds it to the smallest zone containing [pos], creating a
-     * default zone there if none does. Showing removes it from every zone here that contains [pos].
+     * Gives every zone without a color, or with the same color as an earlier zone it touches, the color least used
+     * in its world among those its neighbours don't have. Earlier zones keep theirs, so colors rarely change.
      */
-    public static void setHiddenInZoneAt(BlockPos pos, String particle, boolean hidden) {
-        if (!hidden) {
-            for (Zone zone : zonesHere()) {
-                if (zone.contains(pos)) zone.particles.remove(particle);
+    private static void assignColors() {
+        List<Zone> zones = data.zones;
+        for (int i = 0; i < zones.size(); i++) {
+            Zone zone = zones.get(i);
+            boolean clash = zone.color == null || zone.color < 0 || zone.color >= Zone.COLOR_COUNT;
+            for (int j = 0; j < i && !clash; j++) {
+                Zone other = zones.get(j);
+                clash = zone.color.equals(other.color) && zone.sameWorld(other) && zone.touches(other);
             }
-            changed();
-            return;
+            if (clash) zone.color = pickColor(zone, zones.subList(0, i));
         }
-        Zone zone = zoneAt(pos);
-        if (zone == null) zone = createZone(pos);
-        if (zone != null) setHiddenInZone(zone, particle, true);
+    }
+
+    private static int pickColor(Zone zone, List<Zone> earlier) {
+        int[] uses = new int[Zone.COLOR_COUNT];
+        boolean[] neighbour = new boolean[Zone.COLOR_COUNT];
+        for (Zone other : earlier) {
+            if (!other.sameWorld(zone) || other.color == null) continue;
+            uses[other.color]++;
+            if (other.touches(zone)) neighbour[other.color] = true;
+        }
+        int best = -1;
+        for (int c = 0; c < Zone.COLOR_COUNT; c++) {
+            if (neighbour[c]) continue;
+            if (best < 0 || uses[c] < uses[best]) best = c;
+        }
+        if (best >= 0) return best;
+        // Every color touches this zone already: take the least used one.
+        int least = 0;
+        for (int c = 1; c < Zone.COLOR_COUNT; c++) if (uses[c] < uses[least]) least = c;
+        return least;
     }
 }

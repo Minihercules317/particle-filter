@@ -47,6 +47,11 @@ public class ScrollPanel extends ContainerWidget {
             return this;
         }
 
+        /** Paints the row as the panel would, for rows that wrap another row's look. */
+        public void paint(GuiGraphics g, int x, int y, int width, int height, boolean hovered) {
+            painter.paint(g, x, y, width, height, hovered);
+        }
+
         /** Shown after a short hover over the row's empty space (not its widgets). */
         public Row tooltip(Component tooltip) {
             this.tooltip = tooltip;

@@ -24,10 +24,12 @@ import particlefilter.filter.FilterRules;
 import particlefilter.gui.ParticleFilterScreen;
 import particlefilter.gui.ParticleFilterScreen.Tab;
 import particlefilter.render.ZoneRenderer;
+import particlefilter.scan.DiagnosticScan;
 import particlefilter.scan.ParticleScan;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -74,6 +76,7 @@ public final class ParticleFilter {
         dispatcher.register(Commands.literal(COMMAND)
             .executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, null)))
             .then(Commands.literal("scan").executes(ctx -> openNextTick(ParticleFilter::scanAndOpen)))
+            .then(Commands.literal("diagnostic").executes(ctx -> openNextTick(ParticleFilter::diagnoseAndOpen)))
             .then(Commands.literal("hidden").executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, Tab.HIDDEN))))
             .then(Commands.literal("zones").executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, Tab.ZONES)))));
     }
@@ -89,6 +92,12 @@ public final class ParticleFilter {
         return new ParticleFilterScreen(null, Tab.SCAN);
     }
 
+    /** Starts a diagnostic scan around the player and opens the Diagnostic tab. */
+    private static Screen diagnoseAndOpen() {
+        DiagnosticScan.start();
+        return new ParticleFilterScreen(null, Tab.DIAGNOSTIC);
+    }
+
     /** The block under the crosshair, if the player is looking at one. */
     public static Optional<BlockPos> targetedBlock() {
         HitResult hit = Minecraft.getInstance().hitResult;
@@ -98,8 +107,18 @@ public final class ParticleFilter {
 
     public static void onClientTick() {
         Minecraft mc = Minecraft.getInstance();
+        String world = FilterRules.currentWorld();
+        String dimension = FilterRules.currentDimension();
         FilterRules.tick();
+        // The menu reopens on the last page only while the player stays in the same world or server.
+        if (!Objects.equals(world, FilterRules.currentWorld())) ParticleFilterScreen.forgetLastPage();
+        // Scan results point at places in one dimension.
+        if (!Objects.equals(world, FilterRules.currentWorld()) || !Objects.equals(dimension, FilterRules.currentDimension())) {
+            ParticleScan.reset();
+            DiagnosticScan.reset();
+        }
         ParticleScan.tick();
+        DiagnosticScan.tick();
         if (pendingScreen != null) {
             Supplier<Screen> screen = pendingScreen;
             pendingScreen = null;

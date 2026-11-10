@@ -3,6 +3,7 @@ package particlefilter.gui;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import particlefilter.config.Zone;
 
 import java.util.Locale;
 
@@ -37,11 +38,19 @@ public final class Theme {
     public static final int TYPED = 0xFF6AD3FF;
     public static final int UNTYPED = 0xFFE38BFF;
     public static final int BLOCK = 0xFFF5D76E;
-    /** Same hues as the zone outlines drawn in the world. */
-    public static final int ZONE = 0xFFFF8C1A;
+    /** Zone outline colors, one per zone, picked so that touching zones differ. The first is the original orange. */
+    public static final int[] ZONE_COLORS = {
+        0xFFFF8C1A, 0xFF4C8DFF, 0xFF5BE06B, 0xFFFF5FB0, 0xFFA77BFF, 0xFFF5D040, 0xFFFF4D4D, 0xFFC8D0DA
+    };
+    /** Outline of a zone that Here would create; not one of {@link #ZONE_COLORS}. */
     public static final int NEW_ZONE = 0xFF40E6FF;
 
     private Theme() {}
+
+    /** The color of [zone]'s outline in the world, also used for it in the menu. */
+    public static int zoneColor(Zone zone) {
+        return ZONE_COLORS[zone.color == null ? 0 : Math.floorMod(zone.color, ZONE_COLORS.length)];
+    }
 
     /** Fills a rectangle with corners rounded by [radius] pixels. Rows never overlap, so translucent colors stay even. */
     public static void rect(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
