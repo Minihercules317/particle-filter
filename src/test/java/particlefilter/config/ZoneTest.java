@@ -151,8 +151,8 @@ class ZoneTest {
     }
 
     @Test
-    void version100RadiusBecomesACubeAroundTheSamePoint() {
-        // 1.0.0 stored a cube of radius r around (x, y, z).
+    void oldRadiusZoneBecomesACubeAroundTheSamePoint() {
+        // The first build (commit fc72b78) stored a cube of radius r around (x, y, z).
         Zone zone = new Zone();
         zone.x = 10;
         zone.y = 64;

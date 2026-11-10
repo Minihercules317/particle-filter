@@ -3,7 +3,8 @@ package particlefilter.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.core.BlockPos;
-import particlefilter.ParticleFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import particlefilter.filter.FilterRules;
 
 import java.io.IOException;
@@ -34,7 +35,8 @@ public final class PfConfig {
     public static final int MAX_SCAN_SECONDS = 60;
     public static final int DEFAULT_SCAN_SECONDS = 3;
 
-    private static final class Data {
+    /** The saved settings, as stored in the file. */
+    static final class Data {
         List<String> hiddenParticles = new ArrayList<>();
         List<String> hiddenBlocks = new ArrayList<>();
         List<Zone> zones = new ArrayList<>();
@@ -45,8 +47,27 @@ public final class PfConfig {
         List<String> disabledBlocks = new ArrayList<>();
         Integer scanSeconds = DEFAULT_SCAN_SECONDS;
         Integer diagnosticSeconds = DEFAULT_SCAN_SECONDS;
+
+        /** Fills defaults for fields missing from older or hand-edited files and puts values back in range. */
+        void normalize() {
+            if (hiddenParticles == null) hiddenParticles = new ArrayList<>();
+            if (hiddenBlocks == null) hiddenBlocks = new ArrayList<>();
+            if (zones == null) zones = new ArrayList<>();
+            if (mode == null) mode = FilterMode.ALL; // missing or unknown value
+            if (disabledParticles == null) disabledParticles = new ArrayList<>();
+            if (disabledBlocks == null) disabledBlocks = new ArrayList<>();
+            disabledParticles.removeAll(hiddenParticles);
+            disabledBlocks.removeAll(hiddenBlocks);
+            if (scanSeconds == null) scanSeconds = DEFAULT_SCAN_SECONDS;
+            scanSeconds = clampScanSeconds(scanSeconds);
+            if (diagnosticSeconds == null) diagnosticSeconds = DEFAULT_SCAN_SECONDS;
+            diagnosticSeconds = clampScanSeconds(diagnosticSeconds);
+            zones.forEach(Zone::normalize);
+        }
     }
 
+    /** Same name as {@code ParticleFilter.LOGGER}; kept here so the config code runs without the game (unit tests). */
+    private static final Logger LOGGER = LoggerFactory.getLogger("Particle Filter");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static Path file;
 
@@ -58,43 +79,39 @@ public final class PfConfig {
         file = path;
         if (Files.exists(file)) {
             try {
-                Data loaded = GSON.fromJson(Files.readString(file), Data.class);
-                if (loaded != null) {
-                    if (loaded.hiddenParticles == null) loaded.hiddenParticles = new ArrayList<>();
-                    if (loaded.hiddenBlocks == null) loaded.hiddenBlocks = new ArrayList<>();
-                    if (loaded.zones == null) loaded.zones = new ArrayList<>();
-                    if (loaded.mode == null) loaded.mode = FilterMode.ALL; // missing or unknown value
-                    if (loaded.disabledParticles == null) loaded.disabledParticles = new ArrayList<>();
-                    if (loaded.disabledBlocks == null) loaded.disabledBlocks = new ArrayList<>();
-                    loaded.disabledParticles.removeAll(loaded.hiddenParticles);
-                    loaded.disabledBlocks.removeAll(loaded.hiddenBlocks);
-                    if (loaded.scanSeconds == null) loaded.scanSeconds = DEFAULT_SCAN_SECONDS;
-                    loaded.scanSeconds = clampScanSeconds(loaded.scanSeconds);
-                    if (loaded.diagnosticSeconds == null) loaded.diagnosticSeconds = DEFAULT_SCAN_SECONDS;
-                    loaded.diagnosticSeconds = clampScanSeconds(loaded.diagnosticSeconds);
-                    loaded.zones.forEach(Zone::normalize);
-                    data = loaded;
-                }
+                Data loaded = parse(Files.readString(file));
+                if (loaded != null) data = loaded;
             } catch (Exception e) {
-                ParticleFilter.LOGGER.error("Couldn't read {}; starting with an empty config", file, e);
+                LOGGER.error("Couldn't read {}; starting with an empty config", file, e);
             }
         }
-        assignColors();
+        assignColors(data.zones);
         save(); // writes defaults on first run and upgrades older formats
         FilterRules.rebuild();
     }
 
+    /** The settings in [json], with defaults filled in and values put in range; null for an empty file. */
+    static Data parse(String json) {
+        Data parsed = GSON.fromJson(json, Data.class);
+        if (parsed != null) parsed.normalize();
+        return parsed;
+    }
+
+    static String toJson(Data data) {
+        return GSON.toJson(data);
+    }
+
     private static void save() {
         try {
-            Files.writeString(file, GSON.toJson(data));
+            Files.writeString(file, toJson(data));
         } catch (IOException e) {
-            ParticleFilter.LOGGER.error("Couldn't save {}", file, e);
+            LOGGER.error("Couldn't save {}", file, e);
         }
     }
 
     /** Saves and recompiles the filter rules. Call after any change, including direct edits to a {@link Zone}. */
     public static void changed() {
-        assignColors();
+        assignColors(data.zones);
         save();
         FilterRules.rebuild();
     }
@@ -297,8 +314,7 @@ public final class PfConfig {
      * Gives every zone without a color, or with the same color as an earlier zone it touches, the color least used
      * in its world among those its neighbours don't have. Earlier zones keep theirs, so colors rarely change.
      */
-    private static void assignColors() {
-        List<Zone> zones = data.zones;
+    static void assignColors(List<Zone> zones) {
         for (int i = 0; i < zones.size(); i++) {
             Zone zone = zones.get(i);
             boolean clash = zone.color == null || zone.color < 0 || zone.color >= Zone.COLOR_COUNT;
