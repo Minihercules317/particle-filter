@@ -88,15 +88,14 @@ public class DiagnosticPage extends ResultsPage {
         mergeSlider = null;
         if (showsControls()) {
             int bottomRowY = screen.bodyBottom() - PfScreen.SMALL_BUTTON_HEIGHT;
-            int distanceY = oneControlRow() ? bottomRowY : bottomRowY - CONTROL_ROW;
-            screen.addSpinner(screen.cx() + distanceLabelWidth() + DURATION_GAP, distanceY, DURATION_WIDTH, PfConfig.sourceDistance(),
+            screen.addSpinner(screen.cx() + distanceLabelWidth() + DURATION_GAP, bottomRowY - CONTROL_ROW, DURATION_WIDTH, PfConfig.sourceDistance(),
                 PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE,
                 Component.translatable("particlefilter.diagnostic.source_distance.tooltip", PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE),
                 blocks -> {
                     DiagnosticScan.setSourceDistance(blocks);
                     screen.refreshNextTick(); // previews, notices and zones follow the new distance
                 });
-            mergeSlider = screen.addRenderableWidget(new Slider(mergeX() + mergeLabelWidth() + DURATION_GAP, bottomRowY + (PfScreen.SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
+            mergeSlider = screen.addRenderableWidget(new Slider(screen.cx() + mergeLabelWidth() + DURATION_GAP, bottomRowY + (PfScreen.SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
                 SLIDER_WIDTH, PfConfig.mergePercent(), PfConfig.MIN_MERGE_PERCENT, PfConfig.MAX_MERGE_PERCENT,
                 Component.translatable("particlefilter.diagnostic.merge"), percent -> {
                     DiagnosticScan.setMergePercent(percent);
@@ -105,12 +104,11 @@ public class DiagnosticPage extends ResultsPage {
         }
     }
 
-    // ---------------------------------------------------------------- Controls row: source distance and merge share
+    // ---------------------------------------------------------------- Controls: source distance, then merge share
+    // Two rows under the Here line: side by side they need more than the menu's widest content area.
 
     /** Height of a row of controls at the bottom, with the gap above it. */
     private static final int CONTROL_ROW = PfScreen.SMALL_BUTTON_HEIGHT + 4;
-    /** Smallest gap between the distance and merge controls when they share a row. */
-    private static final int CONTROLS_GAP = 16;
     /** Width of the merge slider. */
     private static final int SLIDER_WIDTH = 80;
 
@@ -129,29 +127,9 @@ public class DiagnosticPage extends ResultsPage {
         return screen.font().width(Component.translatable("particlefilter.diagnostic.merge"));
     }
 
-    /** "Same source within [− n +] blocks". */
-    private int distanceWidth() {
-        return distanceLabelWidth() + DURATION_GAP + DURATION_WIDTH + UNIT_GAP + screen.font().width(Component.translatable("particlefilter.diagnostic.source_distance_unit"));
-    }
-
-    /** "Merge zones sharing [slider] 100%", sized for the widest value. */
-    private int mergeWidth() {
-        return mergeLabelWidth() + DURATION_GAP + SLIDER_WIDTH + UNIT_GAP + screen.font().width(percentText(PfConfig.MAX_MERGE_PERCENT));
-    }
-
-    /** True if both controls fit side by side; otherwise the distance goes on a row above the merge slider. */
-    private boolean oneControlRow() {
-        return distanceWidth() + CONTROLS_GAP + mergeWidth() <= screen.cw();
-    }
-
     /** Height the controls take at the bottom. */
     private int controlsHeight() {
-        return showsControls() ? (oneControlRow() ? 1 : 2) * CONTROL_ROW : 0;
-    }
-
-    /** Left edge of the merge control: right-aligned beside the distance, or at the left on its own row. */
-    private int mergeX() {
-        return oneControlRow() ? screen.cx() + screen.cw() - mergeWidth() : screen.cx();
+        return showsControls() ? 2 * CONTROL_ROW : 0;
     }
 
     private static String percentText(int percent) {
@@ -270,14 +248,13 @@ public class DiagnosticPage extends ResultsPage {
         if (!showsControls()) return;
         var font = screen.font();
         int bottomTextY = screen.bodyBottom() - PfScreen.SMALL_BUTTON_HEIGHT + (PfScreen.SMALL_BUTTON_HEIGHT - 8) / 2;
-        int distanceTextY = oneControlRow() ? bottomTextY : bottomTextY - CONTROL_ROW;
+        int distanceTextY = bottomTextY - CONTROL_ROW;
         int cx = screen.cx();
         Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance"), cx, distanceTextY, Theme.TEXT_DIM);
         Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance_unit"),
             cx + distanceLabelWidth() + DURATION_GAP + DURATION_WIDTH + UNIT_GAP, distanceTextY, Theme.TEXT_DIM);
-        int mergeX = mergeX();
-        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.merge"), mergeX, bottomTextY, Theme.TEXT_DIM);
+        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.merge"), cx, bottomTextY, Theme.TEXT_DIM);
         int percent = mergeSlider != null ? mergeSlider.intValue() : PfConfig.mergePercent();
-        Theme.text(g, font, percentText(percent), mergeX + mergeLabelWidth() + DURATION_GAP + SLIDER_WIDTH + UNIT_GAP, bottomTextY, Theme.TEXT);
+        Theme.text(g, font, percentText(percent), cx + mergeLabelWidth() + DURATION_GAP + SLIDER_WIDTH + UNIT_GAP, bottomTextY, Theme.TEXT);
     }
 }
