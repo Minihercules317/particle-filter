@@ -33,10 +33,12 @@ abstract class ResultsPage extends Page {
     private static final int LIST_TOP = 36;
     /** How far the column labels sit above the list. */
     private static final int COLUMN_LABELS_ABOVE = 12;
-    /** Width of the duration spinner. */
-    private static final int DURATION_WIDTH = 62;
-    /** Gap between "Scan for" and the duration spinner. */
-    private static final int DURATION_GAP = 6;
+    /** Width of the duration spinner (and other number spinners on these pages). */
+    protected static final int DURATION_WIDTH = 62;
+    /** Gap between "Scan for" and the duration spinner (and between other spinners and their labels). */
+    protected static final int DURATION_GAP = 6;
+    /** Gap between a spinner and the unit after it ("seconds"). */
+    protected static final int UNIT_GAP = 5;
     /** Space above a result row's name, and the same below. */
     private static final int RESULT_TEXT_Y = 7;
     /** Gap between a result row's count and its first column; the frequency bar ends at the count's right edge. */
@@ -116,7 +118,7 @@ abstract class ResultsPage extends Page {
         var font = screen.font();
         int textY = screen.bodyTop() + 4;
         Theme.text(g, font, Component.translatable("particlefilter.scan.duration"), screen.cx(), textY, Theme.TEXT_DIM);
-        Theme.text(g, font, Component.translatable("particlefilter.scan.duration_unit"), durationSpinnerX() + DURATION_WIDTH + 5, textY, Theme.TEXT_DIM);
+        Theme.text(g, font, Component.translatable("particlefilter.scan.duration_unit"), durationSpinnerX() + DURATION_WIDTH + UNIT_GAP, textY, Theme.TEXT_DIM);
     }
 
     /** Left edge of column [i] of [n] switch or value columns at the right of a result row. */
@@ -152,18 +154,31 @@ abstract class ResultsPage extends Page {
      */
     protected Row growRow(Component text, Component tip, Runnable grow, Runnable whileHovered) {
         int buttonX = screen.panel().contentWidth() - GROW_WIDTH - GROW_GAP;
-        var lines = screen.wrap(text, buttonX - CARD_TEXT_X - GROW_GAP);
-        Row row = new Row(PfScreen.textHeight(lines.size()) + 2 * GROW_TEXT_Y, (g, x, y, w, h, hovered) -> {
-            Theme.rect(g, x, y, w, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
-            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, Theme.WARNING);
-            screen.drawLines(g, lines, x + CARD_TEXT_X, y + GROW_TEXT_Y, Theme.TEXT);
-            if (hovered) whileHovered.run();
-        });
+        Row row = noticeRow(text, buttonX - GROW_GAP, whileHovered);
         row.add(screen.rowButton(FlatButton.Style.SECONDARY, Component.translatable("particlefilter.grow"), GROW_WIDTH, () -> {
             grow.run();
             screen.refreshNextTick();
         }).tooltip(tip), buttonX);
         return row;
+    }
+
+    /**
+     * A notice card: a warning dot and [text] wrapped to end [textRight] px from the card's left edge. [whileHovered]
+     * runs every frame the card is hovered.
+     */
+    protected Row noticeRow(Component text, int textRight, Runnable whileHovered) {
+        var lines = screen.wrap(text, textRight - CARD_TEXT_X);
+        return new Row(PfScreen.textHeight(lines.size()) + 2 * GROW_TEXT_Y, (g, x, y, w, h, hovered) -> {
+            Theme.rect(g, x, y, w, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
+            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, Theme.WARNING);
+            screen.drawLines(g, lines, x + CARD_TEXT_X, y + GROW_TEXT_Y, Theme.TEXT);
+            if (hovered) whileHovered.run();
+        });
+    }
+
+    /** A notice card's text right edge when it has no button. */
+    protected int noticeTextRight() {
+        return screen.panel().contentWidth() - GROW_GAP;
     }
 
     /** Tooltip of a Grow to fit button: the zone's size now and after, and a warning if it hits the size limit. */

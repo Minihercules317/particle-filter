@@ -172,8 +172,7 @@ public class ScanPage extends ResultsPage {
             renderColumnLabels(g, "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
         }
 
-        ZoneRenderer.highlighted = null;
-        ZoneRenderer.preview = null;
+        ZoneRenderer.clear();
         if (ParticleScan.target() == null) return;
         // What Here refers to: a zone around the scanned block, or a new one fitted to the particles (cyan preview).
         Zone zone = ParticleScan.hereZone();

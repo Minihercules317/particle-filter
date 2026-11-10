@@ -38,6 +38,11 @@ public final class PfConfig {
     public static final int MAX_SCAN_SECONDS = 60;
     public static final int DEFAULT_SCAN_SECONDS = 3;
 
+    /** How far apart spots where a particle appeared may be and still count as one source, in blocks. */
+    public static final int MIN_SOURCE_DISTANCE = 1;
+    public static final int MAX_SOURCE_DISTANCE = 32;
+    public static final int DEFAULT_SOURCE_DISTANCE = 6;
+
     /** The saved settings, as stored in the file. */
     static final class Data {
         List<String> hiddenParticles = new ArrayList<>();
@@ -50,6 +55,7 @@ public final class PfConfig {
         List<String> disabledBlocks = new ArrayList<>();
         Integer scanSeconds = DEFAULT_SCAN_SECONDS;
         Integer diagnosticSeconds = DEFAULT_SCAN_SECONDS;
+        Integer sourceDistance = DEFAULT_SOURCE_DISTANCE;
 
         /** Fills defaults for fields missing from older or hand-edited files and puts values back in range. */
         void normalize() {
@@ -65,6 +71,8 @@ public final class PfConfig {
             scanSeconds = clampScanSeconds(scanSeconds);
             if (diagnosticSeconds == null) diagnosticSeconds = DEFAULT_SCAN_SECONDS;
             diagnosticSeconds = clampScanSeconds(diagnosticSeconds);
+            if (sourceDistance == null) sourceDistance = DEFAULT_SOURCE_DISTANCE;
+            sourceDistance = clampSourceDistance(sourceDistance);
             zones.forEach(Zone::normalize);
         }
     }
@@ -176,6 +184,20 @@ public final class PfConfig {
 
     private static int clampScanSeconds(int seconds) {
         return Math.max(MIN_SCAN_SECONDS, Math.min(MAX_SCAN_SECONDS, seconds));
+    }
+
+    /** Spots where a particle appeared at most this many blocks apart are one source (Diagnostic page). */
+    public static int sourceDistance() {
+        return data.sourceDistance;
+    }
+
+    public static void setSourceDistance(int blocks) {
+        data.sourceDistance = clampSourceDistance(blocks);
+        save();
+    }
+
+    private static int clampSourceDistance(int blocks) {
+        return Math.max(MIN_SOURCE_DISTANCE, Math.min(MAX_SOURCE_DISTANCE, blocks));
     }
 
     // ---- entry lists: hide adds or switches on, remove deletes, setOn moves between the on and off lists ----

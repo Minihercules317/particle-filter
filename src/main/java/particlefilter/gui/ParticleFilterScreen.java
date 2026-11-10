@@ -174,8 +174,7 @@ public class ParticleFilterScreen extends PfScreen {
         tab = t;
         page().shown();
         savedScroll = 0;
-        ZoneRenderer.highlighted = null;
-        ZoneRenderer.preview = null;
+        ZoneRenderer.clear();
         rebuildWidgets();
     }
 

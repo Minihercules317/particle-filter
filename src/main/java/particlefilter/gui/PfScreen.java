@@ -64,8 +64,7 @@ public abstract class PfScreen extends Screen {
 
     @Override
     public void removed() {
-        ZoneRenderer.highlighted = null;
-        ZoneRenderer.preview = null;
+        ZoneRenderer.clear();
     }
 
     /** Rebuilds the screen after a change, keeping the list scrolled where it was. */

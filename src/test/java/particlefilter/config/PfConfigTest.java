@@ -27,6 +27,7 @@ class PfConfigTest {
         assertEquals(List.of(), data.disabledBlocks);
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.scanSeconds);
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.diagnosticSeconds);
+        assertEquals(PfConfig.DEFAULT_SOURCE_DISTANCE, data.sourceDistance);
     }
 
     @Test
@@ -86,6 +87,7 @@ class PfConfigTest {
         assertEquals(List.of(), zone.disabledParticles);
         assertNull(zone.color); // load() gives it one
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.scanSeconds);
+        assertEquals(PfConfig.DEFAULT_SOURCE_DISTANCE, data.sourceDistance);
     }
 
     @Test
@@ -120,6 +122,13 @@ class PfConfigTest {
 
         assertEquals(PfConfig.MIN_SCAN_SECONDS, data.scanSeconds);
         assertEquals(PfConfig.MAX_SCAN_SECONDS, data.diagnosticSeconds);
+    }
+
+    @Test
+    void sourceDistanceIsPutInRange() {
+        assertEquals(PfConfig.MIN_SOURCE_DISTANCE, PfConfig.parse("{\"sourceDistance\": 0}").sourceDistance);
+        assertEquals(PfConfig.MAX_SOURCE_DISTANCE, PfConfig.parse("{\"sourceDistance\": 500}").sourceDistance);
+        assertEquals(10, PfConfig.parse("{\"sourceDistance\": 10}").sourceDistance);
     }
 
     @Test

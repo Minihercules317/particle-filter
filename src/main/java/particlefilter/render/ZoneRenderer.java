@@ -14,6 +14,11 @@ import particlefilter.config.Zone;
 import particlefilter.gui.PfScreen;
 import particlefilter.gui.Theme;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
  * Outlines zones in the world, each in its own color (touching zones always differ). While a zone is being edited or
  * hovered it is drawn brighter and thicker and the others dimmer; a zone that Here would create is cyan. Drawn while
@@ -26,6 +31,18 @@ public final class ZoneRenderer {
     public static Zone highlighted;
     /** Zone that Here would create, not yet added. */
     public static AABB preview;
+    /** More zones to highlight like [highlighted], e.g. every zone of one particle. Cleared with it. */
+    public static List<Zone> highlightedMore = List.of();
+    /** More boxes to preview like [preview], e.g. one per source of a particle. Cleared with it. */
+    public static List<AABB> previewMore = List.of();
+
+    /** Clears every highlight and preview. */
+    public static void clear() {
+        highlighted = null;
+        preview = null;
+        highlightedMore = List.of();
+        previewMore = List.of();
+    }
 
     private ZoneRenderer() {}
 
@@ -34,9 +51,15 @@ public final class ZoneRenderer {
         Minecraft mc = Minecraft.getInstance();
         if (!alwaysShow && !(mc.screen instanceof PfScreen)) return;
         var zones = PfConfig.zonesHere();
-        AABB previewBox = mc.screen instanceof PfScreen ? preview : null;
-        if (zones.isEmpty() && previewBox == null) return;
-        Zone focus = highlighted != null && zones.contains(highlighted) ? highlighted : null;
+        List<AABB> previews = new ArrayList<>();
+        if (mc.screen instanceof PfScreen) {
+            if (preview != null) previews.add(preview);
+            previews.addAll(previewMore);
+        }
+        if (zones.isEmpty() && previews.isEmpty()) return;
+        Set<Zone> focus = new HashSet<>(highlightedMore);
+        if (highlighted != null) focus.add(highlighted);
+        focus.retainAll(zones);
 
         Vec3 cameraPos = camera.getPosition();
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
@@ -45,15 +68,15 @@ public final class ZoneRenderer {
         pose.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
         for (Zone zone : zones) {
             int color = Theme.zoneColor(zone);
-            if (zone == focus) {
+            if (focus.contains(zone)) {
                 color = Theme.mix(color, 0xFFFFFFFF, 0.3f);
                 box(pose, lines, zone.box().inflate(0.02), color); // a second line next to the first reads as thicker
-            } else if (focus != null || previewBox != null) {
+            } else if (!focus.isEmpty() || !previews.isEmpty()) {
                 color = Theme.mix(color, 0xFF000000, 0.5f);
             }
             box(pose, lines, zone.box(), color);
         }
-        if (previewBox != null) {
+        for (AABB previewBox : previews) {
             box(pose, lines, previewBox, Theme.NEW_ZONE);
             box(pose, lines, previewBox.inflate(0.02), Theme.NEW_ZONE);
         }

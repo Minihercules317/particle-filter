@@ -1,6 +1,5 @@
 package particlefilter.scan;
 
-import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
@@ -10,6 +9,7 @@ import particlefilter.config.Zone;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -21,15 +21,22 @@ import java.util.Set;
  * Records every particle around the player within render distance for a few seconds, split into particles that still
  * appeared and particles the rules hid, so players can tell what is still costing them.
  *
- * Its Here column makes one zone per particle, fitted to where that particle appeared (or, if it only appeared hidden,
- * to where it spawned). When one particle's box lies entirely inside another's they share the larger zone. These zones
- * are regrouped whenever a particle is switched on or off, until the player edits one by hand or runs a new diagnostic.
+ * Its Here column makes one zone per source of a particle: the spots where it appeared (or, if it only appeared hidden,
+ * where it spawned) split into groups at most {@link PfConfig#sourceDistance()} blocks apart ({@link ZoneFit#sources}),
+ * the busiest [MAX_SOURCES] of them. When one source's box lies entirely inside another's they share the larger zone.
+ * These zones are regrouped whenever a particle is switched on or off or the distance changes, until the player edits
+ * one by hand or runs a new diagnostic.
  */
 public final class DiagnosticScan {
 
-    /** One particle in one section: how many spawned, the box they fill, and how close the nearest came. */
-    /** [blocks]: the blocks it spawned in, as {@link BlockPos#asLong} (at most {@link SpawnRecorder#MAX_BLOCKS}). */
-    public record Result(String particle, boolean typed, int count, AABB spawns, double nearest, LongSet blocks) {}
+    /**
+     * One particle in one section: how many spawned, the box they fill, how close the nearest came, and how many
+     * spawned in each block (at most {@link SpawnRecorder#MAX_BLOCKS} blocks).
+     */
+    public record Result(String particle, boolean typed, int count, AABB spawns, double nearest, Map<BlockPos, Integer> blocks) {}
+
+    /** Most zones Here makes for one particle: its busiest sources. Above this, Everywhere is suggested instead. */
+    public static final int MAX_SOURCES = 8;
 
     private static final SpawnRecorder recorder = new SpawnRecorder();
     private static int ticksLeft;
@@ -38,8 +45,11 @@ public final class DiagnosticScan {
     private static boolean done;
     private static List<Result> appearing = List.of();
     private static List<Result> hidden = List.of();
-    /** Spawn box per particle used for fitting: where it appeared, or where it spawned hidden if it never appeared. */
-    private static Map<String, AABB> fitSpawns = Map.of();
+    /** Spawn blocks per particle used for fitting: where it appeared, or where it spawned hidden if it never appeared. */
+    private static Map<String, Map<BlockPos, Integer>> fitBlocks = Map.of();
+    /** Sources per particle at [sourcesDistance], worked out when first needed. */
+    private static final Map<String, List<ZoneFit.Source>> sources = new HashMap<>();
+    private static int sourcesDistance;
     private static int generation;
     /** Zones diagnostics created in this world (Here shows them), and those the latest one still resizes and regroups. */
     private static final List<String> createdIds = new ArrayList<>();
@@ -94,7 +104,8 @@ public final class DiagnosticScan {
         if (mc.player == null || mc.level == null) return;
         radius = mc.options.getEffectiveRenderDistance() * 16;
         appearing = hidden = List.of();
-        fitSpawns = Map.of();
+        fitBlocks = Map.of();
+        sources.clear();
         managedIds.clear(); // zones from earlier diagnostics keep their particles but are no longer resized
         capped = false;
         durationTicks = ticksLeft = PfConfig.diagnosticSeconds() * 20;
@@ -106,11 +117,16 @@ public final class DiagnosticScan {
         recorder.stop();
         done = false;
         appearing = hidden = List.of();
-        fitSpawns = Map.of();
+        fitBlocks = Map.of();
+        sources.clear();
         createdIds.clear();
         managedIds.clear();
         capped = false;
         generation++;
+    }
+
+    private static Result result(String particle, boolean typed, SpawnRecorder.Spawns spawns) {
+        return new Result(particle, typed, spawns.count(), spawns.box(), spawns.nearest(), Map.copyOf(spawns.blockCounts()));
     }
 
     public static void record(String particle, boolean typed, double x, double y, double z, boolean wasHidden) {
@@ -122,18 +138,21 @@ public final class DiagnosticScan {
         recorder.stop();
         List<Result> shownList = new ArrayList<>();
         List<Result> hiddenList = new ArrayList<>();
-        Map<String, AABB> fit = new LinkedHashMap<>();
+        Map<String, Map<BlockPos, Integer>> fit = new LinkedHashMap<>();
         for (SpawnRecorder.Recorded r : recorder.collect()) {
-            if (r.shown() != null) shownList.add(new Result(r.particle(), r.typed(), r.shown().count(), r.shown().box(), r.shown().nearest(), r.shown().blocks()));
-            if (r.hidden() != null) hiddenList.add(new Result(r.particle(), r.typed(), r.hidden().count(), r.hidden().box(), r.hidden().nearest(), r.hidden().blocks()));
-            fit.put(r.particle(), (r.shown() != null ? r.shown() : r.hidden()).box());
+            Result shown = r.shown() == null ? null : result(r.particle(), r.typed(), r.shown());
+            Result hid = r.hidden() == null ? null : result(r.particle(), r.typed(), r.hidden());
+            if (shown != null) shownList.add(shown);
+            if (hid != null) hiddenList.add(hid);
+            fit.put(r.particle(), (shown != null ? shown : hid).blocks());
         }
         Comparator<Result> byCount = (a, b) -> Integer.compare(b.count(), a.count());
         shownList.sort(byCount);
         hiddenList.sort(byCount);
         appearing = List.copyOf(shownList);
         hidden = List.copyOf(hiddenList);
-        fitSpawns = fit;
+        fitBlocks = fit;
+        sources.clear();
         done = true;
         generation++;
         appearing.forEach(r -> ParticleFilter.LOGGER.info("Diagnostic: {} x {} appeared", r.count(), r.particle()));
@@ -142,45 +161,74 @@ public final class DiagnosticScan {
 
     // ---------------------------------------------------------------- Here
 
-    /** The zone from this diagnostic that lists [particle], switched on or off; null if none. */
-    public static Zone zoneFor(String particle) {
+    /** Every source of [particle] at the current distance, busiest first; empty if it wasn't recorded. */
+    public static List<ZoneFit.Source> sourcesOf(String particle) {
+        int distance = PfConfig.sourceDistance();
+        if (distance != sourcesDistance) {
+            sources.clear();
+            sourcesDistance = distance;
+        }
+        Map<BlockPos, Integer> blocks = fitBlocks.get(particle);
+        if (blocks == null) return List.of();
+        return sources.computeIfAbsent(particle, p -> List.copyOf(ZoneFit.sources(blocks, distance)));
+    }
+
+    /** The sources Here makes zones for: the busiest [MAX_SOURCES]. */
+    private static List<ZoneFit.Source> hereSources(String particle) {
+        List<ZoneFit.Source> all = sourcesOf(particle);
+        return all.size() > MAX_SOURCES ? all.subList(0, MAX_SOURCES) : all;
+    }
+
+    /** Changes how far apart spots may be and still count as one source, and regroups this diagnostic's zones. */
+    public static void setSourceDistance(int blocks) {
+        PfConfig.setSourceDistance(blocks);
+        if (!managedZones().isEmpty()) regroup(null);
+    }
+
+    /** Zones from diagnostics in this world that list [particle], switched on or off. */
+    public static List<Zone> zonesFor(String particle) {
+        List<Zone> zones = new ArrayList<>();
         for (String id : createdIds) {
             Zone zone = PfConfig.zoneById(id);
-            if (zone != null && PfConfig.isInCurrentWorld(zone)
-                && (zone.particles.contains(particle) || zone.disabledParticles.contains(particle))) return zone;
+            if (zone != null && PfConfig.isInCurrentWorld(zone) && lists(zone, particle)) zones.add(zone);
         }
-        return null;
+        return zones;
     }
 
     public static boolean isHiddenHere(String particle) {
-        Zone zone = zoneFor(particle);
-        return zone != null && zone.particles.contains(particle);
+        return zonesFor(particle).stream().anyMatch(z -> z.particles.contains(particle));
     }
 
-    /** Where switching on Here would put a zone for [particle] on its own. */
-    public static AABB previewFor(String particle) {
-        var spawns = fitSpawns.get(particle);
-        return spawns == null ? null : ZoneFit.fit(null, List.of(spawns)).aabb();
+    /** Where switching on Here would put zones for [particle] on its own: one box per source it gets a zone for. */
+    public static List<AABB> previewFor(String particle) {
+        return hereSources(particle).stream().map(s -> s.box().aabb()).toList();
     }
 
-    /** Hides [particle] in its own fitted zone (shared when nested in another's), or removes it from its zone. */
+    /**
+     * Hides [particle] in one fitted zone per source (shared where one source's box is inside another's), or removes it
+     * from every diagnostic zone listing it.
+     */
     public static void setHiddenHere(String particle, boolean hide) {
-        Zone zone = zoneFor(particle);
+        List<Zone> zones = zonesFor(particle);
+        boolean managed = zones.stream().anyMatch(z -> managedIds.contains(z.id));
         if (hide) {
-            if (zone != null) {
-                PfConfig.setHiddenInZone(zone, particle, true); // listed already: switch it back on
+            if (!zones.isEmpty()) {
+                zones.forEach(z -> PfConfig.setHiddenInZone(z, particle, true)); // listed already: switch it back on
+                if (managed) regroup(null);
                 return;
             }
-            if (!fitSpawns.containsKey(particle)) return;
+            if (hereSources(particle).isEmpty()) return;
             regroup(particle);
-        } else if (zone != null) {
-            PfConfig.setHiddenInZone(zone, particle, false);
-            if (managedIds.contains(zone.id)) regroup(null);
+        } else {
+            zones.forEach(z -> PfConfig.setHiddenInZone(z, particle, false));
+            if (managed) regroup(null);
         }
     }
 
-    /** How far outside a zone (or the spots already joined to it) a particle may appear and still be taken in, in blocks. */
-    private static final int NEAR_ZONE = 2;
+    /** Called when the player edits [zone] by hand, so it keeps its size and particles from now on. */
+    static void stopFitting(Zone zone) {
+        if (zone != null) managedIds.remove(zone.id);
+    }
 
     /** A zone that hides a particle but misses some spots where it appeared, and the box covering them too. */
     public record Growth(Zone zone, ZoneFit.Box box) {}
@@ -188,20 +236,18 @@ public final class DiagnosticScan {
     /**
      * For a particle that appeared despite the rules: a zone in this world that hides it, with the box it would grow to
      * so it also covers the spots where the particle appeared next to it ({@link ZoneFit#growNear}: within
-     * [NEAR_ZONE] blocks, or that close to other such spots). Spots farther away are a separate source and stay out.
-     * Of several such zones, the one growing least. Null if there is none. Zones this diagnostic still fits are left
-     * to it.
+     * {@link PfConfig#sourceDistance()} blocks, or that close to other such spots). Spots farther away are a separate
+     * source and stay out. Of several such zones, the one growing least. Null if there is none. Zones this diagnostic
+     * still fits are left to it.
      */
     public static Growth growthFor(String particle) {
         Result appeared = appearing.stream().filter(r -> r.particle().equals(particle)).findFirst().orElse(null);
         if (appeared == null) return null;
-        List<BlockPos> blocks = new ArrayList<>();
-        appeared.blocks().forEach((long b) -> blocks.add(BlockPos.of(b)));
         Growth best = null;
         for (Zone zone : PfConfig.zonesHere()) {
             if (!zone.particles.contains(particle) || managedIds.contains(zone.id)) continue;
             ZoneFit.Box current = ZoneFit.Box.of(zone);
-            ZoneFit.Box grown = ZoneFit.growNear(current, blocks, NEAR_ZONE);
+            ZoneFit.Box grown = ZoneFit.growNear(current, appeared.blocks().keySet(), PfConfig.sourceDistance());
             if (grown.sameBlocks(current)) continue;
             if (best == null || grown.volume() - current.volume() < best.box.volume() - best.zone.volume()) best = new Growth(zone, grown);
         }
@@ -216,30 +262,41 @@ public final class DiagnosticScan {
         PfConfig.changed();
     }
 
-    /** Called when the player edits [zone] by hand, so it keeps its size and particles from now on. */
-    static void stopFitting(Zone zone) {
-        if (zone != null) managedIds.remove(zone.id);
-    }
-
+    /** One source of a particle in a zone this diagnostic manages; [on] is false while switched off. */
     private record Member(String particle, boolean on, ZoneFit.Box box) {}
 
-    /**
-     * Rebuilds the zones this diagnostic manages from the particles they list (plus [added]): each particle gets a box
-     * fitted to its spawn points; a box inside another joins that one. Zones are reused where they already hold one of
-     * a group's particles, created when needed, and deleted when no longer needed.
-     */
-    private static void regroup(String added) {
+    private static List<Zone> managedZones() {
         List<Zone> managed = new ArrayList<>();
         for (String id : createdIds) {
             Zone zone = PfConfig.zoneById(id);
             if (zone != null && managedIds.contains(id) && PfConfig.isInCurrentWorld(zone)) managed.add(zone);
         }
-        List<Member> members = new ArrayList<>();
+        return managed;
+    }
+
+    /**
+     * Rebuilds the zones this diagnostic manages from the particles they list (plus [added]): each particle gets a box
+     * per source; a box inside another joins that one. Zones are reused where they overlap a group's box (then where
+     * they list one of its particles), created when needed, and deleted when no longer needed.
+     */
+    private static void regroup(String added) {
+        List<Zone> managed = managedZones();
+        Map<String, Boolean> particles = new LinkedHashMap<>();
+        Map<String, Zone> fallback = new HashMap<>();
         for (Zone zone : managed) {
-            for (String p : zone.particles) members.add(member(p, true, zone));
-            for (String p : zone.disabledParticles) members.add(member(p, false, zone));
+            for (String p : zone.particles) particles.put(p, true);
+            for (String p : zone.disabledParticles) particles.putIfAbsent(p, false);
+            for (String p : zone.particles) fallback.putIfAbsent(p, zone);
+            for (String p : zone.disabledParticles) fallback.putIfAbsent(p, zone);
         }
-        if (added != null) members.add(member(added, true, null));
+        if (added != null) particles.put(added, true);
+
+        List<Member> members = new ArrayList<>();
+        particles.forEach((particle, on) -> {
+            List<ZoneFit.Source> own = hereSources(particle);
+            if (!own.isEmpty()) own.forEach(s -> members.add(new Member(particle, on, s.box())));
+            else if (fallback.containsKey(particle)) members.add(new Member(particle, on, ZoneFit.Box.of(fallback.get(particle))));
+        });
         members.sort(Comparator.comparingLong((Member m) -> m.box.volume()).reversed());
 
         List<List<Member>> groups = new ArrayList<>();
@@ -249,16 +306,12 @@ public final class DiagnosticScan {
             else groups.add(new ArrayList<>(List.of(m)));
         }
 
-        Set<Zone> unused = new LinkedHashSet<>(managed);
+        List<Zone> unused = new ArrayList<>(managed);
         capped = false;
         for (List<Member> group : groups) {
             ZoneFit.Box box = group.get(0).box;
             capped |= box.capped();
-            // Prefer the zone that already holds the group's largest particle, then any of its particles.
-            String lead = group.get(0).particle;
-            Zone zone = unused.stream().filter(z -> lists(z, lead)).findFirst()
-                .orElse(unused.stream().filter(z -> group.stream().anyMatch(m -> lists(z, m.particle))).findFirst()
-                .orElse(unused.stream().findFirst().orElse(null)));
+            Zone zone = reusable(unused, group);
             if (zone == null) {
                 zone = PfConfig.createZone(box.minX(), box.minY(), box.minZ(), box.width(), box.height(), box.length());
                 if (zone == null) return;
@@ -267,8 +320,12 @@ public final class DiagnosticScan {
             }
             unused.remove(zone);
             box.applyTo(zone);
-            zone.particles = new ArrayList<>(group.stream().filter(Member::on).map(Member::particle).toList());
-            zone.disabledParticles = new ArrayList<>(group.stream().filter(m -> !m.on).map(Member::particle).toList());
+            Set<String> on = new LinkedHashSet<>();
+            Set<String> off = new LinkedHashSet<>();
+            for (Member m : group) (m.on ? on : off).add(m.particle);
+            off.removeAll(on);
+            zone.particles = new ArrayList<>(on);
+            zone.disabledParticles = new ArrayList<>(off);
         }
         for (Zone zone : unused) {
             PfConfig.deleteZone(zone);
@@ -276,6 +333,30 @@ public final class DiagnosticScan {
             managedIds.remove(zone.id);
         }
         PfConfig.changed();
+    }
+
+    /**
+     * The unused zone to keep for [group], so zones keep their names and colors: the one overlapping its box most, else
+     * one listing its largest particle, else one listing any of its particles. Null if none, so a zone is created.
+     */
+    private static Zone reusable(List<Zone> unused, List<Member> group) {
+        AABB box = group.get(0).box.aabb();
+        Zone best = null;
+        double bestOverlap = 0;
+        for (Zone zone : unused) {
+            if (!zone.box().intersects(box)) continue;
+            AABB overlap = zone.box().intersect(box);
+            double volume = overlap.getXsize() * overlap.getYsize() * overlap.getZsize();
+            if (volume > bestOverlap) {
+                best = zone;
+                bestOverlap = volume;
+            }
+        }
+        if (best != null) return best;
+        String lead = group.get(0).particle;
+        for (Zone zone : unused) if (lists(zone, lead)) return zone;
+        for (Zone zone : unused) if (group.stream().anyMatch(m -> lists(zone, m.particle))) return zone;
+        return null;
     }
 
     private static boolean lists(Zone zone, String particle) {
@@ -290,11 +371,5 @@ public final class DiagnosticScan {
             if (zone.particles.contains(particle) && zone.box().intersects(spawns.inflate(0.5))) by.add("\"" + zone.name + "\"");
         }
         return by;
-    }
-
-    private static Member member(String particle, boolean on, Zone current) {
-        var spawns = fitSpawns.get(particle);
-        ZoneFit.Box box = spawns != null ? ZoneFit.fit(null, List.of(spawns)) : current != null ? ZoneFit.Box.of(current) : null;
-        return new Member(particle, on, box);
     }
 }

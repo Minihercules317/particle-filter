@@ -5,7 +5,9 @@ import net.minecraft.world.phys.AABB;
 import org.junit.jupiter.api.Test;
 import particlefilter.config.Zone;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -217,5 +219,79 @@ class ZoneFitTest {
     void growNearWithNothingNearbyChangesNothing() {
         assertTrue(ZoneFit.growNear(ZONE, List.of(), NEAR).sameBlocks(ZONE));
         assertTrue(ZoneFit.growNear(ZONE, List.of(new BlockPos(1, 65, 1)), NEAR).sameBlocks(ZONE));
+    }
+
+    // ---- sources: one per group of spawn blocks close together ----
+
+    private static Map<BlockPos, Integer> blocks(int... xs) {
+        Map<BlockPos, Integer> map = new LinkedHashMap<>();
+        for (int x : xs) map.put(new BlockPos(x, 64, 0), 1);
+        return map;
+    }
+
+    @Test
+    void oneBlockIsOneSource() {
+        assertEquals(List.of(new ZoneFit.Source(new ZoneFit.Box(5, 64, 0, 1, 1, 1, false), 1)), ZoneFit.sources(blocks(5), 6));
+    }
+
+    @Test
+    void noBlocksNoSources() {
+        assertEquals(List.of(), ZoneFit.sources(Map.of(), 6));
+    }
+
+    @Test
+    void blocksAtTheDistanceJoinAndOneFurtherSplit() {
+        assertEquals(1, ZoneFit.sources(blocks(0, 6), 6).size());
+        assertEquals(2, ZoneFit.sources(blocks(0, 7), 6).size());
+    }
+
+    @Test
+    void sourcesDaisyChainThroughBlocksInBetween() {
+        // 0 and 12 are 12 apart, but 6 sits within 6 of both.
+        List<ZoneFit.Source> chained = ZoneFit.sources(blocks(0, 6, 12), 6);
+        assertEquals(1, chained.size());
+        assertEquals(new ZoneFit.Box(0, 64, 0, 13, 1, 1, false), chained.get(0).box());
+
+        assertEquals(2, ZoneFit.sources(blocks(0, 12), 6).size());
+    }
+
+    @Test
+    void distanceCountsOnEveryAxisSeparately() {
+        // 6 apart on each axis, so within 6 even though farther in a straight line.
+        Map<BlockPos, Integer> diagonal = Map.of(new BlockPos(0, 0, 0), 1, new BlockPos(6, 6, 6), 1);
+        assertEquals(1, ZoneFit.sources(diagonal, 6).size());
+        assertEquals(2, ZoneFit.sources(Map.of(new BlockPos(0, 0, 0), 1, new BlockPos(6, 7, 6), 1), 6).size());
+    }
+
+    @Test
+    void sourcesWorkBelowZeroAndAcrossCells() {
+        // -3 and 3 are 6 apart and fall in different grid cells.
+        assertEquals(1, ZoneFit.sources(blocks(-3, 3), 6).size());
+        assertEquals(1, ZoneFit.sources(blocks(-20, -14), 6).size());
+    }
+
+    @Test
+    void busiestSourceComesFirst() {
+        Map<BlockPos, Integer> counts = new LinkedHashMap<>();
+        counts.put(new BlockPos(0, 64, 0), 3);
+        counts.put(new BlockPos(100, 64, 0), 10);
+        counts.put(new BlockPos(101, 64, 0), 5);
+
+        List<ZoneFit.Source> sources = ZoneFit.sources(counts, 6);
+
+        assertEquals(2, sources.size());
+        assertEquals(new ZoneFit.Source(new ZoneFit.Box(100, 64, 0, 2, 1, 1, false), 15), sources.get(0));
+        assertEquals(3, sources.get(1).count());
+    }
+
+    @Test
+    void longChainIsCutToTheSizeLimit() {
+        int[] xs = new int[100];
+        for (int i = 0; i < xs.length; i++) xs[i] = i * 4; // 0..396, each 4 apart
+
+        ZoneFit.Source source = ZoneFit.sources(blocks(xs), 6).get(0);
+
+        assertEquals(Zone.MAX_SIZE, source.box().width());
+        assertTrue(source.box().capped());
     }
 }

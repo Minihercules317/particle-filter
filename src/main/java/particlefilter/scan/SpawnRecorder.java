@@ -1,8 +1,8 @@
 package particlefilter.scan;
 
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import it.unimi.dsi.fastutil.longs.LongSet;
-import it.unimi.dsi.fastutil.longs.LongSets;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntMaps;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -22,16 +22,23 @@ final class SpawnRecorder {
     static final int MAX_BLOCKS = 1024;
 
     /**
-     * Spawn points of one particle: how many, the box they fill, the closest one to the center, and the blocks they
-     * were in (as {@link BlockPos#asLong}, at most [MAX_BLOCKS]).
+     * Spawn points of one particle: how many, the box they fill, the closest one to the center, and how many spawned
+     * in each block (keyed by {@link BlockPos#asLong}, at most [MAX_BLOCKS] blocks).
      */
-    record Spawns(int count, AABB box, double nearest, LongSet blocks) {
+    record Spawns(int count, AABB box, double nearest, Long2IntMap blocks) {
         static Spawns merge(Spawns a, Spawns b) {
             if (a == null) return b;
             if (b == null) return a;
-            LongSet blocks = new LongOpenHashSet(a.blocks);
-            blocks.addAll(b.blocks);
-            return new Spawns(a.count + b.count, a.box.minmax(b.box), Math.min(a.nearest, b.nearest), LongSets.unmodifiable(blocks));
+            Long2IntOpenHashMap blocks = new Long2IntOpenHashMap(a.blocks);
+            b.blocks.long2IntEntrySet().forEach(e -> blocks.addTo(e.getLongKey(), e.getIntValue()));
+            return new Spawns(a.count + b.count, a.box.minmax(b.box), Math.min(a.nearest, b.nearest), Long2IntMaps.unmodifiable(blocks));
+        }
+
+        /** [blocks] as block positions and counts. */
+        Map<BlockPos, Integer> blockCounts() {
+            Map<BlockPos, Integer> map = new HashMap<>();
+            blocks.long2IntEntrySet().forEach(e -> map.put(BlockPos.of(e.getLongKey()), e.getIntValue()));
+            return map;
         }
     }
 
@@ -47,7 +54,7 @@ final class SpawnRecorder {
         double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, minZ = Double.MAX_VALUE;
         double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
         double nearestSq = Double.MAX_VALUE;
-        final LongSet blocks = new LongOpenHashSet();
+        final Long2IntOpenHashMap blocks = new Long2IntOpenHashMap();
 
         void add(double x, double y, double z, double distSq) {
             count++;
@@ -58,12 +65,13 @@ final class SpawnRecorder {
             maxY = Math.max(maxY, y);
             maxZ = Math.max(maxZ, z);
             nearestSq = Math.min(nearestSq, distSq);
-            if (blocks.size() < MAX_BLOCKS) blocks.add(BlockPos.asLong((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)));
+            long block = BlockPos.asLong((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+            if (blocks.size() < MAX_BLOCKS || blocks.containsKey(block)) blocks.addTo(block, 1);
         }
 
         Spawns build() {
             return count == 0 ? null : new Spawns(count, new AABB(minX, minY, minZ, maxX, maxY, maxZ), Math.sqrt(nearestSq),
-                LongSets.unmodifiable(new LongOpenHashSet(blocks)));
+                Long2IntMaps.unmodifiable(new Long2IntOpenHashMap(blocks)));
         }
     }
 

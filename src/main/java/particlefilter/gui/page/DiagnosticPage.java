@@ -5,6 +5,7 @@ import net.minecraft.network.chat.Component;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
 import particlefilter.gui.ParticleFilterScreen;
+import particlefilter.gui.PfScreen;
 import particlefilter.gui.Theme;
 import particlefilter.gui.widget.FlatButton.Style;
 import particlefilter.gui.widget.ScrollPanel.Row;
@@ -18,6 +19,9 @@ import java.util.List;
 
 /** Records every particle around you, both those still appearing and those your rules hide. */
 public class DiagnosticPage extends ResultsPage {
+
+    /** Gap between the footer line and the source distance label right of it. */
+    private static final int FOOTER_GAP = 12;
 
     public DiagnosticPage(ParticleFilterScreen screen) {
         super(screen);
@@ -63,8 +67,7 @@ public class DiagnosticPage extends ResultsPage {
 
     @Override
     public void beforeRender() {
-        ZoneRenderer.highlighted = null; // rows set them again while hovered
-        ZoneRenderer.preview = null;
+        ZoneRenderer.clear(); // rows set them again while hovered
         super.beforeRender();
     }
 
@@ -83,6 +86,31 @@ public class DiagnosticPage extends ResultsPage {
         addList();
         screen.setRows(diagnosticRows());
         shownScanGeneration = DiagnosticScan.generation();
+
+        if (!screen.panel().isEmpty()) { // with the footer line, which the empty states leave out
+            screen.addSpinner(sourceSpinnerX(), sourceSpinnerY(), DURATION_WIDTH, PfConfig.sourceDistance(),
+                PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE,
+                Component.translatable("particlefilter.diagnostic.source_distance.tooltip", PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE),
+                blocks -> {
+                    DiagnosticScan.setSourceDistance(blocks);
+                    screen.refreshNextTick(); // previews, notices and zones follow the new distance
+                });
+        }
+    }
+
+    /** Left edge of the source distance spinner at the bottom right, before "blocks". */
+    private int sourceSpinnerX() {
+        return screen.cx() + screen.cw() - screen.font().width(Component.translatable("particlefilter.diagnostic.source_distance_unit")) - UNIT_GAP - DURATION_WIDTH;
+    }
+
+    /** Top of the source distance spinner, centered on the footer line. */
+    private int sourceSpinnerY() {
+        return screen.bodyBottom() - FOOTER_LINE - (PfScreen.SMALL_BUTTON_HEIGHT - 8) / 2;
+    }
+
+    /** Left edge of "Same source within", before the spinner. */
+    private int sourceLabelX() {
+        return sourceSpinnerX() - DURATION_GAP - screen.font().width(Component.translatable("particlefilter.diagnostic.source_distance"));
     }
 
     private int renderDistanceBlocks() {
@@ -103,6 +131,12 @@ public class DiagnosticPage extends ResultsPage {
         if (appearing.isEmpty()) rows.add(screen.hintRow(Component.translatable("particlefilter.diagnostic.none_appearing"), screen.panel().contentWidth()));
         for (DiagnosticScan.Result r : appearing) {
             rows.add(diagnosticRow(r, most, false));
+            int sources = DiagnosticScan.sourcesOf(r.particle()).size();
+            if (sources > DiagnosticScan.MAX_SOURCES && !PfConfig.isHiddenEverywhere(r.particle())) {
+                String particle = r.particle();
+                rows.add(noticeRow(Component.translatable("particlefilter.diagnostic.many_sources", ParticleScan.displayName(particle), sources, DiagnosticScan.MAX_SOURCES),
+                    noticeTextRight(), () -> ZoneRenderer.previewMore = DiagnosticScan.previewFor(particle)));
+            }
             DiagnosticScan.Growth growth = DiagnosticScan.growthFor(r.particle());
             if (growth != null) {
                 rows.add(growRow(Component.translatable("particlefilter.diagnostic.grow_notice", growth.zone().name, ParticleScan.displayName(r.particle())),
@@ -127,9 +161,9 @@ public class DiagnosticPage extends ResultsPage {
         Row row = new Row(base::height, (g, x, y, w, h, hovered) -> {
             base.paint(g, x, y, w, h, hovered);
             if (hovered) {
-                Zone zone = DiagnosticScan.zoneFor(particle);
-                ZoneRenderer.highlighted = zone;
-                ZoneRenderer.preview = zone == null ? DiagnosticScan.previewFor(particle) : null;
+                List<Zone> zones = DiagnosticScan.zonesFor(particle);
+                ZoneRenderer.highlightedMore = zones;
+                ZoneRenderer.previewMore = zones.isEmpty() ? DiagnosticScan.previewFor(particle) : List.of();
             }
         });
         if (wasHidden) {
@@ -174,8 +208,14 @@ public class DiagnosticPage extends ResultsPage {
         }
         renderColumnLabels(g, "particlefilter.scan.col_nearest", "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
         boolean capped = DiagnosticScan.anyCapped();
+        int labelX = sourceLabelX();
         renderFooterLine(g, mouseX, mouseY, capped ? Theme.WARNING : Theme.NEW_ZONE,
             Component.translatable(capped ? "particlefilter.diagnostic.here_capped" : "particlefilter.diagnostic.here_line"),
-            Component.translatable("particlefilter.diagnostic.here_line.tooltip", Zone.MAX_SIZE), cw - 4);
+            Component.translatable("particlefilter.diagnostic.here_line.tooltip", DiagnosticScan.MAX_SOURCES, Zone.MAX_SIZE),
+            labelX - FOOTER_GAP - cx - DOT_TEXT_X);
+        var font = screen.font();
+        int textY = screen.bodyBottom() - FOOTER_LINE;
+        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance"), labelX, textY, Theme.TEXT_DIM);
+        Theme.text(g, font, Component.translatable("particlefilter.diagnostic.source_distance_unit"), sourceSpinnerX() + DURATION_WIDTH + UNIT_GAP, textY, Theme.TEXT_DIM);
     }
 }
