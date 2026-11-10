@@ -45,6 +45,32 @@ public class ParticleFilterScreen extends PfScreen {
 
     private static final int SIDEBAR_WIDTH = 124;
     private static final int PAD = 12;
+    /** Inset of the sidebar's buttons from the window's left, right and bottom edges. */
+    private static final int SIDEBAR_PAD = 8;
+    /** Top of the first page button in the sidebar, from the window top. */
+    private static final int NAV_TOP = 34;
+    /** Height of an Active rules option in the sidebar. */
+    private static final int OPTION_HEIGHT = 16;
+    /** Gap between the sidebar's buttons. */
+    private static final int SIDEBAR_GAP = 2;
+    /** Size of the help and close buttons in the window's top right corner. */
+    private static final int CORNER_BUTTON = 14;
+    /** Inset of the close button from the window's top and right edges. */
+    private static final int CORNER_PAD = 8;
+    /** Gap between the help and close buttons. */
+    private static final int CORNER_GAP = 4;
+    /** Gap between the page's header buttons and the help button. */
+    private static final int ACTIONS_GAP = 6;
+    /** Gap between the page title and subtitle and whatever is right of them. */
+    private static final int HEADER_GAP = 8;
+    /** Top of the page title and the header buttons, from the window top. */
+    private static final int HEADER_TOP = 12;
+    /** Top of the page subtitle, from the window top. */
+    private static final int SUBTITLE_TOP = 25;
+    /** Space between the subtitle's last line and the divider below it. */
+    private static final int DIVIDER_GAP = 6;
+    /** Space from the divider to the top of the page body. */
+    private static final int BODY_GAP = 7;
     /** Most lines a page subtitle wraps to; the page body moves down to make room. */
     private static final int MAX_HEADER_LINES = 3;
 
@@ -90,16 +116,18 @@ public class ParticleFilterScreen extends PfScreen {
         wy = (height - wh) / 2;
         cx = wx + SIDEBAR_WIDTH + PAD;
         cw = ww - SIDEBAR_WIDTH - 2 * PAD;
-        actionsRight = wx + ww - 46;
+        int closeX = wx + ww - CORNER_PAD - CORNER_BUTTON;
+        int helpX = closeX - CORNER_GAP - CORNER_BUTTON;
+        actionsRight = helpX - ACTIONS_GAP;
         headerLines = Math.min(MAX_HEADER_LINES, wrap(page().subtitle(), headerWidth()).size());
-        bodyTop = wy + 46 + (headerLines - 1) * LINE;
+        bodyTop = dividerY() + BODY_GAP;
         bodyBottom = wy + wh - PAD;
         panel = null;
 
         initSidebar();
-        button(Style.GHOST, Component.literal("?"), wx + ww - 40, wy + 8, 14, 14, () -> minecraft.setScreen(new GuideScreen(this)))
+        button(Style.GHOST, Component.literal("?"), helpX, wy + CORNER_PAD, CORNER_BUTTON, CORNER_BUTTON, () -> minecraft.setScreen(new GuideScreen(this)))
             .tooltip(Component.translatable("particlefilter.guide.open"));
-        button(Style.GHOST, Component.literal("×"), wx + ww - 22, wy + 8, 14, 14, this::onClose)
+        button(Style.GHOST, Component.literal("×"), closeX, wy + CORNER_PAD, CORNER_BUTTON, CORNER_BUTTON, this::onClose)
             .tooltip(Component.translatable("particlefilter.close"));
         page().init();
     }
@@ -107,25 +135,25 @@ public class ParticleFilterScreen extends PfScreen {
     // ---------------------------------------------------------------- Sidebar
 
     private void initSidebar() {
-        int x = wx + 8;
-        int w = SIDEBAR_WIDTH - 16;
-        int y = wy + 34;
+        int x = wx + SIDEBAR_PAD;
+        int w = SIDEBAR_WIDTH - 2 * SIDEBAR_PAD;
+        int y = wy + NAV_TOP;
         navButtons.clear();
         for (Tab t : Tab.values()) {
             navButtons.put(t, button(Style.NAV, Component.translatable("particlefilter.tab." + t.name().toLowerCase(Locale.ROOT)),
-                x, y, w, 20, () -> switchTo(t)).selected(t == tab));
-            y += 22;
+                x, y, w, BUTTON_HEIGHT, () -> switchTo(t)).selected(t == tab));
+            y += BUTTON_HEIGHT + SIDEBAR_GAP;
         }
 
         FilterMode[] modes = FilterMode.values();
-        modesTop = wy + wh - 8 - modes.length * 18;
+        modesTop = wy + wh - SIDEBAR_PAD - modes.length * (OPTION_HEIGHT + SIDEBAR_GAP);
         int optionY = modesTop;
         for (FilterMode mode : modes) {
-            button(Style.OPTION, Component.translatable(mode.key()), x, optionY, w, 16, () -> {
+            button(Style.OPTION, Component.translatable(mode.key()), x, optionY, w, OPTION_HEIGHT, () -> {
                 PfConfig.setMode(mode);
                 refresh();
             }).selected(mode == PfConfig.mode()).tooltip(Component.translatable(mode.key() + ".tooltip"));
-            optionY += 18;
+            optionY += OPTION_HEIGHT + SIDEBAR_GAP;
         }
     }
 
@@ -155,14 +183,18 @@ public class ParticleFilterScreen extends PfScreen {
 
     /** Width for the page title and subtitle, left of the page's header buttons. */
     private int headerWidth() {
-        int actionsWidth = page().actionsWidth();
-        return (actionsWidth > 0 ? actionsRight - actionsWidth : wx + ww - 46) - cx - 8;
+        return actionsRight - page().actionsWidth() - HEADER_GAP - cx;
+    }
+
+    /** Top of the divider under the subtitle, which moves down as the subtitle wraps. */
+    private int dividerY() {
+        return wy + SUBTITLE_TOP + textHeight(headerLines) + DIVIDER_GAP;
     }
 
     /** Page title and the subtitle wrapped to [headerLines] lines, then a divider above the page body. */
     private void renderHeader(GuiGraphics g, Component title) {
         int maxWidth = headerWidth();
-        Theme.text(g, font, Theme.fit(font, title.getString(), maxWidth), cx, wy + 12, Theme.TEXT);
+        Theme.text(g, font, Theme.fit(font, title.getString(), maxWidth), cx, wy + HEADER_TOP, Theme.TEXT);
         Component subtitle = page().subtitle();
         List<FormattedCharSequence> lines = wrap(subtitle, maxWidth);
         if (lines.size() > headerLines) {
@@ -171,8 +203,8 @@ public class ParticleFilterScreen extends PfScreen {
             lines = new ArrayList<>(lines.subList(0, headerLines - 1));
             lines.add(Component.literal(Theme.fit(font, String.join(" ", parts.subList(headerLines - 1, parts.size())), maxWidth)).getVisualOrderText());
         }
-        drawLines(g, lines, cx, wy + 25, Theme.TEXT_DIM);
-        int dividerY = wy + 39 + (headerLines - 1) * LINE;
+        drawLines(g, lines, cx, wy + SUBTITLE_TOP, Theme.TEXT_DIM);
+        int dividerY = dividerY();
         g.fill(cx, dividerY, cx + cw, dividerY + 1, Theme.DIVIDER);
     }
 
@@ -187,8 +219,8 @@ public class ParticleFilterScreen extends PfScreen {
     @Override
     public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         g.fill(0, 0, width, height, Theme.SCRIM);
-        Theme.rect(g, wx, wy, SIDEBAR_WIDTH, wh, 6, Theme.SIDEBAR, true, false);
-        Theme.rect(g, wx + SIDEBAR_WIDTH, wy, ww - SIDEBAR_WIDTH, wh, 6, Theme.WINDOW, false, true);
+        Theme.rect(g, wx, wy, SIDEBAR_WIDTH, wh, WINDOW_RADIUS, Theme.SIDEBAR, true, false);
+        Theme.rect(g, wx + SIDEBAR_WIDTH, wy, ww - SIDEBAR_WIDTH, wh, WINDOW_RADIUS, Theme.WINDOW, false, true);
     }
 
     @Override
@@ -248,14 +280,13 @@ public class ParticleFilterScreen extends PfScreen {
         return bodyBottom;
     }
 
-    /** Top of the window. */
-    public int wy() {
-        return wy;
-    }
-
-    /** Right edge of the page's header buttons, left of the help and close buttons. */
-    public int actionsRight() {
-        return actionsRight;
+    /**
+     * Adds the current page's header button, {@link Page#actionsWidth} px wide, at the top right left of the help
+     * and close buttons, level with the title.
+     */
+    public FlatButton headerButton(Style style, Component label, Runnable onPress) {
+        int width = page().actionsWidth();
+        return button(style, label, actionsRight - width, wy + HEADER_TOP, width, BUTTON_HEIGHT, onPress);
     }
 
     @Override

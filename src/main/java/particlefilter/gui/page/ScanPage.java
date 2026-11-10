@@ -17,8 +17,19 @@ import particlefilter.scan.ParticleScan;
 import java.util.ArrayList;
 import java.util.List;
 
+import static particlefilter.gui.PfScreen.COMPACT_HEIGHT;
+
 /** Records which particles spawn around what you're looking at, to hide them everywhere or in a zone there. */
 public class ScanPage extends ResultsPage {
+
+    /** Width of the Edit zone button at the bottom right. */
+    private static final int EDIT_ZONE_WIDTH = 64;
+    /** Width of the button left of Edit zone that picks which zone Here uses. */
+    private static final int HERE_WIDTH = 76;
+    /** Gap between those two buttons. */
+    private static final int BUTTON_GAP = 4;
+    /** Width both buttons take together, kept clear of the Here line beside them. */
+    private static final int FOOTER_BUTTONS_WIDTH = HERE_WIDTH + BUTTON_GAP + EDIT_ZONE_WIDTH;
 
     private FlatButton editZoneButton;
 
@@ -70,9 +81,9 @@ public class ScanPage extends ResultsPage {
 
     @Override
     public void init() {
-        int cx = screen.cx(), cw = screen.cw(), bodyTop = screen.bodyTop(), bodyBottom = screen.bodyBottom();
+        int cx = screen.cx(), cw = screen.cw(), bodyBottom = screen.bodyBottom();
         editZoneButton = null;
-        scanButton = screen.button(Style.PRIMARY, buttonLabel(), screen.actionsRight() - 80, screen.wy() + 12, 80, 20, () -> {
+        scanButton = screen.headerButton(Style.PRIMARY, buttonLabel(), () -> {
             ParticleScan.start();
             screen.refresh();
         }).tooltip(scanTooltip());
@@ -82,12 +93,14 @@ public class ScanPage extends ResultsPage {
             scanButton.tooltip(scanTooltip());
         });
 
-        screen.addPanel(cx, bodyTop + 36, cw, bodyBottom - 24 - bodyTop - 36, 3);
+        addList();
         screen.setRows(scanRows());
         shownScanGeneration = ParticleScan.generation();
 
         if (ParticleScan.target() != null) {
-            editZoneButton = screen.button(Style.SECONDARY, Component.translatable("particlefilter.scan.edit_zone"), cx + cw - 64, bodyBottom - 18, 64, 18,
+            int editX = cx + cw - EDIT_ZONE_WIDTH;
+            int buttonY = bodyBottom - COMPACT_HEIGHT;
+            editZoneButton = screen.button(Style.SECONDARY, Component.translatable("particlefilter.scan.edit_zone"), editX, buttonY, EDIT_ZONE_WIDTH, COMPACT_HEIGHT,
                 () -> {
                     Zone zone = ParticleScan.hereZone();
                     if (zone != null) screen.minecraft().setScreen(new ZoneEditScreen(screen, zone));
@@ -96,10 +109,10 @@ public class ScanPage extends ResultsPage {
             Zone next = ParticleScan.nextHereChoice();
             if (current != null || next != null) {
                 Component label = next == null ? Component.translatable("particlefilter.scan.here_new")
-                    : Component.literal(Theme.fit(screen.font(), Component.translatable("particlefilter.scan.here_use", next.name).getString(), 70));
+                    : Component.literal(Theme.fit(screen.font(), Component.translatable("particlefilter.scan.here_use", next.name).getString(), HERE_WIDTH - 6));
                 Component tip = next == null ? Component.translatable("particlefilter.scan.here_new.tooltip")
                     : Component.translatable("particlefilter.scan.here_use.tooltip", next.name);
-                screen.button(Style.SECONDARY, label, cx + cw - 64 - 4 - 76, bodyBottom - 18, 76, 18, () -> {
+                screen.button(Style.SECONDARY, label, editX - BUTTON_GAP - HERE_WIDTH, buttonY, HERE_WIDTH, COMPACT_HEIGHT, () -> {
                     ParticleScan.cycleHere();
                     screen.refresh();
                 }).tooltip(tip);
@@ -131,12 +144,11 @@ public class ScanPage extends ResultsPage {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY) {
-        int cx = screen.cx(), cw = screen.cw(), bodyTop = screen.bodyTop(), bodyBottom = screen.bodyBottom();
+        int cx = screen.cx(), cw = screen.cw();
         renderDurationLabels(g);
 
-        int listTop = bodyTop + 36;
         if (screen.panel().isEmpty()) {
-            int centerY = (listTop + bodyBottom - 24) / 2 - 20;
+            int centerY = emptyStateTop(listTop(), listBottom());
             if (ParticleScan.isRunning()) {
                 screen.drawEmptyState(g, Component.translatable("particlefilter.scan.empty_running"),
                     Component.translatable("particlefilter.scan.empty_running.body", ParticleScan.RADIUS), cx + cw / 2, centerY, cw);
@@ -148,7 +160,7 @@ public class ScanPage extends ResultsPage {
                     Component.translatable("particlefilter.scan.empty_none.body", ParticleScan.RADIUS), cx + cw / 2, centerY, cw);
             }
         } else {
-            renderColumnLabels(g, listTop - 12, "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
+            renderColumnLabels(g, "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
         }
 
         ZoneRenderer.highlighted = null;
@@ -173,6 +185,6 @@ public class ScanPage extends ResultsPage {
         }
         Component tip = zone == null ? Component.translatable(key + ".tooltip")
             : Component.translatable(key + ".tooltip", zone.name, zone.sizeText(), ZoneEditScreen.volumeText(zone));
-        renderFooterLine(g, mouseX, mouseY, color, here, tip, cw - 160);
+        renderFooterLine(g, mouseX, mouseY, color, here, tip, cw - FOOTER_BUTTONS_WIDTH - 16);
     }
 }

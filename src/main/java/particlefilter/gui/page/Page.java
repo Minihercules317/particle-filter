@@ -11,10 +11,26 @@ import particlefilter.render.ZoneRenderer;
  */
 public abstract class Page {
 
+    /** Space kept below a page's list for the footer line, switch or buttons under it. */
+    protected static final int LIST_FOOTER = 24;
+    /** Top of the footer line or switch under a page's list, up from the bottom of the body. */
+    protected static final int FOOTER_LINE = 13;
+    /** Left inset of the dot that starts a footer line or zone heading. */
+    protected static final int DOT_X = 2;
+    /** Left inset of the text after that dot. */
+    protected static final int DOT_TEXT_X = 12;
+    /** How far an empty-state message sits above the middle of its area, to allow for its explanation lines. */
+    private static final int EMPTY_STATE_LIFT = 20;
+
     protected final ParticleFilterScreen screen;
 
     protected Page(ParticleFilterScreen screen) {
         this.screen = screen;
+    }
+
+    /** Top of an empty-state message shown in the area from [top] to [bottom]. */
+    protected static int emptyStateTop(int top, int bottom) {
+        return (top + bottom) / 2 - EMPTY_STATE_LIFT;
     }
 
     public abstract Component title();

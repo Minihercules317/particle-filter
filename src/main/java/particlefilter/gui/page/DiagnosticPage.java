@@ -70,8 +70,7 @@ public class DiagnosticPage extends ResultsPage {
 
     @Override
     public void init() {
-        int cx = screen.cx(), cw = screen.cw(), bodyTop = screen.bodyTop(), bodyBottom = screen.bodyBottom();
-        scanButton = screen.button(Style.PRIMARY, buttonLabel(), screen.actionsRight() - 80, screen.wy() + 12, 80, 20, () -> {
+        scanButton = screen.headerButton(Style.PRIMARY, buttonLabel(), () -> {
             DiagnosticScan.start();
             screen.refresh();
         }).tooltip(Component.translatable("particlefilter.diagnostic.button.tooltip", renderDistanceBlocks(), PfConfig.diagnosticSeconds()));
@@ -81,7 +80,7 @@ public class DiagnosticPage extends ResultsPage {
             scanButton.tooltip(Component.translatable("particlefilter.diagnostic.button.tooltip", renderDistanceBlocks(), seconds));
         });
 
-        screen.addPanel(cx, bodyTop + 36, cw, bodyBottom - 24 - bodyTop - 36, 3);
+        addList();
         screen.setRows(diagnosticRows());
         shownScanGeneration = DiagnosticScan.generation();
     }
@@ -145,13 +144,12 @@ public class DiagnosticPage extends ResultsPage {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY) {
-        int cx = screen.cx(), cw = screen.cw(), bodyTop = screen.bodyTop(), bodyBottom = screen.bodyBottom();
+        int cx = screen.cx(), cw = screen.cw();
         int radius = DiagnosticScan.radius();
         renderDurationLabels(g);
 
-        int listTop = bodyTop + 36;
         if (screen.panel().isEmpty()) {
-            int centerY = (listTop + bodyBottom - 24) / 2 - 20;
+            int centerY = emptyStateTop(listTop(), listBottom());
             if (DiagnosticScan.isRunning()) {
                 screen.drawEmptyState(g, Component.translatable("particlefilter.scan.empty_running"),
                     Component.translatable("particlefilter.diagnostic.empty_running.body", radius), cx + cw / 2, centerY, cw);
@@ -164,7 +162,7 @@ public class DiagnosticPage extends ResultsPage {
             }
             return;
         }
-        renderColumnLabels(g, listTop - 12, "particlefilter.scan.col_nearest", "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
+        renderColumnLabels(g, "particlefilter.scan.col_nearest", "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
         boolean capped = DiagnosticScan.anyCapped();
         renderFooterLine(g, mouseX, mouseY, capped ? Theme.WARNING : Theme.NEW_ZONE,
             Component.translatable(capped ? "particlefilter.diagnostic.here_capped" : "particlefilter.diagnostic.here_line"),

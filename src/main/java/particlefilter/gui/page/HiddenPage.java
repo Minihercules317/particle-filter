@@ -22,11 +22,27 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import static particlefilter.gui.PfScreen.BUTTON_HEIGHT;
+import static particlefilter.gui.PfScreen.DOT_SIZE;
 import static particlefilter.gui.PfScreen.LINE;
+import static particlefilter.gui.PfScreen.SMALL_BUTTON_HEIGHT;
 import static particlefilter.gui.PfScreen.textHeight;
 
 /** Everything hidden and where, each entry with an on/off switch and Delete, and a box to hide by id. */
 public class HiddenPage extends Page {
+
+    /** Width of the Hide particle and Hide block buttons right of the id box. */
+    private static final int ADD_BUTTON_WIDTH = 80;
+    /** Gap between the id box and each of those buttons. */
+    private static final int BUTTON_GAP = 4;
+    /** Space between the id box and the list below it. */
+    private static final int LIST_GAP = 8;
+    /** Space above a section heading's text. */
+    private static final int SECTION_TOP = 8;
+    /** Width of a zone heading's Edit button. */
+    private static final int ZONE_EDIT_WIDTH = 36;
+    /** Width of a zone heading's Delete zone button. */
+    private static final int ZONE_DELETE_WIDTH = 70;
 
     private TextField idInput;
     private String idInputText = "";
@@ -55,18 +71,20 @@ public class HiddenPage extends Page {
     @Override
     public void init() {
         int cx = screen.cx(), cw = screen.cw(), bodyTop = screen.bodyTop(), bodyBottom = screen.bodyBottom();
-        int buttonWidth = 80;
-        idInput = screen.addRenderableWidget(new TextField(screen.font(), cx, bodyTop, cw - 2 * buttonWidth - 8, 20, Component.translatable("particlefilter.hidden.input")));
+        int blockX = cx + cw - ADD_BUTTON_WIDTH;
+        int particleX = blockX - BUTTON_GAP - ADD_BUTTON_WIDTH;
+        idInput = screen.addRenderableWidget(new TextField(screen.font(), cx, bodyTop, particleX - BUTTON_GAP - cx, BUTTON_HEIGHT, Component.translatable("particlefilter.hidden.input")));
         idInput.setMaxLength(256);
         idInput.setHint(Component.translatable("particlefilter.hidden.input_hint").withStyle(s -> s.withColor(Theme.TEXT_FAINT & 0xFFFFFF)));
         idInput.setValue(idInputText);
         idInput.setResponder(s -> idInputText = s);
-        screen.button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_particle"), cx + cw - 2 * buttonWidth - 4, bodyTop, buttonWidth, 20,
+        screen.button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_particle"), particleX, bodyTop, ADD_BUTTON_WIDTH, BUTTON_HEIGHT,
             () -> addTyped(false)).tooltip(Component.translatable("particlefilter.hidden.add_particle.tooltip"));
-        screen.button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_block"), cx + cw - buttonWidth, bodyTop, buttonWidth, 20,
+        screen.button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_block"), blockX, bodyTop, ADD_BUTTON_WIDTH, BUTTON_HEIGHT,
             () -> addTyped(true)).tooltip(Component.translatable("particlefilter.hidden.add_block.tooltip"));
 
-        screen.addPanel(cx, bodyTop + 28, cw, bodyBottom - bodyTop - 28, 2);
+        int listTop = bodyTop + BUTTON_HEIGHT + LIST_GAP;
+        screen.addPanel(cx, listTop, cw, bodyBottom - listTop, 2);
         screen.setRows(hiddenRows());
     }
 
@@ -138,16 +156,20 @@ public class HiddenPage extends Page {
         return particle.contains(":") ? Theme.TYPED : Theme.UNTYPED;
     }
 
+    /** Room the Paused pill takes after a heading's last line, counting the gap before it. */
+    private int pausedRoom(String pausedText) {
+        return screen.font().width(pausedText) + 14;
+    }
+
     /** Section label, with a Paused pill while Active rules leaves this kind of rule out. */
     private Row section(String label, boolean paused, Component pausedTip) {
         var font = screen.font();
         String pausedText = Theme.caps("particlefilter.paused");
-        var shown = screen.wrap(label, screen.panel().contentWidth() - 4 - (paused ? font.width(pausedText) + 14 : 0));
-        int top = 8;
-        int lastY = top + (shown.size() - 1) * LINE;
+        var shown = screen.wrap(label, screen.panel().contentWidth() - 4 - (paused ? pausedRoom(pausedText) : 0));
+        int lastY = SECTION_TOP + (shown.size() - 1) * LINE;
         int lastWidth = font.width(shown.get(shown.size() - 1));
-        Row row = new Row(top + textHeight(shown.size()) + 6, (g, x, y, w, h, hovered) -> {
-            screen.drawLines(g, shown, x + 2, y + top, Theme.TEXT_FAINT);
+        Row row = new Row(SECTION_TOP + textHeight(shown.size()) + 6, (g, x, y, w, h, hovered) -> {
+            screen.drawLines(g, shown, x + 2, y + SECTION_TOP, Theme.TEXT_FAINT);
             if (paused) Theme.pill(g, font, pausedText, x + 8 + lastWidth, y + lastY - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
         });
         if (paused) row.tooltip(pausedTip);
@@ -159,33 +181,35 @@ public class HiddenPage extends Page {
         var font = screen.font();
         int w = screen.panel().contentWidth();
         String pausedText = Theme.caps("particlefilter.paused");
-        int buttons = (here ? 40 : 0) + 74;
+        // Width kept clear at the right for Edit and Delete zone, each with a gap.
+        int buttons = (here ? ZONE_EDIT_WIDTH + 4 : 0) + ZONE_DELETE_WIDTH + 4;
         int color = Theme.zoneColor(zone);
         int nameColor = here ? color : Theme.fade(color, 0.6f);
         // "ZONE · name · x, y, z", wrapped left of the buttons; the Paused pill follows the last line.
-        int room = w - 14 - buttons - (paused ? font.width(pausedText) + 14 : 0);
+        int room = w - buttons - DOT_TEXT_X - 2 - (paused ? pausedRoom(pausedText) : 0);
         var shown = screen.wrapPieces(List.of(
             new Piece(Theme.caps(here ? "particlefilter.hidden.section_zone" : "particlefilter.hidden.section_zone_elsewhere"), nameColor),
             new Piece(zone.name, nameColor),
             new Piece(zone.coordsText(), Theme.TEXT_FAINT)), Theme.TEXT_FAINT, room);
-        int top = 8;
-        int lastY = top + (shown.size() - 1) * LINE;
+        int lastY = SECTION_TOP + (shown.size() - 1) * LINE;
         int lastWidth = font.width(shown.get(shown.size() - 1));
-        Row row = new Row(top + textHeight(shown.size()) + 8, (g, x, y, rw, h, hovered) -> {
-            Theme.dot(g, x + 2, y + top + 1, 5, color);
-            screen.drawLines(g, shown, x + 12, y + top, Theme.TEXT_FAINT);
-            if (paused) Theme.pill(g, font, pausedText, x + 12 + lastWidth + 8, y + lastY - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
+        // The buttons are centered on the first line of text.
+        int buttonY = SECTION_TOP + (textHeight(1) - SMALL_BUTTON_HEIGHT) / 2;
+        Row row = new Row(SECTION_TOP + textHeight(shown.size()) + 8, (g, x, y, rw, h, hovered) -> {
+            Theme.dot(g, x + DOT_X, y + SECTION_TOP + 1, DOT_SIZE, color);
+            screen.drawLines(g, shown, x + DOT_TEXT_X, y + SECTION_TOP, Theme.TEXT_FAINT);
+            if (paused) Theme.pill(g, font, pausedText, x + DOT_TEXT_X + lastWidth + 8, y + lastY - 2, Theme.fade(Theme.WARNING, 0.16f), Theme.WARNING);
             if (hovered && here) ZoneRenderer.highlighted = zone;
         });
         Component where = Component.translatable("particlefilter.hidden.zone_where", zone.coordsText(), zone.sizeText(),
             ZoneEditScreen.volumeText(zone), zone.world, zone.dimension);
         row.tooltip(paused ? Component.empty().append(where).append("\n").append(pausedTip) : where);
         if (here) {
-            row.add(screen.rowButton(Style.GHOST, Component.translatable("particlefilter.edit"), 36,
-                () -> screen.minecraft().setScreen(new ZoneEditScreen(screen, zone))), w - buttons, 4);
+            row.add(screen.rowButton(Style.GHOST, Component.translatable("particlefilter.edit"), ZONE_EDIT_WIDTH,
+                () -> screen.minecraft().setScreen(new ZoneEditScreen(screen, zone))), w - buttons, buttonY);
         }
         boolean confirming = zone == confirmingDelete;
-        row.add(screen.rowButton(Style.DANGER, Component.translatable(confirming ? "particlefilter.confirm" : "particlefilter.zone.delete"), 70, () -> {
+        row.add(screen.rowButton(Style.DANGER, Component.translatable(confirming ? "particlefilter.confirm" : "particlefilter.zone.delete"), ZONE_DELETE_WIDTH, () -> {
             if (confirmingDelete == zone) {
                 PfConfig.deleteZone(zone);
                 confirmingDelete = null;
@@ -193,7 +217,7 @@ public class HiddenPage extends Page {
                 confirmingDelete = zone;
             }
             screen.refreshNextTick();
-        }).selected(confirming).tooltip(Component.translatable("particlefilter.zone.delete.tooltip")), w - 72, 4);
+        }).selected(confirming).tooltip(Component.translatable("particlefilter.zone.delete.tooltip")), w - ZONE_DELETE_WIDTH - 2, buttonY);
         return row;
     }
 
@@ -201,7 +225,7 @@ public class HiddenPage extends Page {
     public void render(GuiGraphics g, int mouseX, int mouseY) {
         if (screen.panel().isEmpty()) {
             screen.drawEmptyState(g, Component.translatable("particlefilter.hidden.empty"), Component.translatable("particlefilter.hidden.empty.body"),
-                screen.cx() + screen.cw() / 2, (screen.panel().getY() + screen.bodyBottom()) / 2 - 20, screen.cw());
+                screen.cx() + screen.cw() / 2, emptyStateTop(screen.panel().getY(), screen.bodyBottom()), screen.cw());
         }
     }
 }

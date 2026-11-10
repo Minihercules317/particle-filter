@@ -97,16 +97,33 @@ public abstract class PfScreen extends Screen {
         panel.setScrollAmount(savedScroll);
     }
 
+    /** Height of a full-size button, such as a page's main action. */
+    public static final int BUTTON_HEIGHT = 20;
+    /** Height of a compact button or text box in a page's body. */
+    public static final int COMPACT_HEIGHT = 18;
+    /** Height of the small buttons in list rows, spinners and Back. */
+    public static final int SMALL_BUTTON_HEIGHT = 16;
+    /** Corner radius of the menu windows. */
+    protected static final int WINDOW_RADIUS = 6;
+    /** Corner radius of a card in a list. */
+    public static final int CARD_RADIUS = 3;
+    /** Size of the small colored dot at the start of a card or label. */
+    public static final int DOT_SIZE = 5;
+
     public FlatButton button(FlatButton.Style style, Component label, int x, int y, int width, int height, Runnable onPress) {
         return addRenderableWidget(new FlatButton(style, label, x, y, width, height, onPress));
     }
 
     /** A row-sized button not yet added anywhere, for placing inside a {@link ScrollPanel.Row}. */
     public FlatButton rowButton(FlatButton.Style style, Component label, int width, Runnable onPress) {
-        return new FlatButton(style, label, 0, 0, width, 16, onPress);
+        return new FlatButton(style, label, 0, 0, width, SMALL_BUTTON_HEIGHT, onPress);
     }
 
     public static final int SPINNER_WIDTH = 84;
+    /** Width of a spinner's − and + buttons. */
+    private static final int SPINNER_STEP = SMALL_BUTTON_HEIGHT;
+    /** Gap between a spinner's number box and each of its buttons. */
+    private static final int SPINNER_GAP = 2;
 
     /**
      * Adds a number field between − and + buttons to [row], [SPINNER_WIDTH] px wide in total. [onValue] receives
@@ -115,36 +132,36 @@ public abstract class PfScreen extends Screen {
     protected void spinner(ScrollPanel.Row row, int x, int value, int min, int max, Component tooltip, IntConsumer onValue) {
         List<AbstractWidget> parts = spinnerParts(SPINNER_WIDTH, value, min, max, tooltip, onValue);
         row.add(parts.get(0), x);
-        row.add(parts.get(1), x + 18);
-        row.add(parts.get(2), x + SPINNER_WIDTH - 16);
+        row.add(parts.get(1), x + SPINNER_STEP + SPINNER_GAP);
+        row.add(parts.get(2), x + SPINNER_WIDTH - SPINNER_STEP);
     }
 
     /** Like {@link #spinner} but added straight to the screen, [width] px wide, with its top left at (x, y). */
     public void addSpinner(int x, int y, int width, int value, int min, int max, Component tooltip, IntConsumer onValue) {
         List<AbstractWidget> parts = spinnerParts(width, value, min, max, tooltip, onValue);
         parts.get(0).setPosition(x, y);
-        parts.get(1).setPosition(x + 18, y);
-        parts.get(2).setPosition(x + width - 16, y);
+        parts.get(1).setPosition(x + SPINNER_STEP + SPINNER_GAP, y);
+        parts.get(2).setPosition(x + width - SPINNER_STEP, y);
         parts.forEach(this::addRenderableWidget);
     }
 
     /** −, the number box and +, in that order, not yet placed. */
     private List<AbstractWidget> spinnerParts(int width, int value, int min, int max, Component tooltip, IntConsumer onValue) {
-        TextField box = new TextField(font, 0, 0, width - 36, 16, tooltip).tooltip(tooltip);
+        TextField box = new TextField(font, 0, 0, width - 2 * (SPINNER_STEP + SPINNER_GAP), SMALL_BUTTON_HEIGHT, tooltip).tooltip(tooltip);
         box.setMaxLength(9);
         box.setFilter(s -> s.matches(min < 0 ? "-?\\d*" : "\\d*"));
         box.setValue(Integer.toString(value));
         box.setResponder(s -> parse(s, min, max, onValue));
         return List.of(
-            new FlatButton(FlatButton.Style.SECONDARY, Component.literal("−"), 0, 0, 16, 16, () -> step(box, -1, min, max)),
+            new FlatButton(FlatButton.Style.SECONDARY, Component.literal("−"), 0, 0, SPINNER_STEP, SMALL_BUTTON_HEIGHT, () -> step(box, -1, min, max)),
             box,
-            new FlatButton(FlatButton.Style.SECONDARY, Component.literal("+"), 0, 0, 16, 16, () -> step(box, 1, min, max)));
+            new FlatButton(FlatButton.Style.SECONDARY, Component.literal("+"), 0, 0, SPINNER_STEP, SMALL_BUTTON_HEIGHT, () -> step(box, 1, min, max)));
     }
 
     /** A clearly labelled "← Back" button that returns to the previous screen. */
     protected FlatButton backButton(int x, int y) {
         Component label = Component.translatable("particlefilter.back_button");
-        return button(FlatButton.Style.SECONDARY, label, x, y, font.width(label) + 14, 16, this::onClose)
+        return button(FlatButton.Style.SECONDARY, label, x, y, font.width(label) + 14, SMALL_BUTTON_HEIGHT, this::onClose)
             .tooltip(Component.translatable("particlefilter.back.tooltip"));
     }
 
@@ -169,16 +186,30 @@ public abstract class PfScreen extends Screen {
         box.setValue(Integer.toString(Math.max(min, Math.min(max, current + delta))));
     }
 
+    /** Height of a section label row. */
+    protected static final int SECTION_HEIGHT = 16;
+    /** Left inset of a section label. */
+    protected static final int SECTION_TEXT_X = 2;
+    /** Space above a section label. */
+    protected static final int SECTION_TEXT_Y = 6;
+
     /** A section label row: uppercase faint text with an optional count. */
     public ScrollPanel.Row sectionRow(String label) {
-        return new ScrollPanel.Row(16, (g, x, y, w, h, hovered) -> Theme.text(g, font, label, x + 2, y + 6, Theme.TEXT_FAINT));
+        return new ScrollPanel.Row(SECTION_HEIGHT, (g, x, y, w, h, hovered) -> Theme.text(g, font, label, x + SECTION_TEXT_X, y + SECTION_TEXT_Y, Theme.TEXT_FAINT));
     }
+
+    /** Pixels from one line of dim explanation text (a hint row or an empty-state message) to the next. */
+    private static final int HINT_LINE = 11;
+    /** Left and right inset of a hint row's text. */
+    protected static final int HINT_TEXT_X = 4;
+    /** Space above and below a hint row's text. */
+    private static final int HINT_TEXT_Y = 3;
 
     /** A row of dim text wrapped to the panel width, sized to fit. */
     public ScrollPanel.Row hintRow(Component text, int width) {
-        List<FormattedCharSequence> lines = font.split(text, width - 8);
-        return new ScrollPanel.Row(lines.size() * 11 + 6, (g, x, y, w, h, hovered) -> {
-            for (int i = 0; i < lines.size(); i++) g.drawString(font, lines.get(i), x + 4, y + 3 + i * 11, Theme.TEXT_DIM, false);
+        List<FormattedCharSequence> lines = font.split(text, width - 2 * HINT_TEXT_X);
+        return new ScrollPanel.Row(lines.size() * HINT_LINE + 2 * HINT_TEXT_Y, (g, x, y, w, h, hovered) -> {
+            for (int i = 0; i < lines.size(); i++) g.drawString(font, lines.get(i), x + HINT_TEXT_X, y + HINT_TEXT_Y + i * HINT_LINE, Theme.TEXT_DIM, false);
         });
     }
 
@@ -188,10 +219,10 @@ public abstract class PfScreen extends Screen {
     private static final int ENTRY_RIGHT = 2;
     /** Gap between an entry row's switch and its Delete button, and between its name and the switch. */
     private static final int ENTRY_GAP = 8;
-    /** Left inset of an entry row's dot. */
-    private static final int ENTRY_DOT_X = 8;
-    /** Left inset of an entry row's name, past the dot. */
-    private static final int ENTRY_TEXT_X = 19;
+    /** Left inset of the dot on an entry or result card. */
+    public static final int CARD_DOT_X = 8;
+    /** Left inset of the name on an entry or result card, past the dot. */
+    public static final int CARD_TEXT_X = 19;
     /** Padding above an entry row's name (and the same below). */
     private static final int ENTRY_TEXT_Y = 6;
 
@@ -205,12 +236,12 @@ public abstract class PfScreen extends Screen {
                                        Consumer<Boolean> setOn, Runnable delete, Zone highlight) {
         int w = panel.contentWidth();
         int switchX = w - DELETE_WIDTH - ENTRY_RIGHT - ENTRY_GAP - Toggle.WIDTH;
-        List<FormattedCharSequence> shown = wrap(name, switchX - ENTRY_TEXT_X - ENTRY_GAP);
+        List<FormattedCharSequence> shown = wrap(name, switchX - CARD_TEXT_X - ENTRY_GAP);
         ScrollPanel.Row row = new ScrollPanel.Row(textHeight(shown.size()) + 2 * ENTRY_TEXT_Y, (g, x, y, rw, h, hovered) -> {
             boolean dim = paused || !isOn.getAsBoolean();
-            Theme.rect(g, x, y, rw, h, 3, hovered ? Theme.CARD_HOVER : Theme.CARD);
-            Theme.dot(g, x + ENTRY_DOT_X, y + (h - 5) / 2, 5, dim ? Theme.fade(color, 0.35f) : color);
-            drawLines(g, shown, x + ENTRY_TEXT_X, y + ENTRY_TEXT_Y, dim ? Theme.TEXT_FAINT : Theme.TEXT);
+            Theme.rect(g, x, y, rw, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
+            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, dim ? Theme.fade(color, 0.35f) : color);
+            drawLines(g, shown, x + CARD_TEXT_X, y + ENTRY_TEXT_Y, dim ? Theme.TEXT_FAINT : Theme.TEXT);
             if (hovered && highlight != null) ZoneRenderer.highlighted = highlight;
         });
         if (id != null && !id.equals(name)) row.tooltip(Component.literal(id));
@@ -291,7 +322,7 @@ public abstract class PfScreen extends Screen {
         y += 16;
         for (FormattedCharSequence line : font.split(body, Math.min(width, 260))) {
             g.drawString(font, line, centerX - font.width(line) / 2, y, Theme.TEXT_DIM, false);
-            y += 11;
+            y += HINT_LINE;
         }
     }
 
