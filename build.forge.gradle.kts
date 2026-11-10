@@ -33,6 +33,9 @@ legacyForge {
             sourceSet(sourceSets.main.get())
         }
     }
+
+    // Unit tests in src/test use Minecraft's plain classes (AABB, BlockPos) without starting the game.
+    addModdingDependenciesTo(sourceSets.test.get())
 }
 
 // Forge runs on SRG names, so mixins need a refmap and the jar is reobfuscated (the dev jar goes to build/devlibs).
@@ -42,12 +45,20 @@ mixin {
 }
 
 dependencies {
+    testImplementation(platform("org.junit:junit-bom:5.12.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     annotationProcessor("org.spongepowered:mixin:0.8.5:processor")
 }
 
 tasks {
     withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
+    }
+
+    // Unit tests run as part of `build`, once per version; a failing test fails the build.
+    test {
+        useJUnitPlatform()
     }
 
     processResources {

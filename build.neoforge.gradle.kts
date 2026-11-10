@@ -33,11 +33,25 @@ neoForge {
             sourceSet(sourceSets.main.get())
         }
     }
+
+    // Unit tests in src/test use Minecraft's plain classes (AABB, BlockPos) without starting the game.
+    addModdingDependenciesTo(sourceSets.test.get())
+}
+
+dependencies {
+    testImplementation(platform("org.junit:junit-bom:5.12.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks {
     withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
+    }
+
+    // Unit tests run as part of `build`, once per version; a failing test fails the build.
+    test {
+        useJUnitPlatform()
     }
 
     processResources {
