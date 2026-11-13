@@ -8,8 +8,20 @@ import org.slf4j.LoggerFactory;
 import particlefilter.filter.FilterRules;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.FileAttributeView;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributes;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -91,35 +103,49 @@ public final class PfConfig {
     private static Path file;
 
     private static Data data = new Data();
+    /**
+     * Set when the file existed but couldn't be read and couldn't be backed up either. The in-memory defaults are
+     * used, but nothing is written until the next {@link #load}, so the unreadable file is never overwritten.
+     */
+    private static boolean saveBlocked;
 
     private PfConfig() {}
 
     public static void load(Path path) {
         file = path;
-        data = read(file);
+        Loaded loaded = read(file);
+        data = loaded.data();
+        saveBlocked = !loaded.safeToSave();
         assignColors(data.zones);
         save(); // writes defaults on first run and upgrades older formats
         FilterRules.rebuild();
     }
 
+    /** What [read] found: the settings, and whether the file may be overwritten by later saves. */
+    record Loaded(Data data, boolean safeToSave) {}
+
     /**
      * The settings in [file], or the defaults if it is missing or empty. Saving replaces the file, so one that can't
      * be read (a typo from editing it by hand, say) is first copied next to it as particlefilter.broken-<time>.json.
+     * If that copy fails too, the defaults are used but the result is marked unsafe to save.
+     * Only a file known not to exist counts as missing; if its existence can't be determined it is treated as present.
      */
-    static Data read(Path file) {
-        if (!Files.exists(file)) return new Data();
+    static Loaded read(Path file) {
+        if (Files.notExists(file)) return new Loaded(new Data(), true);
         try {
             Data loaded = parse(Files.readString(file));
-            return loaded != null ? loaded : new Data();
+            return new Loaded(loaded != null ? loaded : new Data(), true);
         } catch (Exception e) {
             try {
                 Path copy = brokenCopyPath(file);
                 Files.copy(file, copy);
                 LOGGER.error("Couldn't read {}; saved it as {} and started with an empty config", file, copy.getFileName(), e);
-            } catch (IOException copyError) {
-                LOGGER.error("Couldn't read {} or save a copy of it; starting with an empty config", file, e);
+                return new Loaded(new Data(), true);
+            } catch (Exception copyError) {
+                LOGGER.error("Couldn't read {} or save a copy of it; starting with an empty config and not saving "
+                        + "until the config is loaded again", file, e);
+                return new Loaded(new Data(), false);
             }
-            return new Data();
         }
     }
 
@@ -144,12 +170,106 @@ public final class PfConfig {
         return GSON.toJson(data);
     }
 
-    private static void save() {
+    /**
+     * The file a save really replaces. If the config path is a symlink (or a chain of them) that is the final target,
+     * so the links stay in place, as they would with a direct write.
+     *
+     * A dangling link is refused rather than followed: creating whatever it points at could put a file somewhere
+     * the user never meant, so such a config is simply not saved. A file that isn't writable is refused too, since a
+     * direct write would have failed and replacing it through a writable folder would silently get around that.
+     */
+    private static Path saveTarget() throws IOException {
+        Path path = file.toAbsolutePath();
+        Path target;
         try {
-            Files.writeString(file, toJson(data));
+            target = path.toRealPath();
+        } catch (NoSuchFileException e) {
+            if (Files.isSymbolicLink(path)) throw new IOException(path + " is a symbolic link to a missing file", e);
+            return path; // first run: the file doesn't exist yet
+        }
+        if (!Files.isWritable(target)) throw new IOException(target + " is not writable");
+        return target;
+    }
+
+    private static void save() {
+        if (saveBlocked) {
+            LOGGER.error("Not saving {}: it couldn't be read or backed up when it was loaded", file);
+            return;
+        }
+        Path temp = null; // only set once this save has created its own file
+        try {
+            Path target = saveTarget();
+            // A bare filename has no parent, so saveTarget() works on an absolute path.
+            temp = Files.createTempFile(target.getParent(), target.getFileName() + ".", ".tmp");
+            try (FileChannel out = FileChannel.open(temp, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                ByteBuffer bytes = ByteBuffer.wrap(toJson(data).getBytes(StandardCharsets.UTF_8));
+                while (bytes.hasRemaining()) out.write(bytes);
+                out.force(true);
+            }
+            // The temp file starts out private (0600, owned by us); give it the old file's access rules. Any failure
+            // here keeps the previous file, like a failed write.
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) copyAccessMetadata(target, temp);
+            // No fallback to a non-atomic replace: if the filesystem can't move atomically, the previous file is kept.
+            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException e) {
             LOGGER.error("Couldn't save {}", file, e);
+            if (temp != null) {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException ignored) {
+                    // leave it; its name is unique, so it never affects later saves
+                }
+            }
         }
+    }
+
+    /**
+     * Copies who may access [from] onto [to], using the standard NIO attribute views the platform offers: the ACL
+     * (if exposed), and on POSIX the group, the owner and the permission bits. Views the platform doesn't offer are
+     * skipped. Throws if a supported attribute can't be read or applied, so the caller keeps the previous file.
+     *
+     * Limits: Java has no portable view for POSIX default/extended ACLs, SELinux labels, other extended attributes,
+     * Windows owner/DACL inheritance details beyond what {@link AclFileAttributeView} reports, or macOS/NTFS
+     * metadata. Changing the owner normally needs privileges, so a file owned by someone else can't be replaced by an
+     * unprivileged user; the save then fails and the old file stays. The owner and group are only set when they differ.
+     */
+    private static void copyAccessMetadata(Path from, Path to) throws IOException {
+        // A view being available isn't enough (the Windows JDK offers the ACL view on volumes without persistent
+        // ACLs, e.g. FAT), so the volumes themselves are asked too.
+        AclFileAttributeView fromAcl = supportedView(from, AclFileAttributeView.class);
+        AclFileAttributeView toAcl = supportedView(to, AclFileAttributeView.class);
+        if (fromAcl != null && toAcl != null) toAcl.setAcl(applicableAcl(from, fromAcl.getAcl()));
+
+        PosixFileAttributeView fromPosix = supportedView(from, PosixFileAttributeView.class);
+        PosixFileAttributeView toPosix = supportedView(to, PosixFileAttributeView.class);
+        if (fromPosix != null && toPosix != null) {
+            PosixFileAttributes wanted = fromPosix.readAttributes();
+            PosixFileAttributes current = toPosix.readAttributes();
+            if (!wanted.group().equals(current.group())) toPosix.setGroup(wanted.group());
+            if (!wanted.owner().equals(current.owner())) toPosix.setOwner(wanted.owner());
+            // Last, because changing the owner or group can clear setuid/setgid bits.
+            toPosix.setPermissions(wanted.permissions());
+        }
+    }
+
+    /** The view of [path], or null if the file's volume doesn't really support it (or the JDK has no such view). */
+    private static <V extends FileAttributeView> V supportedView(Path path, Class<V> type) throws IOException {
+        if (!Files.getFileStore(path).supportsFileAttributeView(type)) return null;
+        return Files.getFileAttributeView(path, type);
+    }
+
+    /**
+     * The ACL to apply, or an exception if it can't be applied faithfully. The JDK reads both a missing (null) DACL,
+     * which allows everyone, and an empty DACL, which allows no one, as an empty list, so it can't be told which one
+     * it is. Applying either could silently widen or lock out access, and substituting the folder's defaults could
+     * weaken a restrictive ACL, so the save is refused and the previous file kept.
+     */
+    static List<AclEntry> applicableAcl(Path from, List<AclEntry> acl) throws IOException {
+        if (acl.isEmpty()) {
+            throw new IOException("the ACL of " + from + " is empty, which the JDK can't tell apart from no ACL at all,"
+                    + " so it can't be copied safely");
+        }
+        return acl;
     }
 
     /** Saves and recompiles the filter rules. Call after any change, including direct edits to a {@link Zone}. */

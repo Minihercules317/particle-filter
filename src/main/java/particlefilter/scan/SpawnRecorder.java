@@ -81,32 +81,36 @@ final class SpawnRecorder {
         final Builder hidden = new Builder();
     }
 
-    private volatile Vec3 center;
-    private volatile double radiusSq;
+    /** One running scan. Compared by identity, so a record call that saw an older scan never writes into a newer one. */
+    private record Scan(Vec3 center, double radiusSq) {}
+
+    private volatile Scan scan;
     private final Map<String, Entry> entries = new HashMap<>();
 
     boolean isRunning() {
-        return center != null;
+        return scan != null;
     }
 
     void start(Vec3 at, double radius) {
         synchronized (this) {
             entries.clear();
+            scan = new Scan(at, radius * radius);
         }
-        radiusSq = radius * radius;
-        center = at;
     }
 
     void stop() {
-        center = null;
+        synchronized (this) {
+            scan = null;
+        }
     }
 
     void record(String particle, boolean typed, double x, double y, double z, boolean hidden) {
-        Vec3 c = center;
-        if (c == null) return;
-        double distSq = c.distanceToSqr(x, y, z);
-        if (distSq > radiusSq) return;
+        Scan s = scan;
+        if (s == null) return;
+        double distSq = s.center.distanceToSqr(x, y, z);
+        if (distSq > s.radiusSq) return;
         synchronized (this) {
+            if (scan != s) return; // stopped or replaced while waiting for the lock
             Entry e = entries.computeIfAbsent(particle, k -> new Entry());
             e.typed = typed;
             (hidden ? e.hidden : e.shown).add(x, y, z, distSq);
