@@ -2,6 +2,21 @@
 
 All code in this project is written by Claude (Anthropic's AI model); see the README's "Who did what" section.
 
+## 1.3.0
+
+- New Diagnostic page, also opened with `/particles diagnostic`: it records every particle around you within render distance and splits them into those still appearing and those your rules already hide, so you can see what is left after your rules are in place
+- On the Diagnostic page, Here gives each source of a particle its own zone, so two sources far apart no longer end up in one huge zone. Spots where a particle appeared count as one source when they are within a distance you set (**Same source within**, 1-32 blocks, 6 by default), even through other spots in between. A particle with more than 8 sources gets zones for its 8 busiest, with a suggestion to hide it everywhere instead
+- Zones that overlap by at least a share you set with the **Merge zones sharing** slider (1-100% of the smaller zone, 50% by default) merge into one box around both
+- Zones made with Here are now the smallest box around where the particles appeared, with no extra margin, and keep fitting as you switch particles on and off until you edit the zone yourself. Scanning a spot that already has a zone reuses that zone
+- New **Grow to fit**: when particles still appear just outside a zone that hides them, a notice offers to enlarge the zone to cover them. Hover it to preview the new outline in the world first. Zones only grow, never shrink
+- Scan: the scan length is adjustable (1-60 seconds, 3 by default) and saved. Particles you have already hidden are listed too, so you can show them again from the results. A New zone button makes a separate zone even when you are inside an existing one
+- Hidden page: switch an entry off to keep it without applying it, or delete it. Each zone shows its coordinates
+- Zone editor: sizes read Side 1 × Height × Side 2 with the number of blocks affected, and each side is labeled left-right or front-back from your view. Every zone gets its own outline color, so zones that touch or overlap are easy to tell apart
+- The menu reopens on the last page you used, until you leave the world or server. A **?** button opens a quick start guide, and Back buttons are labeled
+- Long text in the menus wraps instead of being cut off with "…"
+- If the config file can't be read (for example after a typo in a hand edit), it is kept as a backup copy (`particlefilter.broken-<time>.json`) instead of being overwritten with defaults
+- Config files from earlier versions load unchanged; the new settings get defaults
+
 ## 1.2.0
 
 - Now also available for Minecraft 1.20.1 with Forge 47+. Each release has one jar per version and loader: `particlefilter-neoforge-<version>+1.21.1.jar` for NeoForge 1.21.1 and `particlefilter-forge-<version>+1.20.1.jar` for Forge 1.20.1. Both have the same features
