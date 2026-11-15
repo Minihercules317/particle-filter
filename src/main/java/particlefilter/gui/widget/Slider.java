@@ -91,6 +91,15 @@ public class Slider extends AbstractSliderButton {
         return handled;
     }
 
+    /**
+     * Ends a drag: applies the value if it changed. Screens call this when the mouse is let go anywhere, since 1.20.1
+     * only tells the widget under the mouse, so a drag let go past the slider's end would never be applied.
+     * Calling it again does nothing.
+     */
+    public void finishDrag() {
+        commit();
+    }
+
     private void commit() {
         int now = intValue();
         if (now == applied && !steppedSinceCommit) return;

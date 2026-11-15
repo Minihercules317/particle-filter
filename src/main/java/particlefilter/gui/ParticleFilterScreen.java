@@ -77,8 +77,11 @@ public class ParticleFilterScreen extends PfScreen {
     /** The window's size when the player hasn't resized it, and its smallest size; never more than the screen allows. */
     private static final int DEFAULT_WIDTH = 560;
     private static final int DEFAULT_HEIGHT = 340;
-    /** Smallest size: the Scan page's duration and radius need this width on one line, the sidebar this height. */
-    private static final int MIN_WIDTH = 444;
+    /**
+     * Smallest size: at this width the Scan page's duration and radius share a line and the Diagnostic page has room
+     * for ids like minecraft:flame beside its three columns; the sidebar needs this height.
+     */
+    private static final int MIN_WIDTH = 500;
     private static final int MIN_HEIGHT = 250;
     /** Space kept between the window and the screen's edges when it is as big as the screen allows. */
     private static final int SCREEN_MARGIN = 8;
@@ -115,6 +118,8 @@ public class ParticleFilterScreen extends PfScreen {
     private int dragX, dragY, dragWidth, dragHeight;
     /** Set while dragging; the widgets are laid out again once per frame instead of once per mouse event. */
     private boolean relayout;
+    /** True once the current drag changed the window, so letting go saves its place (a plain click doesn't). */
+    private boolean dragChanged;
     private long lastBackgroundClick;
 
     public ParticleFilterScreen(Screen parent, Tab tab) {
@@ -205,6 +210,7 @@ public class ParticleFilterScreen extends PfScreen {
 
     private void startDrag(Drag kind, double mouseX, double mouseY) {
         drag = kind;
+        dragChanged = false;
         dragMouseX = mouseX;
         dragMouseY = mouseY;
         dragX = wx;
@@ -230,6 +236,7 @@ public class ParticleFilterScreen extends PfScreen {
         long now = net.minecraft.Util.getMillis();
         if (now - lastBackgroundClick < DOUBLE_CLICK_MS) {
             lastBackgroundClick = 0;
+            drag = Drag.NONE; // the first click's move ends here, so letting go doesn't save the old place again
             placed = null;
             PfConfig.setWindow(null);
             refresh();
@@ -256,6 +263,8 @@ public class ParticleFilterScreen extends PfScreen {
         if (!next.equals(placed)) {
             placed = next;
             relayout = true;
+            dragChanged = true;
+            lastBackgroundClick = 0; // a click right after a drag isn't the second half of a double click
         }
         return true;
     }
@@ -264,6 +273,7 @@ public class ParticleFilterScreen extends PfScreen {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (drag == Drag.NONE) return super.mouseReleased(mouseX, mouseY, button);
         drag = Drag.NONE;
+        if (!dragChanged) return true;
         if (relayout) {
             relayout = false;
             refresh();

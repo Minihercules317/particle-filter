@@ -14,6 +14,7 @@ import net.minecraft.util.FormattedCharSequence;
 import particlefilter.config.Zone;
 import particlefilter.gui.widget.FlatButton;
 import particlefilter.gui.widget.ScrollPanel;
+import particlefilter.gui.widget.Slider;
 import particlefilter.gui.widget.TextField;
 import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
@@ -67,6 +68,12 @@ public abstract class PfScreen extends Screen {
             focused = container.getFocused();
         }
         return focused instanceof EditBox;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && getFocused() instanceof Slider slider) slider.finishDrag();
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     /** Movement keys move the player instead while walking in the menu is on ({@link MenuWalking}). */

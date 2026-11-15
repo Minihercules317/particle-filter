@@ -191,7 +191,7 @@
   "particlefilter.guide.open": "Quick start guide",
   "particlefilter.guide.title": "Quick start",
   "particlefilter.guide.scan.title": "Find the particles",
-  "particlefilter.guide.scan.body": "Look at where the unwanted particles come from and press Scan. Every particle that appears within 6 blocks during the scan is listed, most frequent first, so you don't need to know any names. Set how long it records next to \"Scan for\".",
+  "particlefilter.guide.scan.body": "Look at where the unwanted particles come from and press Scan. Every particle that appears nearby during the scan is listed, most frequent first, so you don't need to know any names. Set how long it records next to \"Scan for\", and how far with Radius. Particles made from a block, like breaking debris, get a row per block.",
   "particlefilter.guide.hide.title": "Hide them",
   "particlefilter.guide.hide.body": "Switch on Everywhere to hide a particle in every world, or Here to hide it only in a zone around the scanned spot. The line under the list says which zone Here uses. If there's none yet, the first particle you switch on creates one, sized to fit where the particles appeared. Use New zone to make a separate zone even inside an existing one. If particles you switched on also appeared outside the zone, Grow to fit offers to enlarge it to cover them.",
   "particlefilter.guide.diagnostic.title": "Diagnostic scan",
