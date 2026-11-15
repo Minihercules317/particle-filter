@@ -74,6 +74,21 @@ public class ParticleFilterScreen extends PfScreen {
     /** Most lines a page subtitle wraps to; the page body moves down to make room. */
     private static final int MAX_HEADER_LINES = 3;
 
+    /** The window's size when the player hasn't resized it, and its smallest size; never more than the screen allows. */
+    private static final int DEFAULT_WIDTH = 560;
+    private static final int DEFAULT_HEIGHT = 340;
+    /** Smallest size: the Scan page's duration and radius need this width on one line, the sidebar this height. */
+    private static final int MIN_WIDTH = 444;
+    private static final int MIN_HEIGHT = 250;
+    /** Space kept between the window and the screen's edges when it is as big as the screen allows. */
+    private static final int SCREEN_MARGIN = 8;
+    /** Half the width of the band along the right and bottom edges that resizes the window when dragged. */
+    private static final int EDGE_GRAB = 3;
+    /** Size of the square at the bottom right corner that resizes both ways; the grip dots are drawn in it. */
+    private static final int CORNER_GRAB = 10;
+    /** Two clicks on the window's background this close together, in milliseconds, put it back to its default place. */
+    private static final long DOUBLE_CLICK_MS = 300;
+
     private static Tab lastTab = Tab.SCAN;
 
     private Tab tab;
@@ -88,6 +103,19 @@ public class ParticleFilterScreen extends PfScreen {
     private int headerLines = 1;
     private int modesTop;
     private final Map<Tab, FlatButton> navButtons = new EnumMap<>(Tab.class);
+    /** Where the player put the window, or null for the default: centered, at the default size. */
+    private PfConfig.Window placed = PfConfig.window();
+
+    /** What dragging with the left button does: nothing, moves the window, or resizes it from an edge or the corner. */
+    private enum Drag { NONE, MOVE, RIGHT, BOTTOM, CORNER }
+
+    private Drag drag = Drag.NONE;
+    /** Mouse position and window when the drag began. */
+    private double dragMouseX, dragMouseY;
+    private int dragX, dragY, dragWidth, dragHeight;
+    /** Set while dragging; the widgets are laid out again once per frame instead of once per mouse event. */
+    private boolean relayout;
+    private long lastBackgroundClick;
 
     public ParticleFilterScreen(Screen parent, Tab tab) {
         super(Component.translatable("particlefilter.title"), parent);
@@ -110,10 +138,7 @@ public class ParticleFilterScreen extends PfScreen {
     @Override
     protected void init() {
         lastTab = tab;
-        ww = Math.min(width - 16, 560);
-        wh = Math.min(height - 16, 340);
-        wx = (width - ww) / 2;
-        wy = (height - wh) / 2;
+        placeWindow();
         cx = wx + SIDEBAR_WIDTH + PAD;
         cw = ww - SIDEBAR_WIDTH - 2 * PAD;
         int closeX = wx + ww - CORNER_PAD - CORNER_BUTTON;
@@ -130,6 +155,131 @@ public class ParticleFilterScreen extends PfScreen {
         button(Style.GHOST, Component.literal("×"), closeX, wy + CORNER_PAD, CORNER_BUTTON, CORNER_BUTTON, this::onClose)
             .tooltip(Component.translatable("particlefilter.close"));
         page().init();
+    }
+
+    // ---------------------------------------------------------------- Moving and resizing
+
+    /**
+     * Sets the window from where the player put it, fitted to this screen (the GUI scale or game window may have
+     * changed since): between the smallest size and the screen's size, and kept on screen. Without a place, it is
+     * centered at the default size, leaving a margin on small screens.
+     */
+    private void placeWindow() {
+        if (placed == null) {
+            ww = Math.max(1, Math.min(width - 2 * SCREEN_MARGIN, DEFAULT_WIDTH));
+            wh = Math.max(1, Math.min(height - 2 * SCREEN_MARGIN, DEFAULT_HEIGHT));
+            wx = (width - ww) / 2;
+            wy = (height - wh) / 2;
+            return;
+        }
+        ww = clamp(placed.width(), minWidth(), width);
+        wh = clamp(placed.height(), minHeight(), height);
+        wx = clamp(placed.x(), 0, width - ww);
+        wy = clamp(placed.y(), 0, height - wh);
+    }
+
+    /** The smallest size, or less on a screen too small for it, as the default size allows. */
+    private int minWidth() {
+        return Math.max(1, Math.min(MIN_WIDTH, width - 2 * SCREEN_MARGIN));
+    }
+
+    private int minHeight() {
+        return Math.max(1, Math.min(MIN_HEIGHT, height - 2 * SCREEN_MARGIN));
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    /** What pressing at the point starts: resizing on the right or bottom edge or the corner, else nothing. */
+    private Drag resizeAt(double mouseX, double mouseY) {
+        int right = wx + ww, bottom = wy + wh;
+        boolean nearRight = mouseX >= right - EDGE_GRAB && mouseX < right + EDGE_GRAB && mouseY >= wy && mouseY < bottom + EDGE_GRAB;
+        boolean nearBottom = mouseY >= bottom - EDGE_GRAB && mouseY < bottom + EDGE_GRAB && mouseX >= wx && mouseX < right + EDGE_GRAB;
+        boolean inCorner = mouseX >= right - CORNER_GRAB && mouseX < right + EDGE_GRAB && mouseY >= bottom - CORNER_GRAB && mouseY < bottom + EDGE_GRAB;
+        if (inCorner || nearRight && nearBottom) return Drag.CORNER;
+        if (nearRight) return Drag.RIGHT;
+        if (nearBottom) return Drag.BOTTOM;
+        return Drag.NONE;
+    }
+
+    private void startDrag(Drag kind, double mouseX, double mouseY) {
+        drag = kind;
+        dragMouseX = mouseX;
+        dragMouseY = mouseY;
+        dragX = wx;
+        dragY = wy;
+        dragWidth = ww;
+        dragHeight = wh;
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            Drag resize = resizeAt(mouseX, mouseY);
+            if (resize != Drag.NONE) {
+                startDrag(resize, mouseX, mouseY);
+                return true;
+            }
+        }
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        // The window's background, outside the widgets and the list, moves it; a double click puts it back.
+        boolean onWindow = mouseX >= wx && mouseX < wx + ww && mouseY >= wy && mouseY < wy + wh;
+        boolean onList = panel != null && panel.isMouseOver(mouseX, mouseY);
+        if (button != 0 || !onWindow || onList) return false;
+        long now = net.minecraft.Util.getMillis();
+        if (now - lastBackgroundClick < DOUBLE_CLICK_MS) {
+            lastBackgroundClick = 0;
+            placed = null;
+            PfConfig.setWindow(null);
+            refresh();
+            return true;
+        }
+        lastBackgroundClick = now;
+        startDrag(Drag.MOVE, mouseX, mouseY);
+        return true;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (drag == Drag.NONE) return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        int dx = (int) Math.round(mouseX - dragMouseX), dy = (int) Math.round(mouseY - dragMouseY);
+        int x = this.dragX, y = this.dragY, w = dragWidth, h = dragHeight;
+        if (drag == Drag.MOVE) {
+            x += dx;
+            y += dy;
+        }
+        if (drag == Drag.RIGHT || drag == Drag.CORNER) w = clamp(w + dx, minWidth(), width - x);
+        if (drag == Drag.BOTTOM || drag == Drag.CORNER) h = clamp(h + dy, minHeight(), height - y);
+        // Resizing keeps the top left corner where it is; moving is kept on screen when the window is placed.
+        PfConfig.Window next = new PfConfig.Window(x, y, w, h);
+        if (!next.equals(placed)) {
+            placed = next;
+            relayout = true;
+        }
+        return true;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (drag == Drag.NONE) return super.mouseReleased(mouseX, mouseY, button);
+        drag = Drag.NONE;
+        if (relayout) {
+            relayout = false;
+            refresh();
+        }
+        // Saved as fitted to this screen, so it reopens where it was seen.
+        placed = new PfConfig.Window(wx, wy, ww, wh);
+        PfConfig.setWindow(placed);
+        return true;
+    }
+
+    /** Three dots across the bottom right corner, where the window can be resized. */
+    private void renderGrip(GuiGraphics g) {
+        int right = wx + ww - 4, bottom = wy + wh - 4;
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j <= i; j++) g.fill(right - 1 - 3 * j, bottom - 1 - 3 * (i - j), right - 3 * j, bottom - 3 * (i - j), Theme.TEXT_FAINT);
+        }
     }
 
     // ---------------------------------------------------------------- Sidebar
@@ -230,6 +380,10 @@ public class ParticleFilterScreen extends PfScreen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        if (relayout) {
+            relayout = false;
+            refresh();
+        }
         page().beforeRender();
         updateBadges();
         super.render(g, mouseX, mouseY, partialTick);
@@ -241,6 +395,7 @@ public class ParticleFilterScreen extends PfScreen {
 
         renderHeader(g, page().title());
         page().render(g, mouseX, mouseY);
+        renderGrip(g);
     }
 
     // ---------------------------------------------------------------- For pages

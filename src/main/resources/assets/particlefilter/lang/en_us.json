@@ -203,5 +203,5 @@
   "particlefilter.guide.rules.title": "Active rules",
   "particlefilter.guide.rules.body": "The switch at the bottom left pauses some or all of your rules at once, to compare with and without them. Nothing is deleted.",
   "particlefilter.guide.keys.title": "Keys",
-  "particlefilter.guide.keys.body": "Keys to open this menu, scan, hide the targeted block's breaking particles, show zone outlines, cycle Active rules and hold to show every particle can be set in Options → Controls → Key Binds. They start unbound. Config in the mod list has two more settings: walking while the menu is open, and lines from your crosshair to each zone."
+  "particlefilter.guide.keys.body": "Keys to open this menu, scan, hide the targeted block's breaking particles, show zone outlines, cycle Active rules and hold to show every particle can be set in Options → Controls → Key Binds. They start unbound. Drag the menu's background to move it and its right or bottom edge to resize it; double-click the background to put it back. Config in the mod list has two more settings: walking while the menu is open, and lines from your crosshair to each zone."
 }
