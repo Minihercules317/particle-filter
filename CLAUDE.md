@@ -1,7 +1,7 @@
 # Particle Filter
 
 ## What this is
-A client-side Minecraft mod, built from one source for NeoForge 1.21.1 (Java 21) and Forge 1.20.1 (Java 17). It scans which particles are on screen and hides the chosen ones everywhere, inside named zones, or by block (breaking/mining debris). `/particles` opens the menu (Scan, Diagnostic, Hidden and Zones pages; Active rules switch). Public on GitHub (Minihercules317/particle-filter, MIT) and CurseForge (project 1760372). Modrinth is off-limits: its rules bar mostly-AI projects.
+A client-side Minecraft mod, built from one source for NeoForge 1.21.1 (Java 21) and Forge 1.20.1 (Java 17). It scans which particles are on screen and hides the chosen ones everywhere, inside named zones, or by block (breaking/mining debris). `/particles` opens the menu (Scan, Diagnostic, Hidden and Zones pages; Active rules switch); Config in the mod list opens a small settings screen (walking in the menu, lines to zones). Public on GitHub (Minihercules317/particle-filter, MIT) and CurseForge (project 1760372). Modrinth is off-limits: its rules bar mostly-AI projects.
 
 ## Rules (for Claude)
 - **AI disclosure stays prominent.** Claude writes all code; the owner contributed the idea, design decisions, testing, media and icon, never code. Keep that in the README ("Who did what"), mod metadata, release notes and store pages. Never overstate the owner's coding role.
@@ -20,7 +20,7 @@ A client-side Minecraft mod, built from one source for NeoForge 1.21.1 (Java 21)
 ## Testing
 - Unit tests (JUnit 5) are in `src/test/java/particlefilter/`, in the same packages as the code they test. `build` runs them once per version, so CI runs them on every push and pull request, and a failing test blocks a tagged release. Just the tests: `mise exec -- ./gradlew test` (one version: `:1.20.1-forge:test`); report in `versions/<mc>-<loader>/build/reports/tests/test/index.html`.
 - They run without the game. Minecraft's plain classes (`AABB`, `BlockPos`, `ResourceLocation`) work; anything needing the game started (registries, `Minecraft.getInstance()`, rendering, `ParticleFilter` and its keybinds) doesn't. Keep logic testable by passing it plain inputs (`PfConfig.parse`, `PfConfig.assignColors`, `FilterRules.compile`); code under test logs through its own `LoggerFactory.getLogger("Particle Filter")`, not `ParticleFilter.LOGGER`. On 1.20.1 even making a `TagKey` loads the registries, so such tests go inside `//? if >1.20.1 {`.
-- Covered: `ZoneFit`, `Zone`, `FilterMode` (and its en_us.json names), reading and saving configs (old formats, colors, unreadable files, atomic saves), `SpawnRecorder` and compiling `FilterRules`. Not covered, so checked in game: the menu, scans, the mixin, and block tags on 1.20.1.
+- Covered: `ZoneFit`, `Zone`, `FilterMode` (and its en_us.json names), reading and saving configs (old formats, colors, unreadable files, atomic saves), `SpawnRecorder`, `ParticleKey` and compiling `FilterRules`. Not covered, so checked in game: the menu (including moving and resizing it), scans, the mixins, walking in the menu, tracers, and block tags on 1.20.1.
 - A bug fix starts with a test that fails without the fix. A behaviour change updates the tests describing it in the same commit; never weaken a test just to make it pass.
 - Everything else is checked in game. To check GUI or behaviour yourself, add a temporary dev self-test hook run via `./gradlew :<mc>-<loader>:runClient`: gate it on an env var, take screenshots with Minecraft's `Screenshot.grab`, and move the window to a hidden Hyprland special workspace. **Delete the hook before committing.** The owner tests releases in their ATM10 instance.
 - The owner's ATM10 instance (a CurseForge `java` process) may be running during dev runs; only ever stop the dev client you started.
@@ -37,10 +37,10 @@ A client-side Minecraft mod, built from one source for NeoForge 1.21.1 (Java 21)
 - `src/main/java/particlefilter/`: mod code
   - `ParticleFilter`: shared setup, commands, keybinds; `loader/*`: the NeoForge and Forge entry points
   - `config/`: `PfConfig` (saved rules and zones, `config/particlefilter.json`), `Zone`, `FilterMode` (Active rules)
-  - `filter/FilterRules`: compiled snapshot of the rules, checked as particles spawn; `mixin/ParticleEngineMixin`: where every particle is filtered and recorded
+  - `filter/FilterRules`: compiled snapshot of the rules, checked as particles spawn; `filter/ParticleKey`: particle names, with the block after "@" for particles made from a block; `mixin/ParticleEngineMixin`: where every particle is filtered and recorded; `mixin/KeyboardInputMixin`: walking while a menu is open (`gui/MenuWalking`)
   - `scan/`: `ParticleScan` (Scan page: around the crosshair), `DiagnosticScan` (Diagnostic page: everything within render distance), `SpawnRecorder` (spawn points), `ZoneFit` (sizes zones made by Here)
   - `render/ZoneRenderer`: zone outlines in the world
-  - `gui/`: `ParticleFilterScreen` is the window shell (sidebar, header, tabs) and each page is a class in `gui/page/` (`Page`, `ResultsPage` shared by `ScanPage` and `DiagnosticPage`, `HiddenPage`, `ZonesPage`); `ZoneEditScreen` is the zone editor drawer, `GuideScreen` the help; `PfScreen` is their base with the shared helpers and constants; `Theme` holds colors and drawing helpers; `widget/*` the controls (`ScrollPanel` is the list)
+  - `gui/`: `ParticleFilterScreen` is the window shell (sidebar, header, tabs) and each page is a class in `gui/page/` (`Page`, `ResultsPage` shared by `ScanPage` and `DiagnosticPage`, `HiddenPage`, `ZonesPage`); `ZoneEditScreen` is the zone editor drawer, `GuideScreen` the help, `SettingsScreen` the mod list's Config screen; `PfScreen` is their base with the shared helpers and constants; `Theme` holds colors and drawing helpers; `widget/*` the controls (`ScrollPanel` is the list)
 - `src/test/java/particlefilter/`: unit tests, one `<Class>Test` per class tested
 - `CHANGELOG.md`: one `## <version>` section per release (CI and the CurseForge script read it)
 - `docs/images/`: README/CurseForge gallery images; `docs/compare/`: the before/after slider served by GitHub Pages; `docs/index.html`: the homepage (GitHub Pages from main)
@@ -48,6 +48,7 @@ A client-side Minecraft mod, built from one source for NeoForge 1.21.1 (Java 21)
 
 ## Menu conventions
 - Text wraps instead of being cut off with "…": use `PfScreen.wrap` and `drawLines`, and size the row from the line count (`textHeight`, `LINE`). Only button labels, page titles and lines with a tooltip giving the full text may be shortened with `Theme.fit`.
+- The menu window can be moved and resized (`ParticleFilterScreen`, from 500 × 250 up to the whole screen; its place is saved in `PfConfig.window`). Pages lay out only from `cx`, `cw`, `bodyTop` and `bodyBottom`, so they must work at every size in that range; check new layouts at the smallest size.
 - Lines made of parts joined by " · " use `PfScreen.wrapPieces`, which breaks only between parts, so no line starts or ends with "·".
 - `ScrollPanel.Row` takes a fixed height or an `IntSupplier` read every frame (for text that changes while typing); widgets added without a y stay vertically centered.
 - Pixel positions that depend on each other are named constants and derived (e.g. text room from button widths and gaps), not repeated literals. Constants live in the narrowest class that uses them; shared ones are in `PfScreen` (button heights, card insets, `entryRow` for the dot/name/switch/Delete row).
