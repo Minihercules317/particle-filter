@@ -4,6 +4,7 @@
   "package": "particlefilter.mixin",
   "compatibilityLevel": "${java}",${refmap}
   "client": [
+    "KeyboardInputMixin",
     "ParticleEngineMixin"
   ],
   "injectors": {

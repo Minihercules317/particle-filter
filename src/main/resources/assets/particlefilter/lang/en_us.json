@@ -9,6 +9,12 @@
 
   "particlefilter.title": "Particle Filter",
   "particlefilter.close": "Close",
+  "particlefilter.settings.title": "Particle Filter settings",
+  "particlefilter.settings.walk": "Walk while the menu is open",
+  "particlefilter.settings.walk.description": "Move, jump and sneak with your usual keys while a Particle Filter screen is open, to walk around what you're scanning or see a zone from another side. Not while you're typing in a box. To sprint, close the menu.",
+  "particlefilter.settings.tracers": "Lines to zones",
+  "particlefilter.settings.tracers.description": "Draws a line from your crosshair to the center of each zone, in the zone's outline color, whenever outlines show: while the menu is open, or with Always Show Zone Outlines. The lines show through blocks, so you can find zones out of sight.",
+  "particlefilter.settings.open_menu": "Open the menu",
   "particlefilter.back.tooltip": "Back to the previous menu (or press Esc)",
   "particlefilter.tab.scan": "Scan",
   "particlefilter.tab.diagnostic": "Diagnostic",
@@ -197,5 +203,5 @@
   "particlefilter.guide.rules.title": "Active rules",
   "particlefilter.guide.rules.body": "The switch at the bottom left pauses some or all of your rules at once, to compare with and without them. Nothing is deleted.",
   "particlefilter.guide.keys.title": "Keys",
-  "particlefilter.guide.keys.body": "Keys to open this menu, scan, hide the targeted block's breaking particles, show zone outlines, cycle Active rules and hold to show every particle can be set in Options → Controls → Key Binds. They start unbound."
+  "particlefilter.guide.keys.body": "Keys to open this menu, scan, hide the targeted block's breaking particles, show zone outlines, cycle Active rules and hold to show every particle can be set in Options → Controls → Key Binds. They start unbound. Config in the mod list has two more settings: walking while the menu is open, and lines from your crosshair to each zone."
 }

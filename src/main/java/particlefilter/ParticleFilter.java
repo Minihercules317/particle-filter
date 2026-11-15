@@ -23,6 +23,7 @@ import particlefilter.config.PfConfig;
 import particlefilter.filter.FilterRules;
 import particlefilter.gui.ParticleFilterScreen;
 import particlefilter.gui.ParticleFilterScreen.Tab;
+import particlefilter.gui.SettingsScreen;
 import particlefilter.render.ZoneRenderer;
 import particlefilter.scan.DiagnosticScan;
 import particlefilter.scan.ParticleScan;
@@ -63,9 +64,9 @@ public final class ParticleFilter {
         PfConfig.load(configDir.resolve("particlefilter.json"));
     }
 
-    /** The menu, opened from the loader's mod list. */
+    /** The settings opened with Config in the loader's mod list; in a world they also open the menu. */
     public static Screen configScreen(Screen parent) {
-        return new ParticleFilterScreen(parent, null);
+        return new SettingsScreen(parent);
     }
 
     private static KeyMapping key(String name) {

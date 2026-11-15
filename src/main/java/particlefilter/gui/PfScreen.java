@@ -2,6 +2,9 @@ package particlefilter.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.ContainerEventHandler;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -55,6 +58,22 @@ public abstract class PfScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    /** True while a text box has focus, so keys type into it. */
+    public boolean isTyping() {
+        GuiEventListener focused = getFocused();
+        while (focused instanceof ContainerEventHandler container && container.getFocused() != null && container.getFocused() != focused) {
+            focused = container.getFocused();
+        }
+        return focused instanceof EditBox;
+    }
+
+    /** Movement keys move the player instead while walking in the menu is on ({@link MenuWalking}). */
+    @Override
+    public boolean keyPressed(int key, int scanCode, int modifiers) {
+        if (MenuWalking.active() && MenuWalking.isMovementKey(key, scanCode)) return true;
+        return super.keyPressed(key, scanCode, modifiers);
     }
 
     @Override
