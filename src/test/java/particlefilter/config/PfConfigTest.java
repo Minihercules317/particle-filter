@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Reading config/particlefilter.json, including files written by older versions. */
 class PfConfigTest {
@@ -29,6 +31,10 @@ class PfConfigTest {
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.diagnosticSeconds);
         assertEquals(PfConfig.DEFAULT_SOURCE_DISTANCE, data.sourceDistance);
         assertEquals(PfConfig.DEFAULT_MERGE_PERCENT, data.mergePercent);
+        assertEquals(PfConfig.DEFAULT_SCAN_RADIUS, data.scanRadius);
+        assertFalse(data.walkInMenu);
+        assertFalse(data.zoneTracers);
+        assertNull(data.window);
     }
 
     @Test
@@ -134,8 +140,31 @@ class PfConfigTest {
 
     @Test
     void mergePercentIsPutInRange() {
-        assertEquals(PfConfig.MIN_MERGE_PERCENT, PfConfig.parse("{\"mergePercent\": 0}").mergePercent);
+        assertEquals(PfConfig.MIN_MERGE_PERCENT, PfConfig.parse("{\"mergePercent\": -5}").mergePercent);
+        assertEquals(0, PfConfig.parse("{\"mergePercent\": 0}").mergePercent);
         assertEquals(PfConfig.MAX_MERGE_PERCENT, PfConfig.parse("{\"mergePercent\": 150}").mergePercent);
+    }
+
+    @Test
+    void scanRadiusIsPutInRange() {
+        assertEquals(PfConfig.MIN_SCAN_RADIUS, PfConfig.parse("{\"scanRadius\": 0}").scanRadius);
+        assertEquals(PfConfig.MAX_SCAN_RADIUS, PfConfig.parse("{\"scanRadius\": 600}").scanRadius);
+        assertEquals(20, PfConfig.parse("{\"scanRadius\": 20}").scanRadius);
+    }
+
+    @Test
+    void windowReadsBackAndAnEmptyOneIsDropped() {
+        assertEquals(new PfConfig.Window(10, 20, 500, 300),
+            PfConfig.parse("{\"window\": {\"x\": 10, \"y\": 20, \"width\": 500, \"height\": 300}}").window);
+        assertNull(PfConfig.parse("{\"window\": {\"x\": 10}}").window);
+    }
+
+    @Test
+    void configScreenSettingsReadBack() {
+        PfConfig.Data data = PfConfig.parse("{\"walkInMenu\": true, \"zoneTracers\": true}");
+
+        assertTrue(data.walkInMenu);
+        assertTrue(data.zoneTracers);
     }
 
     @Test

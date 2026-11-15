@@ -181,14 +181,29 @@ public final class DiagnosticScan {
 
     /** Changes how far apart spots may be and still count as one source, and regroups this diagnostic's zones. */
     public static void setSourceDistance(int blocks) {
-        PfConfig.setSourceDistance(blocks);
-        if (!managedZones().isEmpty()) regroup(null);
+        PfConfig.batch(() -> {
+            PfConfig.setSourceDistance(blocks);
+            if (!managedZones().isEmpty()) regroup(null);
+        });
     }
 
     /** Changes how much zones must overlap to merge, and regroups this diagnostic's zones. */
     public static void setMergePercent(int percent) {
-        PfConfig.setMergePercent(percent);
-        if (!managedZones().isEmpty()) regroup(null);
+        PfConfig.batch(() -> {
+            PfConfig.setMergePercent(percent);
+            if (!managedZones().isEmpty()) regroup(null);
+        });
+    }
+
+    /**
+     * Like {@link #setMergePercent}, but nothing is written to the file: for each step while the slider is dragged,
+     * so zones follow it live. The drag ends with {@link #setMergePercent}, which saves.
+     */
+    public static void previewMergePercent(int percent) {
+        PfConfig.unsaved(() -> {
+            PfConfig.setMergePercent(percent);
+            if (!managedZones().isEmpty()) regroup(null);
+        });
     }
 
     /** Zones from diagnostics in this world that list [particle], switched on or off. */
@@ -205,9 +220,39 @@ public final class DiagnosticScan {
         return zonesFor(particle).stream().anyMatch(z -> z.particles.contains(particle));
     }
 
-    /** Where switching on Here would put zones for [particle] on its own: one box per source it gets a zone for. */
+    /**
+     * The zones [particle] would be hidden in with Here switched on, as boxes: its sources merged with each other and
+     * with this diagnostic's zones as {@link #regroup} would. While it is switched on, the zones it is in now. Zones
+     * from earlier diagnostics that already list it are used as they are. Worked out once per change.
+     */
+    public static List<ZoneFit.Box> hereBoxes(String particle) {
+        int stamp = PfConfig.revision() * 31 + generation;
+        if (stamp != hereBoxesStamp) {
+            hereBoxesCache.clear();
+            hereBoxesStamp = stamp;
+        }
+        return hereBoxesCache.computeIfAbsent(particle, DiagnosticScan::planHereBoxes);
+    }
+
+    private static final Map<String, List<ZoneFit.Box>> hereBoxesCache = new HashMap<>();
+    private static int hereBoxesStamp;
+
+    private static List<ZoneFit.Box> planHereBoxes(String particle) {
+        List<Zone> listed = zonesFor(particle);
+        if (!listed.isEmpty() && listed.stream().noneMatch(z -> managedIds.contains(z.id))) {
+            return listed.stream().map(ZoneFit.Box::of).toList();
+        }
+        Plan plan = plan(particle);
+        List<ZoneFit.Box> boxes = new ArrayList<>();
+        for (ZoneFit.Merged group : plan.groups()) {
+            if (group.members().stream().anyMatch(i -> plan.members().get(i).particle.equals(particle))) boxes.add(group.box());
+        }
+        return List.copyOf(boxes);
+    }
+
+    /** Where switching on Here would put zones for [particle], or the zones it is in: see {@link #hereBoxes}. */
     public static List<AABB> previewFor(String particle) {
-        return hereSources(particle).stream().map(s -> s.box().aabb()).toList();
+        return hereBoxes(particle).stream().map(ZoneFit.Box::aabb).toList();
     }
 
     /**
@@ -286,6 +331,16 @@ public final class DiagnosticScan {
      * group's box (then where they list one of its particles), created when needed, and deleted when no longer needed.
      */
     private static void regroup(String added) {
+        PfConfig.batch(() -> applyPlan(plan(added)));
+    }
+
+    /**
+     * How the zones this diagnostic manages would be grouped with [added] (null for none) switched on: every source of
+     * each particle they list, and the groups {@link ZoneFit#merge} makes of them.
+     */
+    private record Plan(List<Zone> managed, List<Member> members, List<ZoneFit.Merged> groups) {}
+
+    private static Plan plan(String added) {
         List<Zone> managed = managedZones();
         Map<String, Boolean> particles = new LinkedHashMap<>();
         Map<String, Zone> fallback = new HashMap<>();
@@ -305,10 +360,15 @@ public final class DiagnosticScan {
         });
         members.sort(Comparator.comparingLong((Member m) -> m.box.volume()).reversed());
         List<ZoneFit.Merged> merged = ZoneFit.merge(members.stream().map(Member::box).toList(), PfConfig.mergePercent());
+        return new Plan(managed, members, merged);
+    }
 
-        List<Zone> unused = new ArrayList<>(managed);
+    /** Makes the managed zones match [plan]: reuses, resizes, creates and deletes zones. */
+    private static void applyPlan(Plan plan) {
+        List<Member> members = plan.members();
+        List<Zone> unused = new ArrayList<>(plan.managed());
         capped = false;
-        for (ZoneFit.Merged zoneGroup : merged) {
+        for (ZoneFit.Merged zoneGroup : plan.groups()) {
             List<Member> group = zoneGroup.members().stream().map(members::get).toList();
             ZoneFit.Box box = zoneGroup.box();
             capped |= box.capped();

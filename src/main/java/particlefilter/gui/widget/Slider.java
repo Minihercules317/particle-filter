@@ -12,7 +12,8 @@ import java.util.function.IntConsumer;
 /**
  * A slim slider in the style of {@link Toggle}: a thin track, filled up to a round knob. Drag or click it, or use the
  * arrow keys while it has focus. [onValue] gets the new whole number when the mouse is let go (or a key changes it),
- * not on every step of a drag, since applying a value can rebuild zones and save the config.
+ * not on every step of a drag, since applying a value can rebuild zones and save the config. A live slider
+ * ({@link #live}) also reports every step while dragging, to preview the value without saving it.
  */
 public class Slider extends AbstractSliderButton {
 
@@ -27,6 +28,11 @@ public class Slider extends AbstractSliderButton {
     private final IntConsumer onValue;
     private final Anim hover = new Anim(0);
     private int applied;
+    /** Called with every new value while dragging, before [onValue] gets the last one; null if not live. */
+    private IntConsumer onStep;
+    private int stepped;
+    /** True once a step was previewed since the last commit, so the commit applies even if it ends where it began. */
+    private boolean steppedSinceCommit;
 
     /** [name] is only narrated; the page draws the label and the value beside the slider. */
     public Slider(int x, int y, int width, int value, int min, int max, Component name, IntConsumer onValue) {
@@ -36,7 +42,14 @@ public class Slider extends AbstractSliderButton {
         this.max = max;
         this.onValue = onValue;
         this.applied = value;
+        this.stepped = value;
         updateMessage();
+    }
+
+    /** Also reports each new value while the knob moves, to [onStep]; [onValue] still gets the final one. */
+    public Slider live(IntConsumer onStep) {
+        this.onStep = onStep;
+        return this;
     }
 
     public Slider tooltip(Component tooltip) {
@@ -57,7 +70,12 @@ public class Slider extends AbstractSliderButton {
 
     @Override
     protected void applyValue() {
-        // Applied in commit(), once the drag ends.
+        // Applied in commit(), once the drag ends; a live slider previews each step.
+        int now = intValue();
+        if (onStep == null || now == stepped) return;
+        stepped = now;
+        steppedSinceCommit = true;
+        onStep.accept(now);
     }
 
     @Override
@@ -75,8 +93,10 @@ public class Slider extends AbstractSliderButton {
 
     private void commit() {
         int now = intValue();
-        if (now == applied) return;
+        if (now == applied && !steppedSinceCommit) return;
         applied = now;
+        stepped = now;
+        steppedSinceCommit = false;
         onValue.accept(now);
     }
 

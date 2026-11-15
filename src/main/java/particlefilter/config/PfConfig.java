@@ -55,8 +55,16 @@ public final class PfConfig {
     public static final int MAX_SOURCE_DISTANCE = 32;
     public static final int DEFAULT_SOURCE_DISTANCE = 6;
 
-    /** How much of the smaller of two Diagnostic zones must overlap the other for them to merge, in percent. */
-    public static final int MIN_MERGE_PERCENT = 1;
+    /** How far from its center a scan on the Scan page records, in blocks. Minecraft rarely creates particles past 32. */
+    public static final int MIN_SCAN_RADIUS = 1;
+    public static final int MAX_SCAN_RADIUS = 32;
+    public static final int DEFAULT_SCAN_RADIUS = 6;
+
+    /**
+     * How much of the smaller of two Diagnostic zones must overlap the other for them to merge, in percent. At 0,
+     * zones touching face to face merge too.
+     */
+    public static final int MIN_MERGE_PERCENT = 0;
     public static final int MAX_MERGE_PERCENT = 100;
     public static final int DEFAULT_MERGE_PERCENT = 50;
 
@@ -74,6 +82,12 @@ public final class PfConfig {
         Integer diagnosticSeconds = DEFAULT_SCAN_SECONDS;
         Integer sourceDistance = DEFAULT_SOURCE_DISTANCE;
         Integer mergePercent = DEFAULT_MERGE_PERCENT;
+        Integer scanRadius = DEFAULT_SCAN_RADIUS;
+        /** Settings from the mod list's Config screen. */
+        Boolean walkInMenu = false;
+        Boolean zoneTracers = false;
+        /** Where the menu window was moved and resized to, in GUI pixels; null until it is. */
+        Window window;
 
         /** Fills defaults for fields missing from older or hand-edited files and puts values back in range. */
         void normalize() {
@@ -93,7 +107,22 @@ public final class PfConfig {
             sourceDistance = clampSourceDistance(sourceDistance);
             if (mergePercent == null) mergePercent = DEFAULT_MERGE_PERCENT;
             mergePercent = clampMergePercent(mergePercent);
+            if (scanRadius == null) scanRadius = DEFAULT_SCAN_RADIUS;
+            scanRadius = clampScanRadius(scanRadius);
+            if (walkInMenu == null) walkInMenu = false;
+            if (zoneTracers == null) zoneTracers = false;
+            if (window != null && !window.valid()) window = null;
             zones.forEach(Zone::normalize);
+        }
+    }
+
+    /**
+     * The menu window's position and size in GUI pixels, as the player left it. Screens fit it to the screen they
+     * open on, since the GUI scale or game window may have changed since.
+     */
+    public record Window(int x, int y, int width, int height) {
+        boolean valid() {
+            return width > 0 && height > 0;
         }
     }
 
@@ -108,8 +137,46 @@ public final class PfConfig {
      * used, but nothing is written until the next {@link #load}, so the unreadable file is never overwritten.
      */
     private static boolean saveBlocked;
+    /** While above 0, saves wait: see {@link #batch} and {@link #unsaved}. */
+    private static int saveHolds;
+    /** A save was asked for while saves were held. */
+    private static boolean savePending;
+    /** Goes up with every change, so screens can tell when what they worked out from the settings is out of date. */
+    private static int revision;
 
     private PfConfig() {}
+
+    /** Increases whenever a setting, rule or zone changes. */
+    public static int revision() {
+        return revision;
+    }
+
+    /** Runs [changes], writing the file once at the end instead of after each change. */
+    public static void batch(Runnable changes) {
+        saveHolds++;
+        try {
+            changes.run();
+        } finally {
+            saveHolds--;
+            if (saveHolds == 0 && savePending) {
+                savePending = false;
+                save();
+            }
+        }
+    }
+
+    /**
+     * Runs [changes] without writing them to the file, for live previews such as a slider being dragged: they apply
+     * in the game at once, and the next save (when the drag ends) writes them along with everything else.
+     */
+    public static void unsaved(Runnable changes) {
+        saveHolds++;
+        try {
+            changes.run();
+        } finally {
+            saveHolds--;
+        }
+    }
 
     public static void load(Path path) {
         file = path;
@@ -192,6 +259,12 @@ public final class PfConfig {
     }
 
     private static void save() {
+        revision++;
+        if (saveHolds > 0) {
+            savePending = true;
+            return;
+        }
+        savePending = false;
         if (saveBlocked) {
             LOGGER.error("Not saving {}: it couldn't be read or backed up when it was loaded", file);
             return;
@@ -312,6 +385,56 @@ public final class PfConfig {
 
     private static int clampScanSeconds(int seconds) {
         return Math.max(MIN_SCAN_SECONDS, Math.min(MAX_SCAN_SECONDS, seconds));
+    }
+
+    /** How far from what you look at a scan on the Scan page records, in blocks. */
+    public static int scanRadius() {
+        return data.scanRadius;
+    }
+
+    public static void setScanRadius(int blocks) {
+        data.scanRadius = clampScanRadius(blocks);
+        save();
+    }
+
+    private static int clampScanRadius(int blocks) {
+        return Math.max(MIN_SCAN_RADIUS, Math.min(MAX_SCAN_RADIUS, blocks));
+    }
+
+    // ---- settings from the mod list's Config screen ----
+
+    /** Walking with the movement keys while a Particle Filter screen is open. */
+    public static boolean walkInMenu() {
+        return data.walkInMenu;
+    }
+
+    public static void setWalkInMenu(boolean on) {
+        data.walkInMenu = on;
+        save();
+    }
+
+    /** Lines from the crosshair to each zone's center, drawn with the outlines. */
+    public static boolean zoneTracers() {
+        return data.zoneTracers;
+    }
+
+    public static void setZoneTracers(boolean on) {
+        data.zoneTracers = on;
+        save();
+    }
+
+    // ---- the menu window ----
+
+    /** Where the player last moved and resized the menu window; null for the default. */
+    public static Window window() {
+        return data.window;
+    }
+
+    /** Remembers the menu window's place; null goes back to the default. */
+    public static void setWindow(Window window) {
+        if (java.util.Objects.equals(window, data.window)) return;
+        data.window = window;
+        save();
     }
 
     /** Spots where a particle appeared at most this many blocks apart are one source (Diagnostic page). */

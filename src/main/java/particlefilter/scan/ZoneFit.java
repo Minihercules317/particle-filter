@@ -198,7 +198,8 @@ public final class ZoneFit {
 
     /**
      * Groups overlapping boxes: two groups merge when the blocks they share are at least [percent]% of the smaller
-     * one's blocks, into the box around both, unless that box would pass 256 blocks a side. Repeats until nothing more
+     * one's blocks (at 0%, also when they touch face to face; see {@link #sharesEnough}), into the box around both,
+     * unless that box would pass 256 blocks a side. Repeats until nothing more
      * merges, so a box can join through others. At 100% a box merges only into one that holds it entirely. Groups come
      * out in the order of their first box.
      */
@@ -228,15 +229,31 @@ public final class ZoneFit {
         return groups;
     }
 
-    /** True if [a] and [b] share blocks, at least [percent]% of the smaller one's. */
+    /**
+     * True if [a] and [b] share blocks, at least [percent]% of the smaller one's. At 0% they also count when they only
+     * touch face to face: next to each other on one axis and overlapping on the other two. Touching only along an
+     * edge or at a corner never counts.
+     */
     static boolean sharesEnough(Box a, Box b, int percent) {
-        long shared = (long) overlap(a.minX, a.width, b.minX, b.width) * overlap(a.minY, a.height, b.minY, b.height)
-            * overlap(a.minZ, a.length, b.minZ, b.length);
-        return shared > 0 && shared * 100 >= (long) percent * Math.min(a.volume(), b.volume());
+        int x = overlap(a.minX, a.width, b.minX, b.width);
+        int y = overlap(a.minY, a.height, b.minY, b.height);
+        int z = overlap(a.minZ, a.length, b.minZ, b.length);
+        long shared = (long) x * y * z;
+        if (shared > 0) return shared * 100 >= (long) percent * Math.min(a.volume(), b.volume());
+        if (percent > 0) return false;
+        boolean touchX = touches(a.minX, a.width, b.minX, b.width);
+        boolean touchY = touches(a.minY, a.height, b.minY, b.height);
+        boolean touchZ = touches(a.minZ, a.length, b.minZ, b.length);
+        return touchX && y > 0 && z > 0 || touchY && x > 0 && z > 0 || touchZ && x > 0 && y > 0;
     }
 
     private static int overlap(int minA, int sizeA, int minB, int sizeB) {
         return Math.max(0, Math.min(minA + sizeA, minB + sizeB) - Math.max(minA, minB));
+    }
+
+    /** True if blocks [minA, minA + sizeA) and [minB, minB + sizeB) are next to each other, with no gap or overlap. */
+    private static boolean touches(int minA, int sizeA, int minB, int sizeB) {
+        return minA + sizeA == minB || minB + sizeB == minA;
     }
 
     /** The box around [a] and [b]; null if it would pass 256 blocks a side. */

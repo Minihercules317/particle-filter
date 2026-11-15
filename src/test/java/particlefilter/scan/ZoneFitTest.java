@@ -324,8 +324,42 @@ class ZoneFitTest {
     }
 
     @Test
-    void boxesThatOnlyTouchNeverMerge() {
+    void boxesThatOnlyTouchDoNotMergeAboveZero() {
         assertEquals(2, ZoneFit.merge(List.of(box(0, 4), box(4, 4)), 1).size());
+    }
+
+    @Test
+    void atZeroBoxesTouchingFaceToFaceMerge() {
+        // Blocks 0-3 and 4-7 on x, the same blocks on y and z: no block shared, but a whole face.
+        assertEquals(List.of(new ZoneFit.Merged(box(0, 8), List.of(0, 1))), ZoneFit.merge(List.of(box(0, 4), box(4, 4)), 0));
+    }
+
+    @Test
+    void atZeroPartOfAFaceIsEnough() {
+        ZoneFit.Box a = new ZoneFit.Box(0, 0, 0, 4, 4, 4, false);
+        ZoneFit.Box b = new ZoneFit.Box(4, 3, 3, 4, 4, 4, false); // shares one block's worth of a's x = 4 face
+
+        assertEquals(1, ZoneFit.merge(List.of(a, b), 0).size());
+    }
+
+    @Test
+    void atZeroTouchingAlongAnEdgeOrAtACornerDoesNotMerge() {
+        ZoneFit.Box a = new ZoneFit.Box(0, 0, 0, 4, 4, 4, false);
+        ZoneFit.Box edge = new ZoneFit.Box(4, 4, 0, 4, 4, 4, false); // next to a on x and y: only an edge in common
+        ZoneFit.Box corner = new ZoneFit.Box(4, 4, 4, 4, 4, 4, false);
+
+        assertEquals(2, ZoneFit.merge(List.of(a, edge), 0).size());
+        assertEquals(2, ZoneFit.merge(List.of(a, corner), 0).size());
+    }
+
+    @Test
+    void atZeroAGapOfOneBlockDoesNotMerge() {
+        assertEquals(2, ZoneFit.merge(List.of(box(0, 4), box(5, 4)), 0).size());
+    }
+
+    @Test
+    void atZeroOverlappingBoxesStillMerge() {
+        assertEquals(1, ZoneFit.merge(List.of(box(0, 100), box(99, 4)), 0).size());
     }
 
     @Test

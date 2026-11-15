@@ -114,6 +114,11 @@ abstract class ResultsPage extends Page {
         return screen.cx() + screen.font().width(Component.translatable("particlefilter.scan.duration")) + DURATION_GAP;
     }
 
+    /** Right edge of "Scan for [− n +] seconds", for controls placed after it on the same line. */
+    protected int durationRowRight() {
+        return durationSpinnerX() + DURATION_WIDTH + UNIT_GAP + screen.font().width(Component.translatable("particlefilter.scan.duration_unit"));
+    }
+
     protected void renderDurationLabels(GuiGraphics g) {
         var font = screen.font();
         int textY = screen.bodyTop() + 4;

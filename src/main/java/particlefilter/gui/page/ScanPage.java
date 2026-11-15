@@ -5,11 +5,13 @@ import net.minecraft.network.chat.Component;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
 import particlefilter.gui.ParticleFilterScreen;
+import particlefilter.gui.PfScreen;
 import particlefilter.gui.Theme;
 import particlefilter.gui.ZoneEditScreen;
 import particlefilter.gui.widget.FlatButton;
 import particlefilter.gui.widget.FlatButton.Style;
 import particlefilter.gui.widget.ScrollPanel.Row;
+import particlefilter.gui.widget.Slider;
 import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
 import particlefilter.scan.ParticleScan;
@@ -32,7 +34,14 @@ public class ScanPage extends ResultsPage {
     /** Width both buttons take together, kept clear of the Here line beside them. */
     private static final int FOOTER_BUTTONS_WIDTH = HERE_WIDTH + BUTTON_GAP + EDIT_ZONE_WIDTH;
 
+    /** Gap between "seconds" and the radius control after it. */
+    private static final int RADIUS_GAP = 14;
+    /** Narrowest and widest the radius slider gets; it takes the room left on the line between them. */
+    private static final int RADIUS_SLIDER_MIN = 40;
+    private static final int RADIUS_SLIDER_MAX = 100;
+
     private FlatButton editZoneButton;
+    private Slider radiusSlider;
     /** Set while the grow notice is hovered (the list paints before {@link #render}), to outline the grown zone. */
     private boolean growHovered;
 
@@ -49,7 +58,7 @@ public class ScanPage extends ResultsPage {
     public Component subtitle() {
         int found = ParticleScan.results().size();
         if (ParticleScan.isRunning()) {
-            return Component.translatable("particlefilter.scan.status_running", ParticleScan.targetName(), ParticleScan.RADIUS);
+            return Component.translatable("particlefilter.scan.status_running", ParticleScan.targetName(), ParticleScan.radius());
         } else if (ParticleScan.target() != null) {
             return Component.translatable(found == 1 ? "particlefilter.scan.status_done_one" : "particlefilter.scan.status_done", found, ParticleScan.targetName());
         }
@@ -79,7 +88,7 @@ public class ScanPage extends ResultsPage {
     }
 
     private static Component scanTooltip() {
-        return Component.translatable("particlefilter.scan.button.tooltip", ParticleScan.RADIUS, PfConfig.scanSeconds());
+        return Component.translatable("particlefilter.scan.button.tooltip", PfConfig.scanRadius(), PfConfig.scanSeconds());
     }
 
     @Override
@@ -95,6 +104,12 @@ public class ScanPage extends ResultsPage {
             PfConfig.setScanSeconds(seconds);
             scanButton.tooltip(scanTooltip());
         });
+        radiusSlider = screen.addRenderableWidget(new Slider(radiusSliderX(), screen.bodyTop() + (PfScreen.SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
+            radiusSliderWidth(), PfConfig.scanRadius(), PfConfig.MIN_SCAN_RADIUS, PfConfig.MAX_SCAN_RADIUS,
+            Component.translatable("particlefilter.scan.radius"), blocks -> {
+                PfConfig.setScanRadius(blocks);
+                scanButton.tooltip(scanTooltip());
+            }).tooltip(Component.translatable("particlefilter.scan.radius.tooltip", PfConfig.MIN_SCAN_RADIUS, PfConfig.MAX_SCAN_RADIUS)));
 
         addList();
         screen.setRows(scanRows());
@@ -121,6 +136,35 @@ public class ScanPage extends ResultsPage {
                 }).tooltip(tip);
             }
         }
+    }
+
+    // ---------------------------------------------------------------- Radius: on the duration's line, after it
+
+    private int radiusLabelX() {
+        return durationRowRight() + RADIUS_GAP;
+    }
+
+    private int radiusSliderX() {
+        return radiusLabelX() + screen.font().width(Component.translatable("particlefilter.scan.radius")) + DURATION_GAP;
+    }
+
+    /** The room left before the value at the line's right end, kept between the narrowest and widest slider. */
+    private int radiusSliderWidth() {
+        int widestValue = screen.font().width(radiusText(PfConfig.MAX_SCAN_RADIUS));
+        int room = screen.cx() + screen.cw() - widestValue - UNIT_GAP - radiusSliderX();
+        return Math.max(RADIUS_SLIDER_MIN, Math.min(RADIUS_SLIDER_MAX, room));
+    }
+
+    private static Component radiusText(int blocks) {
+        return Component.translatable(blocks == 1 ? "particlefilter.scan.radius_value_one" : "particlefilter.scan.radius_value", blocks);
+    }
+
+    private void renderRadiusLabels(GuiGraphics g) {
+        var font = screen.font();
+        int textY = screen.bodyTop() + 4;
+        Theme.text(g, font, Component.translatable("particlefilter.scan.radius"), radiusLabelX(), textY, Theme.TEXT_DIM);
+        int blocks = radiusSlider != null ? radiusSlider.intValue() : PfConfig.scanRadius();
+        Theme.text(g, font, radiusText(blocks), radiusSliderX() + radiusSliderWidth() + UNIT_GAP, textY, Theme.TEXT);
     }
 
     /** One row per particle, with Everywhere and Here switches. */
@@ -155,18 +199,19 @@ public class ScanPage extends ResultsPage {
     public void render(GuiGraphics g, int mouseX, int mouseY) {
         int cx = screen.cx(), cw = screen.cw();
         renderDurationLabels(g);
+        renderRadiusLabels(g);
 
         if (screen.panel().isEmpty()) {
             int centerY = emptyStateTop(listTop(), listBottom());
             if (ParticleScan.isRunning()) {
                 screen.drawEmptyState(g, Component.translatable("particlefilter.scan.empty_running"),
-                    Component.translatable("particlefilter.scan.empty_running.body", ParticleScan.RADIUS), cx + cw / 2, centerY, cw);
+                    Component.translatable("particlefilter.scan.empty_running.body", ParticleScan.radius()), cx + cw / 2, centerY, cw);
             } else if (ParticleScan.target() == null) {
                 screen.drawEmptyState(g, Component.translatable("particlefilter.scan.empty_first"),
-                    Component.translatable("particlefilter.scan.empty_first.body", ParticleScan.RADIUS, PfConfig.scanSeconds()), cx + cw / 2, centerY, cw);
+                    Component.translatable("particlefilter.scan.empty_first.body", PfConfig.scanRadius(), PfConfig.scanSeconds()), cx + cw / 2, centerY, cw);
             } else {
                 screen.drawEmptyState(g, Component.translatable("particlefilter.scan.empty_none"),
-                    Component.translatable("particlefilter.scan.empty_none.body", ParticleScan.RADIUS), cx + cw / 2, centerY, cw);
+                    Component.translatable("particlefilter.scan.empty_none.body", ParticleScan.radius()), cx + cw / 2, centerY, cw);
             }
         } else {
             renderColumnLabels(g, "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");

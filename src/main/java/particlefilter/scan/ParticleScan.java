@@ -29,7 +29,8 @@ public final class ParticleScan {
     /** One particle the scan saw: how often, the box its spawn points fill, and the closest one to the center. */
     public record Result(String particle, int count, boolean typed, AABB spawns, double nearest) {}
 
-    public static final int RADIUS = 6;
+    /** Radius of the running or last scan, in blocks ({@link PfConfig#scanRadius()} when it started). */
+    private static int radius;
 
     private static final SpawnRecorder recorder = new SpawnRecorder();
     private static int ticksLeft;
@@ -65,6 +66,11 @@ public final class ParticleScan {
         return results;
     }
 
+    /** How far from its center the running or last scan records, in blocks. */
+    public static int radius() {
+        return radius;
+    }
+
     /** Block the last scan was centered on; Here works around it. Null before the first scan. */
     public static BlockPos target() {
         return target;
@@ -95,7 +101,8 @@ public final class ParticleScan {
         Zone existing = zonesAtTarget().stream().findFirst().orElse(null);
         hereZoneId = existing == null ? null : existing.id;
         durationTicks = ticksLeft = PfConfig.scanSeconds() * 20;
-        recorder.start(at, RADIUS);
+        radius = PfConfig.scanRadius();
+        recorder.start(at, radius);
         generation++;
     }
 

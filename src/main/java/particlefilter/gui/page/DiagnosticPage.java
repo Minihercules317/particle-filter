@@ -95,11 +95,15 @@ public class DiagnosticPage extends ResultsPage {
                     DiagnosticScan.setSourceDistance(blocks);
                     screen.refreshNextTick(); // previews, notices and zones follow the new distance
                 });
+            // Zones follow the slider live; only the list is rebuilt, so the slider keeps its drag and focus.
             mergeSlider = screen.addRenderableWidget(new Slider(screen.cx() + mergeLabelWidth() + DURATION_GAP, bottomRowY + (PfScreen.SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
                 SLIDER_WIDTH, PfConfig.mergePercent(), PfConfig.MIN_MERGE_PERCENT, PfConfig.MAX_MERGE_PERCENT,
                 Component.translatable("particlefilter.diagnostic.merge"), percent -> {
                     DiagnosticScan.setMergePercent(percent);
-                    screen.refreshNextTick();
+                    screen.replaceRows(diagnosticRows());
+                }).live(percent -> {
+                    DiagnosticScan.previewMergePercent(percent);
+                    screen.replaceRows(diagnosticRows());
                 }).tooltip(Component.translatable("particlefilter.diagnostic.merge.tooltip", Zone.MAX_SIZE)));
         }
     }
@@ -113,6 +117,8 @@ public class DiagnosticPage extends ResultsPage {
     private static final int SLIDER_WIDTH = 80;
 
     private Slider mergeSlider;
+    /** Particle of the row hovered this frame (the list paints before {@link #render}), for the footer line. */
+    private String hoveredParticle;
 
     /** The controls show with results, under the Here line. */
     private static boolean showsControls() {
@@ -188,10 +194,18 @@ public class DiagnosticPage extends ResultsPage {
         Row base = resultRow(particle, result.typed(), result.count(), most, 3, wasHidden, nearest);
         Row row = new Row(base::height, (g, x, y, w, h, hovered) -> {
             base.paint(g, x, y, w, h, hovered);
+            int zoneCount = DiagnosticScan.hereBoxes(particle).size();
+            if (zoneCount > 0) {
+                // How many zones Here hides it in, beside the switch: cyan like the outlines previewed on hover.
+                boolean on = DiagnosticScan.isHiddenHere(particle);
+                Theme.text(g, screen.font(), Integer.toString(zoneCount), x + column(2, 3) + (COLUMN + Toggle.WIDTH) / 2 + ZONE_COUNT_GAP,
+                    y + (h - 8) / 2, on ? Theme.TEXT_DIM : Theme.NEW_ZONE);
+            }
             if (hovered) {
+                hoveredParticle = particle;
                 List<Zone> zones = DiagnosticScan.zonesFor(particle);
                 ZoneRenderer.highlightedMore = zones;
-                ZoneRenderer.previewMore = zones.isEmpty() ? DiagnosticScan.previewFor(particle) : List.of();
+                ZoneRenderer.previewMore = DiagnosticScan.isHiddenHere(particle) ? List.of() : DiagnosticScan.previewFor(particle);
             }
         });
         if (wasHidden) {
@@ -205,8 +219,20 @@ public class DiagnosticPage extends ResultsPage {
         row.add(new Toggle(0, 0, DiagnosticScan.isHiddenHere(particle), Component.translatable("particlefilter.scan.col_zone"), on -> {
             DiagnosticScan.setHiddenHere(particle, on);
             screen.refreshNextTick();
-        }).tooltip(Component.translatable("particlefilter.diagnostic.here.tooltip", ParticleScan.displayName(particle))), column(2, 3) + (COLUMN - Toggle.WIDTH) / 2);
+        }).tooltip(Component.empty().append(Component.translatable("particlefilter.diagnostic.here.tooltip", ParticleScan.displayName(particle)))
+            .append("\n").append(zoneCountText(particle))), column(2, 3) + (COLUMN - Toggle.WIDTH) / 2);
         return row;
+    }
+
+    /** Gap between the Here switch and the number of zones beside it. */
+    private static final int ZONE_COUNT_GAP = 3;
+
+    /** How many zones Here hides [particle] in, or would if switched on. */
+    private static Component zoneCountText(String particle) {
+        int count = DiagnosticScan.hereBoxes(particle).size();
+        String name = ParticleScan.displayName(particle);
+        String key = DiagnosticScan.isHiddenHere(particle) ? "particlefilter.diagnostic.here_count_on" : "particlefilter.diagnostic.here_count_new";
+        return count == 1 ? Component.translatable(key + "_one", name) : Component.translatable(key, name, count);
     }
 
     private static String boxText(net.minecraft.world.phys.AABB box) {
@@ -236,8 +262,13 @@ public class DiagnosticPage extends ResultsPage {
         }
         renderColumnLabels(g, "particlefilter.scan.col_nearest", "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
         boolean capped = DiagnosticScan.anyCapped();
-        renderFooterLine(g, mouseX, mouseY, capped ? Theme.WARNING : Theme.NEW_ZONE,
-            Component.translatable(capped ? "particlefilter.diagnostic.here_capped" : "particlefilter.diagnostic.here_line"),
+        // While a row is hovered, the line says how many zones Here gives that particle.
+        String hovered = hoveredParticle;
+        hoveredParticle = null;
+        boolean counting = hovered != null && !DiagnosticScan.hereBoxes(hovered).isEmpty();
+        Component line = counting ? zoneCountText(hovered)
+            : Component.translatable(capped ? "particlefilter.diagnostic.here_capped" : "particlefilter.diagnostic.here_line");
+        renderFooterLine(g, mouseX, mouseY, capped && !counting ? Theme.WARNING : Theme.NEW_ZONE, line,
             Component.translatable("particlefilter.diagnostic.here_line.tooltip", DiagnosticScan.MAX_SOURCES, Zone.MAX_SIZE),
             cw - 4, screen.bodyBottom() - FOOTER_LINE - controlsHeight());
         renderControlLabels(g);

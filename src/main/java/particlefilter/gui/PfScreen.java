@@ -90,6 +90,16 @@ public abstract class PfScreen extends Screen {
         return panel;
     }
 
+    /**
+     * Swaps the panel's rows for [rows] where the list is scrolled now, without rebuilding the screen, so the other
+     * widgets (such as a slider being dragged) keep working.
+     */
+    public void replaceRows(List<ScrollPanel.Row> rows) {
+        double scroll = panel.scrollAmount();
+        panel.setRows(rows);
+        panel.setScrollAmount(scroll);
+    }
+
     /** Fills the panel and restores the scroll position saved before the rebuild. */
     public void setRows(List<ScrollPanel.Row> rows) {
         panel.setRows(rows);
