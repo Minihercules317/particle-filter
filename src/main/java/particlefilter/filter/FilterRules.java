@@ -48,9 +48,18 @@ public final class FilterRules {
         }
 
         boolean hidesParticle(String particle, double x, double y, double z) {
-            if (particles.contains(particle)) return true;
+            return hidesParticle(ParticleKey.base(particle), particle, x, y, z);
+        }
+
+        /**
+         * [key] is [base] plus the block it was made from, if any ({@link ParticleKey}); a rule for either hides it.
+         * Without a block, [key] is [base] itself.
+         */
+        boolean hidesParticle(String base, String key, double x, double y, double z) {
+            boolean withBlock = !base.equals(key);
+            if (particles.contains(key) || withBlock && particles.contains(base)) return true;
             for (ZoneBox zone : zones) {
-                if (zone.contains(x, y, z) && zone.particles.contains(particle)) return true;
+                if (zone.contains(x, y, z) && (zone.particles.contains(key) || withBlock && zone.particles.contains(base))) return true;
             }
             return false;
         }
@@ -147,9 +156,12 @@ public final class FilterRules {
         return snapshot.hasParticleRules();
     }
 
-    /** True if [particle] (type id or class name) is hidden everywhere, or in a zone containing the point. */
-    public static boolean isParticleHidden(String particle, double x, double y, double z) {
-        return snapshot.hidesParticle(particle, x, y, z);
+    /**
+     * True if [key] is hidden everywhere, or in a zone containing the point. [key] is the type id or class name
+     * [base], plus the block the particle was made from if any ({@link ParticleKey}); rules for [base] cover every block.
+     */
+    public static boolean isParticleHidden(String base, String key, double x, double y, double z) {
+        return snapshot.hidesParticle(base, key, x, y, z);
     }
 
     /** True if this block's breaking, mining and block-dust particles are hidden. */

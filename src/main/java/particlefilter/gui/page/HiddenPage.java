@@ -6,6 +6,7 @@ import org.lwjgl.glfw.GLFW;
 import particlefilter.config.FilterMode;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
+import particlefilter.filter.ParticleKey;
 import particlefilter.gui.ParticleFilterScreen;
 import particlefilter.gui.PfScreen.Piece;
 import particlefilter.gui.Theme;
@@ -161,7 +162,7 @@ public class HiddenPage extends Page {
     }
 
     private static int particleColor(String particle) {
-        return particle.contains(":") ? Theme.TYPED : Theme.UNTYPED;
+        return ParticleKey.isTyped(particle) ? Theme.TYPED : Theme.UNTYPED;
     }
 
     /** Room the Paused pill takes after a heading's last line, counting the gap before it. */

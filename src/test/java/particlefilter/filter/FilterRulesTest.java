@@ -50,6 +50,45 @@ class FilterRulesTest {
         assertFalse(rules.hidesParticle(SMOKE, 2, 2, 2));
     }
 
+    // ---- particles made from a block ----
+
+    private static final String DUST_STONE = ParticleKey.withBlock("minecraft:block", "minecraft:stone");
+    private static final String DUST_DIRT = ParticleKey.withBlock("minecraft:block", "minecraft:dirt");
+
+    @Test
+    void ruleForOneBlockHidesOnlyThatBlocksParticles() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(DUST_STONE), List.of());
+
+        assertTrue(rules.hidesParticle(DUST_STONE, 0, 0, 0));
+        assertFalse(rules.hidesParticle(DUST_DIRT, 0, 0, 0));
+        assertFalse(rules.hidesParticle("minecraft:block", 0, 0, 0));
+    }
+
+    @Test
+    void ruleForTheParticleHidesItFromEveryBlock() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of("minecraft:block"), List.of());
+
+        assertTrue(rules.hidesParticle(DUST_STONE, 0, 0, 0));
+        assertTrue(rules.hidesParticle(DUST_DIRT, 0, 0, 0));
+    }
+
+    @Test
+    void zoneRuleForOneBlockStaysInsideTheZone() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of(), zone(DUST_STONE));
+
+        assertTrue(rules.hidesParticle(DUST_STONE, 2, 2, 2));
+        assertFalse(rules.hidesParticle(DUST_STONE, 5, 2, 2));
+        assertFalse(rules.hidesParticle(DUST_DIRT, 2, 2, 2));
+    }
+
+    @Test
+    void zoneRuleForTheParticleCoversEveryBlockInsideIt() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of(), zone("minecraft:block"));
+
+        assertTrue(rules.hidesParticle(DUST_DIRT, 2, 2, 2));
+        assertFalse(rules.hidesParticle(DUST_DIRT, 5, 2, 2));
+    }
+
     @Test
     void zoneEdgesMatchZoneContains() {
         // The compiled box and Zone.contains (used for outlines and the menu) must agree on every edge.

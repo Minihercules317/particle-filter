@@ -6,6 +6,7 @@ import net.minecraft.world.phys.AABB;
 import particlefilter.ParticleFilter;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
+import particlefilter.filter.ParticleKey;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -424,12 +425,20 @@ public final class DiagnosticScan {
         return zone.particles.contains(particle) || zone.disabledParticles.contains(particle);
     }
 
-    /** Names of the rules hiding [particle] around [spawns] right now: "Everywhere" and zone names. */
+    /**
+     * Names of the rules hiding [particle] around [spawns] right now: "Everywhere" and zone names. A rule for the
+     * particle without its block counts too ({@link ParticleKey}).
+     */
     public static List<String> hiddenBy(String particle, AABB spawns) {
+        String base = ParticleKey.base(particle);
         List<String> by = new ArrayList<>();
-        if (PfConfig.isHiddenEverywhere(particle)) by.add(net.minecraft.network.chat.Component.translatable("particlefilter.scan.col_everywhere").getString());
+        if (PfConfig.isHiddenEverywhere(particle) || PfConfig.isHiddenEverywhere(base)) {
+            by.add(net.minecraft.network.chat.Component.translatable("particlefilter.scan.col_everywhere").getString());
+        }
         for (Zone zone : PfConfig.zonesHere()) {
-            if (zone.particles.contains(particle) && zone.box().intersects(spawns.inflate(0.5))) by.add("\"" + zone.name + "\"");
+            if ((zone.particles.contains(particle) || zone.particles.contains(base)) && zone.box().intersects(spawns.inflate(0.5))) {
+                by.add("\"" + zone.name + "\"");
+            }
         }
         return by;
     }

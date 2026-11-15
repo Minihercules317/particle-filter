@@ -8,6 +8,7 @@ import net.minecraft.world.phys.Vec3;
 import particlefilter.ParticleFilter;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
+import particlefilter.filter.ParticleKey;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -262,8 +263,8 @@ public final class ParticleScan {
         return ZoneFit.fit(target, spawns);
     }
 
-    /** Short display name: the type id, or just the simple class name for untyped particles. */
+    /** Short display name: see {@link ParticleKey#displayName}. */
     public static String displayName(String particle) {
-        return particle.contains(":") ? particle : particle.substring(particle.lastIndexOf('.') + 1);
+        return ParticleKey.displayName(particle);
     }
 }
