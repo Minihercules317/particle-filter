@@ -20,7 +20,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import particlefilter.filter.FilterRules;
 import particlefilter.filter.ParticleKey;
-import particlefilter.scan.DiagnosticScan;
 import particlefilter.scan.ParticleScan;
 
 /**
@@ -54,7 +53,7 @@ public abstract class ParticleEngineMixin {
     private void particlefilter$filterTyped(ParticleOptions options, double x, double y, double z, double xSpeed, double ySpeed, double zSpeed, CallbackInfoReturnable<Particle> cir) {
         boolean blockHidden = options instanceof BlockParticleOption block && FilterRules.isBlockHidden(block.getState());
         boolean rules = FilterRules.hasParticleRules();
-        boolean scanning = ParticleScan.isRunning() || DiagnosticScan.isRunning();
+        boolean scanning = ParticleScan.isRunning();
         if (blockHidden && !scanning) {
             cir.setReturnValue(null);
             return;
@@ -65,10 +64,7 @@ public abstract class ParticleEngineMixin {
             String key = options instanceof BlockParticleOption block ? ParticleKey.withBlock(particle, particlefilter$blockId(block.getState())) : particle;
             boolean hidden = blockHidden || rules && FilterRules.isParticleHidden(particle, key, x, y, z);
             // Recorded even when hidden, so scans can list hidden particles too.
-            if (scanning) {
-                ParticleScan.record(key, true, x, y, z, hidden);
-                DiagnosticScan.record(key, true, x, y, z, hidden);
-            }
+            if (scanning) ParticleScan.record(key, true, x, y, z, hidden);
             if (hidden) {
                 cir.setReturnValue(null);
                 return;
@@ -86,17 +82,14 @@ public abstract class ParticleEngineMixin {
     private void particlefilter$filterUntyped(Particle particle, CallbackInfo ci) {
         if (IN_TYPED_SPAWN.get()) return;
         boolean rules = FilterRules.hasParticleRules();
-        boolean scanning = ParticleScan.isRunning() || DiagnosticScan.isRunning();
+        boolean scanning = ParticleScan.isRunning();
         if (!rules && !scanning) return;
         Vec3 pos = particle.getBoundingBox().getCenter();
         String className = particle.getClass().getName();
         String breaking = BREAKING_BLOCK.get();
         String key = breaking == null ? className : ParticleKey.withBlock(className, breaking);
         boolean hidden = rules && FilterRules.isParticleHidden(className, key, pos.x, pos.y, pos.z);
-        if (scanning) {
-            ParticleScan.record(key, false, pos.x, pos.y, pos.z, hidden);
-            DiagnosticScan.record(key, false, pos.x, pos.y, pos.z, hidden);
-        }
+        if (scanning) ParticleScan.record(key, false, pos.x, pos.y, pos.z, hidden);
         if (hidden) ci.cancel();
     }
 

@@ -25,7 +25,6 @@ import particlefilter.gui.ParticleFilterScreen;
 import particlefilter.gui.ParticleFilterScreen.Tab;
 import particlefilter.gui.SettingsScreen;
 import particlefilter.render.ZoneRenderer;
-import particlefilter.scan.DiagnosticScan;
 import particlefilter.scan.ParticleScan;
 
 import java.nio.file.Path;
@@ -77,7 +76,6 @@ public final class ParticleFilter {
         dispatcher.register(Commands.literal(COMMAND)
             .executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, null)))
             .then(Commands.literal("scan").executes(ctx -> openNextTick(ParticleFilter::scanAndOpen)))
-            .then(Commands.literal("diagnostic").executes(ctx -> openNextTick(ParticleFilter::diagnoseAndOpen)))
             .then(Commands.literal("hidden").executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, Tab.HIDDEN))))
             .then(Commands.literal("zones").executes(ctx -> openNextTick(() -> new ParticleFilterScreen(null, Tab.ZONES)))));
     }
@@ -91,12 +89,6 @@ public final class ParticleFilter {
     private static Screen scanAndOpen() {
         ParticleScan.start();
         return new ParticleFilterScreen(null, Tab.SCAN);
-    }
-
-    /** Starts a diagnostic scan around the player and opens the Diagnostic tab. */
-    private static Screen diagnoseAndOpen() {
-        DiagnosticScan.start();
-        return new ParticleFilterScreen(null, Tab.DIAGNOSTIC);
     }
 
     /** The block under the crosshair, if the player is looking at one. */
@@ -116,10 +108,8 @@ public final class ParticleFilter {
         // Scan results point at places in one dimension.
         if (!Objects.equals(world, FilterRules.currentWorld()) || !Objects.equals(dimension, FilterRules.currentDimension())) {
             ParticleScan.reset();
-            DiagnosticScan.reset();
         }
         ParticleScan.tick();
-        DiagnosticScan.tick();
         if (pendingScreen != null) {
             Supplier<Screen> screen = pendingScreen;
             pendingScreen = null;

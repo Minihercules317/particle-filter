@@ -1,7 +1,9 @@
 package particlefilter.gui.page;
 
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.AABB;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
 import particlefilter.gui.ParticleFilterScreen;
@@ -14,36 +16,100 @@ import particlefilter.gui.widget.ScrollPanel.Row;
 import particlefilter.gui.widget.Slider;
 import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
+import particlefilter.scan.FittedZones;
 import particlefilter.scan.ParticleScan;
 import particlefilter.scan.ZoneFit;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntConsumer;
 
+import static particlefilter.gui.PfScreen.CARD_DOT_X;
+import static particlefilter.gui.PfScreen.CARD_RADIUS;
+import static particlefilter.gui.PfScreen.CARD_TEXT_X;
 import static particlefilter.gui.PfScreen.COMPACT_HEIGHT;
+import static particlefilter.gui.PfScreen.DOT_SIZE;
+import static particlefilter.gui.PfScreen.SMALL_BUTTON_HEIGHT;
 
-/** Records which particles spawn around what you're looking at, to hide them everywhere or in a zone there. */
-public class ScanPage extends ResultsPage {
+/**
+ * Records which particles spawn around what you're looking at, both those still appearing and those your rules hide,
+ * to hide them everywhere or in zones there.
+ *
+ * Below the header: the scan's length and radius, then a Zone options switch that shows the settings for the zones Here
+ * fits (how close spots count as one source, how many zones a particle gets, when zones merge) and the number of zones
+ * beside each Here switch. Below those, the results with Everywhere and Here switches, then a line saying where Here
+ * hides particles, with buttons to pick that zone and edit it.
+ */
+public class ScanPage extends Page {
+
+    /** Width of each switch column. */
+    private static final int COLUMN = 58;
+    private static final int COLUMNS = 2;
+    /** Width of the scan button in the header. */
+    private static final int SCAN_BUTTON_WIDTH = 80;
+    /** Height of a line of controls below the header, with the gap below it. */
+    private static final int CONTROL_ROW = SMALL_BUTTON_HEIGHT + 4;
+    /** Space from the last line of controls to the list, for the column labels. */
+    private static final int LABELS_SPACE = 20;
+    /** How far the column labels sit above the list. */
+    private static final int COLUMN_LABELS_ABOVE = 12;
+    /** Width of the number spinners. */
+    private static final int SPINNER_WIDTH = 62;
+    /** Gap between a control's label and the control. */
+    private static final int LABEL_GAP = 6;
+    /** Gap between a control and the unit or value after it ("seconds"). */
+    private static final int UNIT_GAP = 5;
+    /** Gap between controls sharing a line. */
+    private static final int GROUP_GAP = 14;
+    /** Narrowest and widest the radius slider gets; it takes the room left on its line between them. */
+    private static final int RADIUS_SLIDER_MIN = 40;
+    private static final int RADIUS_SLIDER_MAX = 100;
+    /** Width of the merge slider. */
+    private static final int MERGE_SLIDER_WIDTH = 80;
+    /** Room left and right of the Zone options label inside its button. */
+    private static final int OPTIONS_PAD = 6;
+    /** Text top inside a line of controls. */
+    private static final int CONTROL_TEXT_Y = (SMALL_BUTTON_HEIGHT - 8) / 2;
+
+    /** Space above a result row's name, and the same below. */
+    private static final int RESULT_TEXT_Y = 7;
+    /** Gap between a result row's count and its first column; the frequency bar ends at the count's right edge. */
+    private static final int COUNT_GAP = 8;
+    /** Smallest gap between a result row's name and its count. */
+    private static final int NAME_GAP = 7;
+    /** Gap between the Here switch and the number of zones beside it. */
+    private static final int ZONE_COUNT_GAP = 3;
+    /** Width of a grow notice's Grow to fit button. */
+    private static final int GROW_WIDTH = 72;
+    /** Gap between a notice's text and its button, and between the button and the card's right edge. */
+    private static final int NOTICE_GAP = 8;
+    /** Space above a notice's text, and the same below. */
+    private static final int NOTICE_TEXT_Y = 6;
 
     /** Width of the Edit zone button at the bottom right. */
     private static final int EDIT_ZONE_WIDTH = 64;
-    /** Width of the button left of Edit zone that picks which zone Here uses. */
+    /** Width of the button left of Edit zone that picks where Here hides particles. */
     private static final int HERE_WIDTH = 76;
     /** Gap between those two buttons. */
     private static final int BUTTON_GAP = 4;
     /** Width both buttons take together, kept clear of the Here line beside them. */
     private static final int FOOTER_BUTTONS_WIDTH = HERE_WIDTH + BUTTON_GAP + EDIT_ZONE_WIDTH;
+    /** Gap between the Here line and those buttons. */
+    private static final int FOOTER_GAP = 16;
 
-    /** Gap between "seconds" and the radius control after it. */
-    private static final int RADIUS_GAP = 14;
-    /** Narrowest and widest the radius slider gets; it takes the room left on the line between them. */
-    private static final int RADIUS_SLIDER_MIN = 40;
-    private static final int RADIUS_SLIDER_MAX = 100;
-
+    private FlatButton scanButton;
+    private int shownScanGeneration;
     private FlatButton editZoneButton;
     private Slider radiusSlider;
-    /** Set while the grow notice is hovered (the list paints before {@link #render}), to outline the grown zone. */
-    private boolean growHovered;
+    private Slider mergeSlider;
+    /** The Zone options laid out in [init]: where each label, control and unit or value sits. */
+    private final List<PlacedOption> options = new ArrayList<>();
+    /** Top of the list, below the controls and the column labels; set in [init]. */
+    private int listTop;
+    /** Particle of the row hovered this frame (the list paints before {@link #render}), for the Here line and outlines. */
+    private String hoveredParticle;
+    /** Set while a notice is hovered this frame; it sets the outlines itself. */
+    private boolean noticeHovered;
 
     public ScanPage(ParticleFilterScreen screen) {
         super(screen);
@@ -56,32 +122,24 @@ public class ScanPage extends ResultsPage {
 
     @Override
     public Component subtitle() {
-        int found = ParticleScan.results().size();
+        List<ParticleScan.Result> results = ParticleScan.results();
         if (ParticleScan.isRunning()) {
             return Component.translatable("particlefilter.scan.status_running", ParticleScan.targetName(), ParticleScan.radius());
         } else if (ParticleScan.target() != null) {
+            int found = results.size();
+            long hidden = results.stream().filter(ParticleScan.Result::allHidden).count();
+            if (hidden > 0) return Component.translatable("particlefilter.scan.status_done_hidden", found, ParticleScan.targetName(), hidden);
             return Component.translatable(found == 1 ? "particlefilter.scan.status_done_one" : "particlefilter.scan.status_done", found, ParticleScan.targetName());
         }
         return Component.translatable("particlefilter.scan.status_idle");
     }
 
     @Override
-    protected int generation() {
-        return ParticleScan.generation();
+    public int actionsWidth() {
+        return SCAN_BUTTON_WIDTH;
     }
 
-    @Override
-    protected boolean isRunning() {
-        return ParticleScan.isRunning();
-    }
-
-    @Override
-    protected float progress() {
-        return ParticleScan.progress();
-    }
-
-    @Override
-    protected Component buttonLabel() {
+    private Component buttonLabel() {
         return ParticleScan.isRunning()
             ? Component.translatable("particlefilter.scan.running", ParticleScan.secondsLeft())
             : Component.translatable("particlefilter.scan.button");
@@ -91,28 +149,59 @@ public class ScanPage extends ResultsPage {
         return Component.translatable("particlefilter.scan.button.tooltip", PfConfig.scanRadius(), PfConfig.scanSeconds());
     }
 
+    /** Unlike the other pages, clears every outline: rows and notices set them while hovered, then {@link #render}. */
+    @Override
+    public void beforeRender() {
+        ZoneRenderer.clear();
+        if (scanButton != null) scanButton.setProgress(ParticleScan.isRunning() ? ParticleScan.progress() : -1);
+    }
+
+    @Override
+    public void tick() {
+        if (scanButton == null) return;
+        if (ParticleScan.generation() != shownScanGeneration) screen.refresh(); // a scan started or finished
+        else if (ParticleScan.isRunning()) scanButton.setMessage(buttonLabel());
+    }
+
     @Override
     public void init() {
-        int cx = screen.cx(), cw = screen.cw(), bodyBottom = screen.bodyBottom();
+        int cx = screen.cx(), cw = screen.cw(), bodyTop = screen.bodyTop(), bodyBottom = screen.bodyBottom();
         editZoneButton = null;
+        mergeSlider = null;
         scanButton = screen.headerButton(Style.PRIMARY, buttonLabel(), () -> {
             ParticleScan.start();
             screen.refresh();
         }).tooltip(scanTooltip());
         scanButton.active = !ParticleScan.isRunning();
-        addDurationSpinner(PfConfig.scanSeconds(), seconds -> {
-            PfConfig.setScanSeconds(seconds);
-            scanButton.tooltip(scanTooltip());
-        });
-        radiusSlider = screen.addRenderableWidget(new Slider(radiusSliderX(), screen.bodyTop() + (PfScreen.SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
+
+        // Length and radius, always shown.
+        screen.addSpinner(durationSpinnerX(), bodyTop, SPINNER_WIDTH, PfConfig.scanSeconds(), PfConfig.MIN_SCAN_SECONDS, PfConfig.MAX_SCAN_SECONDS,
+            Component.translatable("particlefilter.scan.duration.tooltip", PfConfig.MIN_SCAN_SECONDS, PfConfig.MAX_SCAN_SECONDS), seconds -> {
+                PfConfig.setScanSeconds(seconds);
+                scanButton.tooltip(scanTooltip());
+            });
+        radiusSlider = screen.addRenderableWidget(new Slider(radiusSliderX(), bodyTop + (SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
             radiusSliderWidth(), PfConfig.scanRadius(), PfConfig.MIN_SCAN_RADIUS, PfConfig.MAX_SCAN_RADIUS,
             Component.translatable("particlefilter.scan.radius"), blocks -> {
                 PfConfig.setScanRadius(blocks);
                 scanButton.tooltip(scanTooltip());
             }).tooltip(Component.translatable("particlefilter.scan.radius.tooltip", PfConfig.MIN_SCAN_RADIUS, PfConfig.MAX_SCAN_RADIUS)));
 
-        addList();
-        screen.setRows(scanRows());
+        // Zone options: a switch, and the settings below it while open.
+        boolean open = PfConfig.zoneOptionsOpen();
+        Component optionsLabel = Component.translatable(open ? "particlefilter.scan.options_open" : "particlefilter.scan.options_closed");
+        int optionsY = bodyTop + CONTROL_ROW;
+        screen.button(Style.GHOST, optionsLabel, cx, optionsY, screen.font().width(optionsLabel) + 2 * OPTIONS_PAD, SMALL_BUTTON_HEIGHT, () -> {
+            PfConfig.setZoneOptionsOpen(!PfConfig.zoneOptionsOpen());
+            screen.refresh();
+        }).tooltip(Component.translatable("particlefilter.scan.options.tooltip"));
+        int lastRowY = optionsY;
+        options.clear();
+        if (open) lastRowY = addOptions(optionsY + CONTROL_ROW);
+        listTop = lastRowY + SMALL_BUTTON_HEIGHT + LABELS_SPACE;
+
+        screen.addPanel(cx, listTop, cw, listBottom() - listTop, 3);
+        screen.setRows(rows());
         shownScanGeneration = ParticleScan.generation();
 
         if (ParticleScan.target() != null) {
@@ -120,7 +209,7 @@ public class ScanPage extends ResultsPage {
             int buttonY = bodyBottom - COMPACT_HEIGHT;
             editZoneButton = screen.button(Style.SECONDARY, Component.translatable("particlefilter.scan.edit_zone"), editX, buttonY, EDIT_ZONE_WIDTH, COMPACT_HEIGHT,
                 () -> {
-                    Zone zone = ParticleScan.hereZone();
+                    Zone zone = editableZone();
                     if (zone != null) screen.minecraft().setScreen(new ZoneEditScreen(screen, zone));
                 }).tooltip(Component.translatable("particlefilter.scan.edit_zone.tooltip"));
             Zone current = ParticleScan.hereZone();
@@ -138,14 +227,24 @@ public class ScanPage extends ResultsPage {
         }
     }
 
-    // ---------------------------------------------------------------- Radius: on the duration's line, after it
+    /** Bottom of the result list, above the Here line and its buttons. */
+    private int listBottom() {
+        return screen.bodyBottom() - LIST_FOOTER;
+    }
+
+    // ---------------------------------------------------------------- Length and radius: one line below the header
+
+    private int durationSpinnerX() {
+        return screen.cx() + screen.font().width(Component.translatable("particlefilter.scan.duration")) + LABEL_GAP;
+    }
 
     private int radiusLabelX() {
-        return durationRowRight() + RADIUS_GAP;
+        int durationRight = durationSpinnerX() + SPINNER_WIDTH + UNIT_GAP + screen.font().width(Component.translatable("particlefilter.scan.duration_unit"));
+        return durationRight + GROUP_GAP;
     }
 
     private int radiusSliderX() {
-        return radiusLabelX() + screen.font().width(Component.translatable("particlefilter.scan.radius")) + DURATION_GAP;
+        return radiusLabelX() + screen.font().width(Component.translatable("particlefilter.scan.radius")) + LABEL_GAP;
     }
 
     /** The room left before the value at the line's right end, kept between the narrowest and widest slider. */
@@ -159,50 +258,285 @@ public class ScanPage extends ResultsPage {
         return Component.translatable(blocks == 1 ? "particlefilter.scan.radius_value_one" : "particlefilter.scan.radius_value", blocks);
     }
 
-    private void renderRadiusLabels(GuiGraphics g) {
+    private void renderLengthAndRadius(GuiGraphics g) {
         var font = screen.font();
-        int textY = screen.bodyTop() + 4;
+        int textY = screen.bodyTop() + CONTROL_TEXT_Y;
+        Theme.text(g, font, Component.translatable("particlefilter.scan.duration"), screen.cx(), textY, Theme.TEXT_DIM);
+        Theme.text(g, font, Component.translatable("particlefilter.scan.duration_unit"), durationSpinnerX() + SPINNER_WIDTH + UNIT_GAP, textY, Theme.TEXT_DIM);
         Theme.text(g, font, Component.translatable("particlefilter.scan.radius"), radiusLabelX(), textY, Theme.TEXT_DIM);
         int blocks = radiusSlider != null ? radiusSlider.intValue() : PfConfig.scanRadius();
         Theme.text(g, font, radiusText(blocks), radiusSliderX() + radiusSliderWidth() + UNIT_GAP, textY, Theme.TEXT);
     }
 
-    /** One row per particle, with Everywhere and Here switches. */
-    private List<Row> scanRows() {
-        List<Row> rows = new ArrayList<>();
-        boolean here = ParticleScan.target() != null;
-        ZoneFit.Box grown = here ? ParticleScan.growBox() : null;
-        Zone zone = ParticleScan.hereZone();
-        if (grown != null && zone != null) {
-            rows.add(growRow(Component.translatable("particlefilter.scan.grow_notice", zone.name), growTooltip(zone, grown),
-                ParticleScan::growHereZone, () -> growHovered = true));
-        }
-        int most = ParticleScan.results().stream().mapToInt(ParticleScan.Result::count).max().orElse(1);
-        for (ParticleScan.Result result : ParticleScan.results()) {
-            String particle = result.particle();
-            Row row = resultRow(particle, result.typed(), result.count(), most, 2, false, null);
-            row.add(everywhereToggle(particle), column(0, 2) + (COLUMN - Toggle.WIDTH) / 2);
-            if (here) {
-                row.add(new Toggle(0, 0, ParticleScan.isHiddenHere(particle), Component.translatable("particlefilter.scan.col_zone"),
-                    hidden -> {
-                        ParticleScan.setHiddenHere(particle, hidden);
-                        screen.refreshNextTick(); // the Here line and buttons follow a zone created or removed
-                    }).tooltip(Component.translatable("particlefilter.scan.zone.tooltip", ParticleScan.displayName(particle))),
-                    column(1, 2) + (COLUMN - Toggle.WIDTH) / 2);
+    // ---------------------------------------------------------------- Zone options
+
+    /** One of the Zone options: its label, its control's width, and the unit after it (null for the merge value). */
+    private record Option(String labelKey, int controlWidth, String unitKey) {}
+
+    /** An option placed at (x, y): label at x, control after it. */
+    private record PlacedOption(Option option, int x, int y) {}
+
+    private static final Option SOURCE_DISTANCE = new Option("particlefilter.scan.source_distance", SPINNER_WIDTH, "particlefilter.scan.source_distance_unit");
+    private static final Option MAX_ZONES = new Option("particlefilter.scan.max_zones", SPINNER_WIDTH, "particlefilter.scan.max_zones_unit");
+    private static final Option MERGE = new Option("particlefilter.scan.merge", MERGE_SLIDER_WIDTH, null);
+
+    private int controlX(PlacedOption placed) {
+        return placed.x + screen.font().width(Component.translatable(placed.option.labelKey)) + LABEL_GAP;
+    }
+
+    /** Width of an option with its label and unit or widest value. */
+    private int optionWidth(Option option) {
+        var font = screen.font();
+        int after = option.unitKey != null ? font.width(Component.translatable(option.unitKey)) : font.width(percentText(PfConfig.MAX_MERGE_PERCENT));
+        return font.width(Component.translatable(option.labelKey)) + LABEL_GAP + option.controlWidth + UNIT_GAP + after;
+    }
+
+    /**
+     * Lays out the Zone options from [top], side by side while they fit the page's width and on further lines after,
+     * and adds their controls. Returns the top of the last line.
+     */
+    private int addOptions(int top) {
+        int x = screen.cx(), y = top, right = screen.cx() + screen.cw();
+        for (Option option : List.of(SOURCE_DISTANCE, MAX_ZONES, MERGE)) {
+            int width = optionWidth(option);
+            if (x > screen.cx() && x + width > right) {
+                x = screen.cx();
+                y += CONTROL_ROW;
             }
-            rows.add(row);
+            options.add(new PlacedOption(option, x, y));
+            x += width + GROUP_GAP;
+        }
+        for (PlacedOption placed : options) {
+            int controlX = controlX(placed);
+            if (placed.option == SOURCE_DISTANCE) {
+                addSpinner(controlX, placed.y, PfConfig.sourceDistance(), PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE,
+                    Component.translatable("particlefilter.scan.source_distance.tooltip", PfConfig.MIN_SOURCE_DISTANCE, PfConfig.MAX_SOURCE_DISTANCE),
+                    ParticleScan::setSourceDistance);
+            } else if (placed.option == MAX_ZONES) {
+                addSpinner(controlX, placed.y, PfConfig.maxZones(), PfConfig.MIN_MAX_ZONES, PfConfig.MAX_MAX_ZONES,
+                    Component.translatable("particlefilter.scan.max_zones.tooltip", PfConfig.MIN_MAX_ZONES, PfConfig.MAX_MAX_ZONES),
+                    ParticleScan::setMaxZones);
+            } else {
+                // Zones follow the slider live; only the list is rebuilt, so the slider keeps its drag and focus.
+                mergeSlider = screen.addRenderableWidget(new Slider(controlX, placed.y + (SMALL_BUTTON_HEIGHT - Slider.HEIGHT) / 2,
+                    MERGE_SLIDER_WIDTH, PfConfig.mergePercent(), PfConfig.MIN_MERGE_PERCENT, PfConfig.MAX_MERGE_PERCENT,
+                    Component.translatable("particlefilter.scan.merge"), percent -> {
+                        ParticleScan.setMergePercent(percent);
+                        screen.replaceRows(rows());
+                    }).live(percent -> {
+                        ParticleScan.previewMergePercent(percent);
+                        screen.replaceRows(rows());
+                    }).tooltip(Component.translatable("particlefilter.scan.merge.tooltip", Zone.MAX_SIZE)));
+            }
+        }
+        return y;
+    }
+
+    /** A spinner whose new value regroups the zones; the page is laid out again so notices and counts follow. */
+    private void addSpinner(int x, int y, int value, int min, int max, Component tooltip, IntConsumer onValue) {
+        screen.addSpinner(x, y, SPINNER_WIDTH, value, min, max, tooltip, v -> {
+            onValue.accept(v);
+            screen.refreshNextTick();
+        });
+    }
+
+    private static String percentText(int percent) {
+        return percent + "%";
+    }
+
+    private void renderOptionLabels(GuiGraphics g) {
+        var font = screen.font();
+        for (PlacedOption placed : options) {
+            int textY = placed.y + CONTROL_TEXT_Y;
+            Theme.text(g, font, Component.translatable(placed.option.labelKey), placed.x, textY, Theme.TEXT_DIM);
+            int afterX = controlX(placed) + placed.option.controlWidth + UNIT_GAP;
+            if (placed.option.unitKey != null) {
+                Theme.text(g, font, Component.translatable(placed.option.unitKey), afterX, textY, Theme.TEXT_DIM);
+            } else {
+                int percent = mergeSlider != null ? mergeSlider.intValue() : PfConfig.mergePercent();
+                Theme.text(g, font, percentText(percent), afterX, textY, Theme.TEXT);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- Results
+
+    /** Left edge of switch column [i], from the list's left. */
+    private int column(int i) {
+        return screen.panel().contentWidth() - (COLUMNS - i) * COLUMN;
+    }
+
+    /**
+     * One row per particle, those still appearing first, with Everywhere and Here switches. Below a row, a notice when
+     * it has more sources than Here makes zones for, or when a zone hiding it missed spots where it appeared.
+     */
+    private List<Row> rows() {
+        List<Row> rows = new ArrayList<>();
+        List<ParticleScan.Result> results = ParticleScan.results();
+        int most = results.stream().mapToInt(ParticleScan.Result::count).max().orElse(1);
+        boolean fitted = ParticleScan.hereZone() == null;
+        for (ParticleScan.Result result : results) {
+            String particle = result.particle();
+            rows.add(resultRow(result, most));
+            if (fitted && FittedZones.hasMoreSources(particle) && !PfConfig.isHiddenEverywhere(particle)) {
+                int sources = FittedZones.sourcesOf(particle).size();
+                rows.add(noticeRow(Component.translatable("particlefilter.scan.many_sources", ParticleScan.displayName(particle), sources, PfConfig.maxZones()),
+                    noticeTextRight(), () -> ZoneRenderer.previewMore = ParticleScan.previewFor(particle)));
+            }
+            FittedZones.Growth growth = FittedZones.growthFor(particle);
+            if (growth != null) {
+                rows.add(growRow(Component.translatable("particlefilter.scan.grow_notice", growth.zone().name, ParticleScan.displayName(particle)),
+                    growTooltip(growth.zone(), growth.box()), () -> FittedZones.grow(growth), () -> {
+                        ZoneRenderer.highlighted = growth.zone();
+                        ZoneRenderer.preview = growth.box().aabb();
+                    }));
+            }
         }
         return rows;
+    }
+
+    /**
+     * A result row: dot, name, a bar for how often it spawned next to [most], the count, and the switches. Dimmed when
+     * the rules hid every one. With Zone options open, the number of zones Here uses sits beside its switch.
+     */
+    private Row resultRow(ParticleScan.Result result, int most) {
+        var font = screen.font();
+        String particle = result.particle();
+        boolean dim = result.allHidden();
+        int firstX = column(0);
+        String countText = "×" + result.count();
+        int countRight = firstX - COUNT_GAP;
+        var name = screen.wrap(ParticleScan.displayName(particle), countRight - font.width(countText) - NAME_GAP - CARD_TEXT_X);
+        int color = result.typed() ? Theme.TYPED : Theme.UNTYPED;
+        float share = result.count() / (float) Math.max(1, most);
+        boolean counts = PfConfig.zoneOptionsOpen() && ParticleScan.hereZone() == null;
+        Row row = new Row(PfScreen.textHeight(name.size()) + 2 * RESULT_TEXT_Y, (g, x, y, w, h, hovered) -> {
+            Theme.rect(g, x, y, w, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
+            // How often it spawned compared to the most frequent particle.
+            g.fill(x + CARD_TEXT_X, y + h - 3, x + CARD_TEXT_X + Math.max(2, Math.round((countRight - CARD_TEXT_X) * share)), y + h - 2, Theme.fade(color, dim ? 0.25f : 0.55f));
+            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, dim ? Theme.fade(color, 0.45f) : color);
+            screen.drawLines(g, name, x + CARD_TEXT_X, y + RESULT_TEXT_Y, dim ? Theme.TEXT_DIM : Theme.TEXT);
+            Theme.text(g, font, countText, x + countRight - font.width(countText), y + (h - 8) / 2, Theme.TEXT_DIM);
+            if (counts) {
+                int zones = ParticleScan.hereZoneCount(particle);
+                // Cyan like the outlines previewed on hover, until it is switched on.
+                if (zones > 0) Theme.text(g, font, Integer.toString(zones), x + column(1) + (COLUMN + Toggle.WIDTH) / 2 + ZONE_COUNT_GAP,
+                    y + (h - 8) / 2, ParticleScan.isHiddenHere(particle) ? Theme.TEXT_DIM : Theme.NEW_ZONE);
+            }
+            if (hovered) hoveredParticle = particle;
+        }).tooltip(rowTooltip(result));
+        row.add(new Toggle(0, 0, PfConfig.isHiddenEverywhere(particle), Component.translatable("particlefilter.scan.col_everywhere"),
+                hidden -> PfConfig.setHiddenEverywhere(particle, hidden))
+                .tooltip(Component.translatable("particlefilter.scan.everywhere.tooltip", ParticleScan.displayName(particle))),
+            column(0) + (COLUMN - Toggle.WIDTH) / 2);
+        row.add(new Toggle(0, 0, ParticleScan.isHiddenHere(particle), Component.translatable("particlefilter.scan.col_zone"), hidden -> {
+                ParticleScan.setHiddenHere(particle, hidden);
+                screen.refreshNextTick(); // the Here line, buttons and notices follow zones created or removed
+            }).tooltip(hereTooltip(particle)),
+            column(1) + (COLUMN - Toggle.WIDTH) / 2);
+        return row;
+    }
+
+    /** The particle's id and kind, how many appeared and were hidden, where, and which rules hid them. */
+    private static Component rowTooltip(ParticleScan.Result result) {
+        String particle = result.particle();
+        int appeared = result.count() - result.hiddenCount();
+        String where = boxText(result.spawns());
+        var tip = Component.empty().append(Component.translatable(result.typed() ? "particlefilter.particle.typed.tooltip" : "particlefilter.particle.untyped.tooltip", particle))
+            .append("\n");
+        if (result.hiddenCount() == 0) return tip.append(Component.translatable("particlefilter.scan.row_appeared", appeared, where));
+        tip.append(result.allHidden() ? Component.translatable("particlefilter.scan.row_hidden", result.count(), where)
+            : Component.translatable("particlefilter.scan.row_mixed", appeared, result.hiddenCount(), where));
+        List<String> by = ParticleScan.hiddenBy(particle, result.spawns());
+        String rules = by.isEmpty() ? Component.translatable("particlefilter.scan.hidden_by_changed").getString() : String.join(", ", by);
+        return tip.append("\n").append(Component.translatable("particlefilter.scan.hidden_by", rules));
+    }
+
+    private static String boxText(AABB box) {
+        return (int) Math.floor(box.minX) + ", " + (int) Math.floor(box.minY) + ", " + (int) Math.floor(box.minZ) + " → "
+            + (int) Math.floor(box.maxX) + ", " + (int) Math.floor(box.maxY) + ", " + (int) Math.floor(box.maxZ);
+    }
+
+    /** What the Here switch does for [particle]: hide it in Here's zone, or in zones fitted to it, and how many. */
+    private static Component hereTooltip(String particle) {
+        String name = ParticleScan.displayName(particle);
+        Zone zone = ParticleScan.hereZone();
+        if (zone != null) return Component.translatable("particlefilter.scan.zone.tooltip", name, zone.name);
+        return Component.empty().append(Component.translatable("particlefilter.scan.here_fitted.tooltip", name)).append("\n").append(zoneCountText(particle));
+    }
+
+    /** How many zones Here hides [particle] in, or would if switched on. */
+    private static Component zoneCountText(String particle) {
+        int count = ParticleScan.hereZoneCount(particle);
+        String name = ParticleScan.displayName(particle);
+        String key = ParticleScan.isHiddenHere(particle) ? "particlefilter.scan.here_count_on" : "particlefilter.scan.here_count_new";
+        return count == 1 ? Component.translatable(key + "_one", name) : Component.translatable(key, name, count);
+    }
+
+    // ---------------------------------------------------------------- Notices
+
+    /**
+     * A notice saying a zone misses some spots where its particles appeared: a warning dot and [text] wrapped beside a
+     * Grow to fit button with [tip]. [grow] runs on click, then the page is rebuilt. [whileHovered] runs every frame the
+     * card is hovered, to outline the grown zone.
+     */
+    private Row growRow(Component text, Component tip, Runnable grow, Runnable whileHovered) {
+        int buttonX = screen.panel().contentWidth() - GROW_WIDTH - NOTICE_GAP;
+        Row row = noticeRow(text, buttonX - NOTICE_GAP, whileHovered);
+        row.add(screen.rowButton(Style.SECONDARY, Component.translatable("particlefilter.grow"), GROW_WIDTH, () -> {
+            grow.run();
+            screen.refreshNextTick();
+        }).tooltip(tip), buttonX);
+        return row;
+    }
+
+    /** A notice card: a warning dot and [text] wrapped to end [textRight] px from the card's left edge. */
+    private Row noticeRow(Component text, int textRight, Runnable whileHovered) {
+        var lines = screen.wrap(text, textRight - CARD_TEXT_X);
+        return new Row(PfScreen.textHeight(lines.size()) + 2 * NOTICE_TEXT_Y, (g, x, y, w, h, hovered) -> {
+            Theme.rect(g, x, y, w, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
+            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, Theme.WARNING);
+            screen.drawLines(g, lines, x + CARD_TEXT_X, y + NOTICE_TEXT_Y, Theme.TEXT);
+            if (hovered) {
+                noticeHovered = true;
+                whileHovered.run();
+            }
+        });
+    }
+
+    /** A notice's text right edge when it has no button. */
+    private int noticeTextRight() {
+        return screen.panel().contentWidth() - NOTICE_GAP;
+    }
+
+    /** Tooltip of a Grow to fit button: the zone's size now and after, and a warning if it hits the size limit. */
+    private static Component growTooltip(Zone zone, ZoneFit.Box grown) {
+        Component tip = Component.translatable("particlefilter.grow.tooltip", zone.name, zone.sizeText(), grown.sizeText());
+        return grown.capped() ? Component.empty().append(tip).append("\n").append(Component.translatable("particlefilter.grow.capped", Zone.MAX_SIZE)) : tip;
+    }
+
+    // ---------------------------------------------------------------- Drawing
+
+    /** The zone Edit zone opens: Here's zone, or the one zone the latest scan made. Null if there isn't exactly one. */
+    private static Zone editableZone() {
+        Zone zone = ParticleScan.hereZone();
+        if (zone != null) return zone;
+        List<Zone> made = FittedZones.managedZones();
+        return made.size() == 1 ? made.get(0) : null;
     }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY) {
         int cx = screen.cx(), cw = screen.cw();
-        renderDurationLabels(g);
-        renderRadiusLabels(g);
+        renderLengthAndRadius(g);
+        renderOptionLabels(g);
+        String hovered = hoveredParticle;
+        hoveredParticle = null;
+        boolean notice = noticeHovered;
+        noticeHovered = false;
 
         if (screen.panel().isEmpty()) {
-            int centerY = emptyStateTop(listTop(), listBottom());
+            int centerY = emptyStateTop(listTop, listBottom());
             if (ParticleScan.isRunning()) {
                 screen.drawEmptyState(g, Component.translatable("particlefilter.scan.empty_running"),
                     Component.translatable("particlefilter.scan.empty_running.body", ParticleScan.radius()), cx + cw / 2, centerY, cw);
@@ -214,35 +548,75 @@ public class ScanPage extends ResultsPage {
                     Component.translatable("particlefilter.scan.empty_none.body", ParticleScan.radius()), cx + cw / 2, centerY, cw);
             }
         } else {
-            renderColumnLabels(g, "particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone");
+            renderColumnLabels(g);
         }
 
-        ZoneRenderer.clear();
         if (ParticleScan.target() == null) return;
-        // What Here refers to: a zone around the scanned block, or a new one fitted to the particles (cyan preview).
         Zone zone = ParticleScan.hereZone();
-        ZoneRenderer.highlighted = zone;
-        if (editZoneButton != null) editZoneButton.active = zone != null;
-        String key;
-        Component here;
+        if (editZoneButton != null) editZoneButton.active = editableZone() != null;
+        if (hovered != null) {
+            // The zones the hovered particle is in, or where Here would put them.
+            ZoneRenderer.highlighted = zone;
+            ZoneRenderer.highlightedMore = ParticleScan.zonesFor(hovered);
+            if (!ParticleScan.isHiddenHere(hovered)) ZoneRenderer.previewMore = ParticleScan.previewFor(hovered);
+        } else if (!notice) {
+            // Where Here hides particles: its zone, the zones this scan made, or the scanned block where they start.
+            ZoneRenderer.highlighted = zone;
+            if (zone == null) {
+                List<Zone> made = FittedZones.managedZones();
+                if (made.isEmpty()) ZoneRenderer.preview = ParticleScan.newZonePreview();
+                else ZoneRenderer.highlightedMore = made;
+            }
+        }
+        renderHereLine(g, mouseX, mouseY, zone, hovered, cw - FOOTER_BUTTONS_WIDTH - FOOTER_GAP);
+    }
+
+    /** Column headers above the list: PARTICLE on the left and one label per switch column on the right. */
+    private void renderColumnLabels(GuiGraphics g) {
+        var font = screen.font();
+        int cx = screen.cx();
+        int y = listTop - COLUMN_LABELS_ABOVE;
+        Theme.text(g, font, Theme.caps("particlefilter.scan.col_particle"), cx + 2, y, Theme.TEXT_FAINT);
+        String[] keys = {"particlefilter.scan.col_everywhere", "particlefilter.scan.col_zone"};
+        for (int i = 0; i < keys.length; i++) Theme.centered(g, font, Theme.caps(keys[i]), cx + column(i) + COLUMN / 2, y, Theme.TEXT_FAINT);
+    }
+
+    /**
+     * The line under the list saying where Here hides particles: an existing zone, the zones this scan made, or new
+     * zones still to be made. With Zone options open, while a row is hovered, how many zones Here gives that particle.
+     */
+    private void renderHereLine(GuiGraphics g, int mouseX, int mouseY, Zone zone, String hovered, int maxWidth) {
+        Component text;
+        Component tip;
         int color;
         if (zone != null) {
-            key = ParticleScan.isFitting(zone) ? "particlefilter.scan.zone_fitted" : "particlefilter.scan.zone_existing";
-            here = Component.translatable(key, zone.name, zone.sizeText());
+            text = Component.translatable("particlefilter.scan.zone_existing", zone.name, zone.sizeText());
+            tip = Component.translatable("particlefilter.scan.zone_existing.tooltip", zone.name, zone.sizeText(), ZoneEditScreen.volumeText(zone));
             color = Theme.zoneColor(zone);
         } else {
-            ZoneRenderer.preview = ParticleScan.newZonePreview();
-            key = "particlefilter.scan.zone_new";
-            here = Component.translatable(key);
-            color = Theme.NEW_ZONE;
+            int made = FittedZones.managedZones().size();
+            boolean capped = FittedZones.anyCapped();
+            tip = Component.translatable("particlefilter.scan.zone_fitted.tooltip", Zone.MAX_SIZE);
+            color = capped ? Theme.WARNING : Theme.NEW_ZONE;
+            if (hovered != null && PfConfig.zoneOptionsOpen() && ParticleScan.hereZoneCount(hovered) > 0) {
+                text = zoneCountText(hovered);
+                color = Theme.NEW_ZONE;
+            } else if (capped) {
+                text = Component.translatable("particlefilter.scan.zone_capped");
+            } else if (made == 0) {
+                text = Component.translatable("particlefilter.scan.zone_new");
+            } else {
+                text = made == 1 ? Component.translatable("particlefilter.scan.zone_made_one") : Component.translatable("particlefilter.scan.zone_made", made);
+            }
         }
-        Component tip = zone == null ? Component.translatable(key + ".tooltip")
-            : Component.translatable(key + ".tooltip", zone.name, zone.sizeText(), ZoneEditScreen.volumeText(zone));
-        renderFooterLine(g, mouseX, mouseY, color, here, tip, cw - FOOTER_BUTTONS_WIDTH - 16);
-        if (growHovered) {
-            ZoneFit.Box grown = ParticleScan.growBox();
-            if (grown != null) ZoneRenderer.preview = grown.aabb();
-            growHovered = false;
+        var font = screen.font();
+        int cx = screen.cx();
+        int y = screen.bodyBottom() - FOOTER_LINE;
+        String shown = Theme.fit(font, text.getString(), maxWidth);
+        Theme.dot(g, cx + DOT_X, y + 1, DOT_SIZE, color);
+        Theme.text(g, font, shown, cx + DOT_TEXT_X, y, Theme.TEXT_DIM);
+        if (mouseX >= cx && mouseX < cx + DOT_TEXT_X + font.width(shown) && mouseY >= y - 4 && mouseY < y + 12) {
+            screen.setTooltipForNextRenderPass(Tooltip.splitTooltip(screen.minecraft(), tip));
         }
     }
 }

@@ -12,7 +12,7 @@ import java.util.List;
 public class GuideScreen extends PfScreen {
 
     /** Sections in order; each has a ".title" and a ".body" translation under particlefilter.guide. */
-    private static final String[] SECTIONS = {"scan", "hide", "diagnostic", "hidden", "zones", "rules", "keys"};
+    private static final String[] SECTIONS = {"scan", "hide", "hidden", "zones", "rules", "keys"};
     /** Inset of the Back button from the window's top left, gap between it and the title, and space below the list. */
     private static final int PAD = 10;
     /** Inset of the divider and the list from the window's left edge (and the divider's from the right). */

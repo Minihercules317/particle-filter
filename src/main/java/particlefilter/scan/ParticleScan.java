@@ -11,24 +11,35 @@ import particlefilter.config.Zone;
 import particlefilter.filter.ParticleKey;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
- * Records which particles spawn near the block under the crosshair for a few seconds, and where. Results are listed
- * most frequent first; typed particles are keyed by particle type id, particles created without a type by class name.
- * Particles that are already hidden are recorded too, so they can be shown again from the results.
+ * Records which particles spawn near the block under the crosshair for a few seconds, and where: both those that
+ * appeared and those the rules hid, so players can see what is left once their rules are in place. Results list
+ * particles that appeared first, most frequent first; typed particles are keyed by particle type id, particles created
+ * without a type by class name.
  *
- * The "Here" column hides particles in one zone: an existing zone at the scanned block, or a new one just big enough
- * for the spawn points of the particles switched on there. See {@link DiagnosticScan} for the scan of everything around the
- * player.
+ * The "Here" column hides particles either in one existing zone (the one at the scanned block, or another the player
+ * picks) or in new zones fitted to each source of the particle ({@link FittedZones}).
  */
 public final class ParticleScan {
 
-    /** One particle the scan saw: how often, the box its spawn points fill, and the closest one to the center. */
-    public record Result(String particle, int count, boolean typed, AABB spawns, double nearest) {}
+    /**
+     * One particle the scan saw: how many spawned and how many of those the rules hid, the box they fill, how close the
+     * nearest came, how many spawned in each block, how many appeared in each block, and the blocks Here fits zones to:
+     * where it appeared, or where it spawned hidden if it never appeared. Block maps hold at most
+     * {@link SpawnRecorder#MAX_BLOCKS} blocks of each kind.
+     */
+    public record Result(String particle, boolean typed, int count, int hiddenCount, AABB spawns, double nearest,
+                         Map<BlockPos, Integer> spawnBlocks, Map<BlockPos, Integer> appeared, Map<BlockPos, Integer> fitBlocks) {
+        /** True if the rules hid every one that spawned. */
+        public boolean allHidden() {
+            return hiddenCount == count;
+        }
+    }
 
     /** Radius of the running or last scan, in blocks ({@link PfConfig#scanRadius()} when it started). */
     private static int radius;
@@ -41,11 +52,9 @@ public final class ParticleScan {
     private static BlockPos target;
     private static Component targetName = Component.empty();
     private static int generation;
-    /** Zone the Here column uses; null means a new zone, created when the first particle is switched on. */
+    /** Existing zone the Here column uses; null means new zones fitted to each source. */
     private static String hereZoneId;
-    /** Zone this scan created, resized to fit its particles until the player edits it or scans again. */
-    private static String fittedZoneId;
-    /** Zone Here used before switching to a new zone, offered to switch back to. */
+    /** Zone Here used before switching to new zones, offered to switch back to. */
     private static String previousZoneId;
 
     private ParticleScan() {}
@@ -97,7 +106,7 @@ public final class ParticleScan {
             .orElse(Component.translatable("particlefilter.scan.target_you"));
         target = BlockPos.containing(at);
         results = List.of();
-        fittedZoneId = null;
+        FittedZones.reset(); // zones from earlier scans keep their particles but are no longer resized
         previousZoneId = null;
         Zone existing = zonesAtTarget().stream().findFirst().orElse(null);
         hereZoneId = existing == null ? null : existing.id;
@@ -113,8 +122,8 @@ public final class ParticleScan {
         results = List.of();
         target = null;
         hereZoneId = null;
-        fittedZoneId = null;
         previousZoneId = null;
+        FittedZones.reset();
         generation++;
     }
 
@@ -128,14 +137,24 @@ public final class ParticleScan {
         List<Result> list = new ArrayList<>();
         for (SpawnRecorder.Recorded r : recorder.collect()) {
             SpawnRecorder.Spawns all = r.all();
-            list.add(new Result(r.particle(), all.count(), r.typed(), all.box(), all.nearest()));
+            int hiddenCount = r.hidden() == null ? 0 : r.hidden().count();
+            Map<BlockPos, Integer> appeared = blocks(r.shown());
+            list.add(new Result(r.particle(), r.typed(), all.count(), hiddenCount, all.box(), all.nearest(), blocks(all),
+                appeared, appeared.isEmpty() ? blocks(r.hidden()) : appeared));
         }
+        list.sort(Comparator.comparing(Result::allHidden).thenComparing(Comparator.comparingInt(Result::count).reversed()));
         results = List.copyOf(list);
+        FittedZones.resultsChanged();
         generation++;
-        list.forEach(r -> ParticleFilter.LOGGER.info("Scan: {} x {}{}", r.count(), r.particle(), r.typed() ? "" : " (untyped)"));
+        list.forEach(r -> ParticleFilter.LOGGER.info("Scan: {} x {}{}, {} hidden", r.count(), r.particle(), r.typed() ? "" : " (untyped)", r.hiddenCount()));
     }
 
-    private static Result result(String particle) {
+    private static Map<BlockPos, Integer> blocks(SpawnRecorder.Spawns spawns) {
+        return spawns == null ? Map.of() : Map.copyOf(spawns.blockCounts());
+    }
+
+    /** What the last scan recorded for [particle], or null if it didn't see it. */
+    public static Result result(String particle) {
         for (Result r : results) if (r.particle().equals(particle)) return r;
         return null;
     }
@@ -153,21 +172,21 @@ public final class ParticleScan {
             .sorted(Comparator.comparing((Zone z) -> !z.contains(target)).thenComparingLong(Zone::volume)).toList();
     }
 
-    /** The zone Here hides particles in, or null when switching one on will create a zone. */
+    /** The existing zone Here hides particles in, or null when Here makes new zones fitted to each source. */
     public static Zone hereZone() {
         Zone zone = PfConfig.zoneById(hereZoneId);
         return zone != null && PfConfig.isInCurrentWorld(zone) ? zone : null;
     }
 
-    /** True while Here uses a zone this scan made and keeps resizing. */
+    /** True while [zone] is one the latest scan made and keeps adjusting. */
     public static boolean isFitting(Zone zone) {
-        return zone != null && zone.id.equals(fittedZoneId);
+        return FittedZones.isFitting(zone);
     }
 
     /**
-     * What the Here button switches to: from a zone, always a new zone; from a new zone, back to the zone used before
-     * (or the smallest zone around the scanned block). Null means a new zone, and also "nothing to switch to" while
-     * Here is already a new zone with no zone around.
+     * What the Here button switches to: from a zone, always new zones; from new zones, back to the zone used before
+     * (or the smallest zone around the scanned block). Null means new zones, and also "nothing to switch to" while
+     * Here already makes new zones with no zone around.
      */
     public static Zone nextHereChoice() {
         if (hereZone() != null) return null;
@@ -180,87 +199,102 @@ public final class ParticleScan {
         Zone current = hereZone();
         Zone next = nextHereChoice();
         if (current != null) previousZoneId = current.id;
+        if (next != null) stopFitting(next); // particles are added to it as it is from now on
         hereZoneId = next == null ? null : next.id;
     }
 
     public static boolean isHiddenHere(String particle) {
         Zone zone = hereZone();
-        return zone != null && PfConfig.isHiddenInZone(zone, particle);
+        return zone != null ? PfConfig.isHiddenInZone(zone, particle) : FittedZones.isHidden(particle);
     }
 
-    /**
-     * Hides or shows [particle] in the Here zone. Hiding with no zone chosen creates one fitted to the particle's spawn
-     * points. A zone the scan created keeps fitting the particles switched on in it, and is deleted again when the last
-     * one is switched off.
-     */
+    /** Hides or shows [particle] in Here's zone, or in zones fitted to each of its sources. */
     public static void setHiddenHere(String particle, boolean hidden) {
         if (target == null) return;
         Zone zone = hereZone();
-        if (zone == null) {
-            if (!hidden) return;
-            ZoneFit.Box box = fittedBox(List.of(particle));
-            zone = PfConfig.createZone(box.minX(), box.minY(), box.minZ(), box.width(), box.height(), box.length());
-            if (zone == null) return;
-            hereZoneId = fittedZoneId = zone.id;
-        }
-        PfConfig.setHiddenInZone(zone, particle, hidden);
-        if (!isFitting(zone)) return;
-        if (!zone.hasEntries()) {
-            PfConfig.deleteZone(zone);
-            hereZoneId = fittedZoneId = null;
-            return;
-        }
-        fittedBox(zone.particles).applyTo(zone);
-        PfConfig.changed();
+        if (zone != null) PfConfig.setHiddenInZone(zone, particle, hidden);
+        else FittedZones.setHidden(particle, hidden);
     }
 
-    /**
-     * The box Here's zone would grow to so it also covers every spot where its switched-on particles appeared in this
-     * scan. Null when nothing appeared outside it, when Here makes a new zone, or while the zone already keeps fitting.
-     */
-    public static ZoneFit.Box growBox() {
+    /** The zones listing [particle] that Here's switch for it changes. */
+    public static List<Zone> zonesFor(String particle) {
         Zone zone = hereZone();
-        if (zone == null || isFitting(zone)) return null;
-        List<AABB> spawns = new ArrayList<>();
-        for (String particle : zone.particles) {
-            Result r = result(particle);
-            if (r != null) spawns.add(r.spawns());
-        }
-        ZoneFit.Box current = ZoneFit.Box.of(zone);
-        ZoneFit.Box grown = ZoneFit.grow(current, spawns);
-        return grown.sameBlocks(current) ? null : grown;
+        if (zone == null) return FittedZones.zonesFor(particle);
+        return zone.particles.contains(particle) || zone.disabledParticles.contains(particle) ? List.of(zone) : List.of();
     }
 
-    /** Grows Here's zone to {@link #growBox()}; it keeps that size, as if edited by hand. */
-    public static void growHereZone() {
-        Zone zone = hereZone();
-        ZoneFit.Box box = growBox();
-        if (zone == null || box == null) return;
-        stopFitting(zone);
-        box.applyTo(zone);
-        PfConfig.changed();
+    /** How many zones Here hides [particle] in, or would if switched on. */
+    public static int hereZoneCount(String particle) {
+        return hereZone() != null ? 1 : FittedZones.hereBoxes(particle).size();
+    }
+
+    /** Where switching on Here would put zones for [particle]; empty when Here uses an existing zone. */
+    public static List<AABB> previewFor(String particle) {
+        return hereZone() != null ? List.of() : FittedZones.previewFor(particle);
     }
 
     /** Called when the player edits [zone] by hand, so no scan resizes it any more. */
     public static void stopFitting(Zone zone) {
-        if (isFitting(zone)) fittedZoneId = null;
-        DiagnosticScan.stopFitting(zone);
+        FittedZones.stopFitting(zone);
     }
 
-    /** Marks the scanned block, where a new zone is made, before any particle is switched on. */
+    /** Marks the scanned block, where new zones start, before any particle is switched on. */
     public static AABB newZonePreview() {
         if (target == null) return null;
-        return fittedBox(List.of()).aabb();
+        return ZoneFit.fit(target, List.of()).aabb();
     }
 
-    /** Smallest box holding the spawn points of [particles]; just the scanned block if none were recorded. */
-    private static ZoneFit.Box fittedBox(Collection<String> particles) {
-        List<AABB> spawns = new ArrayList<>();
-        for (String particle : particles) {
-            Result r = result(particle);
-            if (r != null) spawns.add(r.spawns());
+    /** Changes how far apart spots may be and still count as one source, and regroups the latest scan's zones. */
+    public static void setSourceDistance(int blocks) {
+        PfConfig.batch(() -> {
+            PfConfig.setSourceDistance(blocks);
+            FittedZones.settingsChanged();
+        });
+    }
+
+    /** Changes how many zones Here makes per particle at most, and regroups the latest scan's zones. */
+    public static void setMaxZones(int zones) {
+        PfConfig.batch(() -> {
+            PfConfig.setMaxZones(zones);
+            FittedZones.settingsChanged();
+        });
+    }
+
+    /** Changes how much zones must overlap to merge, and regroups the latest scan's zones. */
+    public static void setMergePercent(int percent) {
+        PfConfig.batch(() -> {
+            PfConfig.setMergePercent(percent);
+            FittedZones.settingsChanged();
+        });
+    }
+
+    /**
+     * Like {@link #setMergePercent}, but nothing is written to the file: for each step while the slider is dragged,
+     * so zones follow it live. The drag ends with {@link #setMergePercent}, which saves.
+     */
+    public static void previewMergePercent(int percent) {
+        PfConfig.unsaved(() -> {
+            PfConfig.setMergePercent(percent);
+            FittedZones.settingsChanged();
+        });
+    }
+
+    /**
+     * Names of the rules hiding [particle] around [spawns] right now: "Everywhere" and zone names. A rule for the
+     * particle without its block counts too ({@link ParticleKey}).
+     */
+    public static List<String> hiddenBy(String particle, AABB spawns) {
+        String base = ParticleKey.base(particle);
+        List<String> by = new ArrayList<>();
+        if (PfConfig.isHiddenEverywhere(particle) || PfConfig.isHiddenEverywhere(base)) {
+            by.add(Component.translatable("particlefilter.scan.col_everywhere").getString());
         }
-        return ZoneFit.fit(target, spawns);
+        for (Zone zone : PfConfig.zonesHere()) {
+            if ((zone.particles.contains(particle) || zone.particles.contains(base)) && zone.box().intersects(spawns.inflate(0.5))) {
+                by.add("\"" + zone.name + "\"");
+            }
+        }
+        return by;
     }
 
     /** Short display name: see {@link ParticleKey#displayName}. */

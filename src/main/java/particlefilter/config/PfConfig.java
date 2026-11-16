@@ -60,8 +60,13 @@ public final class PfConfig {
     public static final int MAX_SCAN_RADIUS = 32;
     public static final int DEFAULT_SCAN_RADIUS = 6;
 
+    /** Most zones Here makes for one particle, one per source, for its busiest sources. */
+    public static final int MIN_MAX_ZONES = 1;
+    public static final int MAX_MAX_ZONES = 32;
+    public static final int DEFAULT_MAX_ZONES = 8;
+
     /**
-     * How much of the smaller of two Diagnostic zones must overlap the other for them to merge, in percent. At 0,
+     * How much of the smaller of two zones fitted by a scan must overlap the other for them to merge, in percent. At 0,
      * zones touching face to face merge too.
      */
     public static final int MIN_MERGE_PERCENT = 0;
@@ -79,10 +84,12 @@ public final class PfConfig {
         List<String> disabledParticles = new ArrayList<>();
         List<String> disabledBlocks = new ArrayList<>();
         Integer scanSeconds = DEFAULT_SCAN_SECONDS;
-        Integer diagnosticSeconds = DEFAULT_SCAN_SECONDS;
         Integer sourceDistance = DEFAULT_SOURCE_DISTANCE;
         Integer mergePercent = DEFAULT_MERGE_PERCENT;
         Integer scanRadius = DEFAULT_SCAN_RADIUS;
+        Integer maxZones = DEFAULT_MAX_ZONES;
+        /** Whether the Scan page's Zone options are expanded. */
+        Boolean zoneOptionsOpen = false;
         /** Settings from the mod list's Config screen. */
         Boolean walkInMenu = false;
         Boolean zoneTracers = false;
@@ -101,14 +108,15 @@ public final class PfConfig {
             disabledBlocks.removeAll(hiddenBlocks);
             if (scanSeconds == null) scanSeconds = DEFAULT_SCAN_SECONDS;
             scanSeconds = clampScanSeconds(scanSeconds);
-            if (diagnosticSeconds == null) diagnosticSeconds = DEFAULT_SCAN_SECONDS;
-            diagnosticSeconds = clampScanSeconds(diagnosticSeconds);
             if (sourceDistance == null) sourceDistance = DEFAULT_SOURCE_DISTANCE;
             sourceDistance = clampSourceDistance(sourceDistance);
             if (mergePercent == null) mergePercent = DEFAULT_MERGE_PERCENT;
             mergePercent = clampMergePercent(mergePercent);
             if (scanRadius == null) scanRadius = DEFAULT_SCAN_RADIUS;
             scanRadius = clampScanRadius(scanRadius);
+            if (maxZones == null) maxZones = DEFAULT_MAX_ZONES;
+            maxZones = clampMaxZones(maxZones);
+            if (zoneOptionsOpen == null) zoneOptionsOpen = false;
             if (walkInMenu == null) walkInMenu = false;
             if (zoneTracers == null) zoneTracers = false;
             if (window != null && !window.valid()) window = null;
@@ -374,15 +382,6 @@ public final class PfConfig {
         save();
     }
 
-    public static int diagnosticSeconds() {
-        return data.diagnosticSeconds;
-    }
-
-    public static void setDiagnosticSeconds(int seconds) {
-        data.diagnosticSeconds = clampScanSeconds(seconds);
-        save();
-    }
-
     private static int clampScanSeconds(int seconds) {
         return Math.max(MIN_SCAN_SECONDS, Math.min(MAX_SCAN_SECONDS, seconds));
     }
@@ -399,6 +398,30 @@ public final class PfConfig {
 
     private static int clampScanRadius(int blocks) {
         return Math.max(MIN_SCAN_RADIUS, Math.min(MAX_SCAN_RADIUS, blocks));
+    }
+
+    /** Most zones Here makes for one particle. */
+    public static int maxZones() {
+        return data.maxZones;
+    }
+
+    public static void setMaxZones(int zones) {
+        data.maxZones = clampMaxZones(zones);
+        save();
+    }
+
+    private static int clampMaxZones(int zones) {
+        return Math.max(MIN_MAX_ZONES, Math.min(MAX_MAX_ZONES, zones));
+    }
+
+    /** Whether the Scan page shows its Zone options. */
+    public static boolean zoneOptionsOpen() {
+        return data.zoneOptionsOpen;
+    }
+
+    public static void setZoneOptionsOpen(boolean open) {
+        data.zoneOptionsOpen = open;
+        save();
     }
 
     // ---- settings from the mod list's Config screen ----
@@ -437,7 +460,7 @@ public final class PfConfig {
         save();
     }
 
-    /** Spots where a particle appeared at most this many blocks apart are one source (Diagnostic page). */
+    /** Spots where a particle appeared at most this many blocks apart are one source (Scan page, Here). */
     public static int sourceDistance() {
         return data.sourceDistance;
     }
@@ -451,7 +474,7 @@ public final class PfConfig {
         return Math.max(MIN_SOURCE_DISTANCE, Math.min(MAX_SOURCE_DISTANCE, blocks));
     }
 
-    /** Diagnostic zones merge when at least this percent of the smaller one overlaps the other. */
+    /** Zones fitted by a scan merge when at least this percent of the smaller one overlaps the other. */
     public static int mergePercent() {
         return data.mergePercent;
     }

@@ -28,10 +28,11 @@ class PfConfigTest {
         assertEquals(List.of(), data.disabledParticles);
         assertEquals(List.of(), data.disabledBlocks);
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.scanSeconds);
-        assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.diagnosticSeconds);
         assertEquals(PfConfig.DEFAULT_SOURCE_DISTANCE, data.sourceDistance);
         assertEquals(PfConfig.DEFAULT_MERGE_PERCENT, data.mergePercent);
         assertEquals(PfConfig.DEFAULT_SCAN_RADIUS, data.scanRadius);
+        assertEquals(PfConfig.DEFAULT_MAX_ZONES, data.maxZones);
+        assertFalse(data.zoneOptionsOpen);
         assertFalse(data.walkInMenu);
         assertFalse(data.zoneTracers);
         assertNull(data.window);
@@ -124,11 +125,30 @@ class PfConfigTest {
     }
 
     @Test
-    void scanLengthsArePutInRange() {
-        PfConfig.Data data = PfConfig.parse("{\"scanSeconds\": 0, \"diagnosticSeconds\": 999}");
+    void scanLengthIsPutInRange() {
+        assertEquals(PfConfig.MIN_SCAN_SECONDS, PfConfig.parse("{\"scanSeconds\": 0}").scanSeconds);
+        assertEquals(PfConfig.MAX_SCAN_SECONDS, PfConfig.parse("{\"scanSeconds\": 999}").scanSeconds);
+    }
 
-        assertEquals(PfConfig.MIN_SCAN_SECONDS, data.scanSeconds);
-        assertEquals(PfConfig.MAX_SCAN_SECONDS, data.diagnosticSeconds);
+    @Test
+    void diagnosticLengthFromBeforeTheMergeIsIgnored() {
+        // Development builds of 1.3.0 had a separate Diagnostic page with its own scan length.
+        PfConfig.Data data = PfConfig.parse("{\"scanSeconds\": 10, \"diagnosticSeconds\": 20, \"sourceDistance\": 4}");
+
+        assertEquals(10, data.scanSeconds);
+        assertEquals(4, data.sourceDistance);
+    }
+
+    @Test
+    void maxZonesIsPutInRange() {
+        assertEquals(PfConfig.MIN_MAX_ZONES, PfConfig.parse("{\"maxZones\": 0}").maxZones);
+        assertEquals(PfConfig.MAX_MAX_ZONES, PfConfig.parse("{\"maxZones\": 100}").maxZones);
+        assertEquals(3, PfConfig.parse("{\"maxZones\": 3}").maxZones);
+    }
+
+    @Test
+    void zoneOptionsOpenIsKept() {
+        assertTrue(PfConfig.parse("{\"zoneOptionsOpen\": true}").zoneOptionsOpen);
     }
 
     @Test

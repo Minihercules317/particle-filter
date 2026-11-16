@@ -12,7 +12,6 @@ import net.minecraft.network.chat.FormattedText;
 import net.minecraft.util.FormattedCharSequence;
 import particlefilter.config.FilterMode;
 import particlefilter.config.PfConfig;
-import particlefilter.gui.page.DiagnosticPage;
 import particlefilter.gui.page.HiddenPage;
 import particlefilter.gui.page.Page;
 import particlefilter.gui.page.ScanPage;
@@ -21,7 +20,6 @@ import particlefilter.gui.widget.FlatButton;
 import particlefilter.gui.widget.FlatButton.Style;
 import particlefilter.gui.widget.ScrollPanel;
 import particlefilter.render.ZoneRenderer;
-import particlefilter.scan.DiagnosticScan;
 import particlefilter.scan.ParticleScan;
 
 import java.util.ArrayList;
@@ -33,15 +31,15 @@ import java.util.Map;
 /**
  * The Particle Filter window: a sidebar with the pages and the Active rules switch, a header, and the current page
  * (each in {@code gui.page}):
- * - Scan: record which particles spawn around what you're looking at, and hide them everywhere or in a zone there
- * - Diagnostic: record every particle around you, both those still appearing and those your rules hide
+ * - Scan: record which particles spawn around what you're looking at, both those still appearing and those your rules
+ *   hide, and hide them everywhere or in zones there
  * - Hidden: everything hidden and where, each entry with an on/off switch and Delete, and a box to hide by id
  * - Zones: the zones in this world, to edit, delete or create
  * The page last shown is reopened until the player leaves the world or server.
  */
 public class ParticleFilterScreen extends PfScreen {
 
-    public enum Tab { SCAN, DIAGNOSTIC, HIDDEN, ZONES }
+    public enum Tab { SCAN, HIDDEN, ZONES }
 
     private static final int SIDEBAR_WIDTH = 124;
     private static final int PAD = 12;
@@ -78,8 +76,7 @@ public class ParticleFilterScreen extends PfScreen {
     private static final int DEFAULT_WIDTH = 560;
     private static final int DEFAULT_HEIGHT = 340;
     /**
-     * Smallest size: at this width the Scan page's duration and radius share a line and the Diagnostic page has room
-     * for ids like minecraft:flame beside its three columns; the sidebar needs this height.
+     * Smallest size: at this width the Scan page's duration and radius share a line; the sidebar needs this height.
      */
     private static final int MIN_WIDTH = 500;
     private static final int MIN_HEIGHT = 250;
@@ -126,7 +123,6 @@ public class ParticleFilterScreen extends PfScreen {
         super(Component.translatable("particlefilter.title"), parent);
         this.tab = tab != null ? tab : lastTab;
         pages.put(Tab.SCAN, new ScanPage(this));
-        pages.put(Tab.DIAGNOSTIC, new DiagnosticPage(this));
         pages.put(Tab.HIDDEN, new HiddenPage(this));
         pages.put(Tab.ZONES, new ZonesPage(this));
     }
@@ -321,7 +317,6 @@ public class ParticleFilterScreen extends PfScreen {
         navButtons.get(Tab.HIDDEN).badge(Integer.toString(hiddenCount()));
         navButtons.get(Tab.ZONES).badge(Integer.toString(PfConfig.zonesHere().size()));
         navButtons.get(Tab.SCAN).badge(ParticleScan.isRunning() ? ParticleScan.secondsLeft() + "s" : null);
-        navButtons.get(Tab.DIAGNOSTIC).badge(DiagnosticScan.isRunning() ? DiagnosticScan.secondsLeft() + "s" : null);
     }
 
     /** Entries switched on; switched-off ones are listed on the page but don't count as hidden. */
