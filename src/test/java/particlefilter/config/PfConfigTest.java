@@ -22,11 +22,11 @@ class PfConfigTest {
         PfConfig.Data data = PfConfig.parse("{}");
 
         assertEquals(List.of(), data.hiddenParticles);
-        assertEquals(List.of(), data.hiddenBlocks);
+        assertNull(data.hiddenBlocks);
         assertEquals(List.of(), data.zones);
         assertEquals(FilterMode.ALL, data.mode);
         assertEquals(List.of(), data.disabledParticles);
-        assertEquals(List.of(), data.disabledBlocks);
+        assertNull(data.disabledBlocks);
         assertEquals(PfConfig.DEFAULT_SCAN_SECONDS, data.scanSeconds);
         assertEquals(PfConfig.DEFAULT_SOURCE_DISTANCE, data.sourceDistance);
         assertEquals(PfConfig.DEFAULT_MERGE_PERCENT, data.mergePercent);
@@ -70,6 +70,7 @@ class PfConfigTest {
         assertNull(zone.radius);
         assertEquals(List.of("minecraft:flame"), zone.particles);
         assertEquals(FilterMode.ALL, data.mode);
+        assertEquals(List.of("minecraft:smoke", "*@minecraft:stone"), data.hiddenParticles);
     }
 
     @Test
@@ -89,7 +90,8 @@ class PfConfigTest {
             """);
 
         assertEquals(FilterMode.ZONES, data.mode);
-        assertEquals(List.of("#minecraft:logs", "create:*"), data.hiddenBlocks);
+        assertEquals(List.of("minecraft:smoke", "*@#minecraft:logs", "*@create:*"), data.hiddenParticles);
+        assertNull(data.hiddenBlocks);
         Zone zone = data.zones.get(0);
         assertEquals(List.of(4, 3, 6), List.of(zone.width, zone.height, zone.length));
         assertEquals(List.of(), zone.disabledParticles);
@@ -121,7 +123,48 @@ class PfConfigTest {
             """);
 
         assertEquals(List.of("minecraft:flame"), data.disabledParticles);
-        assertEquals(List.of(), data.disabledBlocks);
+        assertEquals(List.of("minecraft:smoke", "*@minecraft:stone"), data.hiddenParticles);
+    }
+
+    // ---- block entries from before 1.3.0 ----
+
+    @Test
+    void blockEntriesBecomeEntriesForEverythingMadeFromThem() {
+        PfConfig.Data data = PfConfig.parse("""
+            {
+              "hiddenParticles": ["*@minecraft:dirt"],
+              "hiddenBlocks": ["minecraft:stone", " geore:* ", "#c:ores", "minecraft:dirt", ""],
+              "disabledBlocks": ["minecraft:glass"]
+            }
+            """);
+
+        assertEquals(List.of("*@minecraft:dirt", "*@minecraft:stone", "*@geore:*", "*@#c:ores"), data.hiddenParticles);
+        assertEquals(List.of("*@minecraft:glass"), data.disabledParticles);
+        assertNull(data.hiddenBlocks);
+        assertNull(data.disabledBlocks);
+    }
+
+    @Test
+    void invalidBlockEntryIsKeptAsWrittenSoItCanBeDeleted() {
+        PfConfig.Data data = PfConfig.parse("{\"hiddenBlocks\": [\"Minecraft:Stone\"]}");
+
+        assertEquals(List.of("*@Minecraft:Stone"), data.hiddenParticles);
+    }
+
+    @Test
+    void blockListsAreNotWrittenAgain() {
+        String saved = PfConfig.toJson(PfConfig.parse("{\"hiddenBlocks\": [\"minecraft:stone\"], \"disabledBlocks\": []}"));
+
+        assertFalse(saved.contains("hiddenBlocks"), saved);
+        assertFalse(saved.contains("disabledBlocks"), saved);
+        assertTrue(saved.contains("*@minecraft:stone"), saved);
+    }
+
+    @Test
+    void blockEntryFillsInTheNamespace() {
+        assertEquals("*@minecraft:stone", PfConfig.blockEntry("stone"));
+        assertEquals("*@#minecraft:logs", PfConfig.blockEntry(" #logs "));
+        assertEquals("*@geore:*", PfConfig.blockEntry("geore:*"));
     }
 
     @Test

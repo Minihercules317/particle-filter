@@ -321,7 +321,7 @@ public class ParticleFilterScreen extends PfScreen {
 
     /** Entries switched on; switched-off ones are listed on the page but don't count as hidden. */
     private static int hiddenCount() {
-        return PfConfig.hiddenParticles().size() + PfConfig.hiddenBlocks().size()
+        return PfConfig.hiddenParticles().size()
             + PfConfig.zones().stream().mapToInt(z -> z.particles.size()).sum();
     }
 

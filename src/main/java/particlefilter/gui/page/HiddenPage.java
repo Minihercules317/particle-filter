@@ -7,6 +7,8 @@ import particlefilter.config.FilterMode;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
 import particlefilter.filter.ParticleKey;
+import particlefilter.filter.ParticlePattern;
+import particlefilter.gui.RuleNames;
 import particlefilter.gui.ParticleFilterScreen;
 import particlefilter.gui.PfScreen.Piece;
 import particlefilter.gui.Theme;
@@ -15,7 +17,6 @@ import particlefilter.gui.widget.FlatButton.Style;
 import particlefilter.gui.widget.ScrollPanel.Row;
 import particlefilter.gui.widget.TextField;
 import particlefilter.render.ZoneRenderer;
-import particlefilter.scan.ParticleScan;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -86,7 +87,11 @@ public class HiddenPage extends Page {
         idInput.setMaxLength(256);
         idInput.setHint(Component.translatable("particlefilter.hidden.input_hint").withStyle(s -> s.withColor(Theme.TEXT_FAINT & 0xFFFFFF)));
         idInput.setValue(idInputText);
-        idInput.setResponder(s -> idInputText = s);
+        idInput.setResponder(s -> {
+            idInputText = s;
+            showValidity();
+        });
+        showValidity();
         screen.button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_particle"), particleX, bodyTop, ADD_BUTTON_WIDTH, BUTTON_HEIGHT,
             () -> addTyped(false)).tooltip(Component.translatable("particlefilter.hidden.add_particle.tooltip"));
         screen.button(Style.SECONDARY, Component.translatable("particlefilter.hidden.add_block"), blockX, bodyTop, ADD_BUTTON_WIDTH, BUTTON_HEIGHT,
@@ -97,11 +102,24 @@ public class HiddenPage extends Page {
         screen.setRows(hiddenRows());
     }
 
+    /** The entry the box's text hides as a particle or, with [block], as a block; null if it isn't valid. */
+    private static String typedEntry(String text, boolean block) {
+        String typed = text.trim();
+        if (typed.isEmpty()) return null;
+        ParticlePattern pattern = ParticlePattern.parse(block ? PfConfig.blockEntry(typed) : typed);
+        return pattern == null ? null : pattern.toString();
+    }
+
+    /** Text that is neither a valid particle nor a valid block entry turns red. */
+    private void showValidity() {
+        boolean valid = idInputText.isBlank() || typedEntry(idInputText, false) != null || typedEntry(idInputText, true) != null;
+        idInput.setTextColor((valid ? Theme.TEXT : Theme.DANGER) & 0xFFFFFF);
+    }
+
     private void addTyped(boolean block) {
-        String id = idInputText.trim();
-        if (id.isEmpty()) return;
-        if (block) PfConfig.setBlockHidden(id, true);
-        else PfConfig.setHiddenEverywhere(id, true);
+        String entry = typedEntry(idInputText, block);
+        if (entry == null) return;
+        PfConfig.setHiddenEverywhere(entry, true);
         idInputText = "";
         screen.refresh();
     }
@@ -132,7 +150,7 @@ public class HiddenPage extends Page {
         if (!everywhere.isEmpty()) {
             rows.add(section(Theme.caps("particlefilter.hidden.section_everywhere", everywhere.size()), !mode.global, pausedTip));
             for (String p : everywhere) {
-                rows.add(screen.entryRow(ParticleScan.displayName(p), p, particleColor(p), !mode.global,
+                rows.add(screen.entryRow(RuleNames.of(p), p, particleColor(p), !mode.global,
                     () -> PfConfig.isHiddenEverywhere(p), on -> PfConfig.setEverywhereOn(p, on), () -> PfConfig.setHiddenEverywhere(p, false), null));
             }
         }
@@ -144,25 +162,19 @@ public class HiddenPage extends Page {
             boolean here = PfConfig.isInCurrentWorld(zone);
             rows.add(zoneSection(zone, here, !mode.zones, pausedTip));
             for (String p : listed(zone.particles, zone.disabledParticles)) {
-                rows.add(screen.entryRow(ParticleScan.displayName(p), p, particleColor(p), !mode.zones,
+                rows.add(screen.entryRow(RuleNames.of(p), p, particleColor(p), !mode.zones,
                     () -> zone.particles.contains(p), on -> PfConfig.setZoneEntryOn(zone, p, on), () -> PfConfig.setHiddenInZone(zone, p, false),
                     here ? zone : null));
-            }
-        }
-
-        List<String> blocks = listed(PfConfig.hiddenBlocks(), PfConfig.disabledBlocks());
-        if (!blocks.isEmpty()) {
-            rows.add(section(Theme.caps("particlefilter.hidden.section_blocks", blocks.size()), !mode.global, pausedTip));
-            for (String b : blocks) {
-                rows.add(screen.entryRow(b, null, Theme.BLOCK, !mode.global,
-                    () -> PfConfig.hasBlockEntry(b), on -> PfConfig.setBlockOn(b, on), () -> PfConfig.setBlockHidden(b, false), null));
             }
         }
         return rows;
     }
 
-    private static int particleColor(String particle) {
-        return ParticleKey.isTyped(particle) ? Theme.TYPED : Theme.UNTYPED;
+    /** Dot color: groups of particles made from blocks like the old block entries, others by whether they're typed. */
+    private static int particleColor(String entry) {
+        ParticlePattern pattern = ParticlePattern.parse(entry);
+        if (pattern != null && pattern.anyParticle()) return Theme.BLOCK;
+        return ParticleKey.isTyped(entry) ? Theme.TYPED : Theme.UNTYPED;
     }
 
     /** Room the Paused pill takes after a heading's last line, counting the gap before it. */

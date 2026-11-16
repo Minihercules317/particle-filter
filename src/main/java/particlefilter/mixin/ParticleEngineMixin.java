@@ -24,9 +24,9 @@ import particlefilter.scan.ParticleScan;
 
 /**
  * All filtering happens at the particle engine, which every particle passes through however a mod spawns it:
- * - createParticle: typed particles (by particle type id), and block-dust particles (by block)
+ * - createParticle: typed particles (by particle type id, with the block for block-dust particles)
  * - add: particles a mod constructs itself without a type (by class name)
- * - destroy / crack: block breaking and mining particles (by block)
+ * - destroy / crack: block breaking and mining particles, skipped entirely when everything from the block is hidden
  * Particles made from a block (block dust, and whatever destroy or crack adds) are named with their block too
  * ({@link ParticleKey}), so rules and scans can tell one block's apart from another's.
  */
@@ -51,18 +51,13 @@ public abstract class ParticleEngineMixin {
 
     @Inject(method = "createParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)Lnet/minecraft/client/particle/Particle;", at = @At("HEAD"), cancellable = true)
     private void particlefilter$filterTyped(ParticleOptions options, double x, double y, double z, double xSpeed, double ySpeed, double zSpeed, CallbackInfoReturnable<Particle> cir) {
-        boolean blockHidden = options instanceof BlockParticleOption block && FilterRules.isBlockHidden(block.getState());
         boolean rules = FilterRules.hasParticleRules();
         boolean scanning = ParticleScan.isRunning();
-        if (blockHidden && !scanning) {
-            cir.setReturnValue(null);
-            return;
-        }
-        if (blockHidden || rules || scanning) {
+        if (rules || scanning) {
             ResourceLocation id = BuiltInRegistries.PARTICLE_TYPE.getKey(options.getType());
             String particle = id == null ? options.getType().toString() : id.toString();
             String key = options instanceof BlockParticleOption block ? ParticleKey.withBlock(particle, particlefilter$blockId(block.getState())) : particle;
-            boolean hidden = blockHidden || rules && FilterRules.isParticleHidden(particle, key, x, y, z);
+            boolean hidden = rules && FilterRules.isParticleHidden(particle, key, x, y, z);
             // Recorded even when hidden, so scans can list hidden particles too.
             if (scanning) ParticleScan.record(key, true, x, y, z, hidden);
             if (hidden) {
@@ -95,8 +90,7 @@ public abstract class ParticleEngineMixin {
 
     @Inject(method = "destroy(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V", at = @At("HEAD"), cancellable = true)
     private void particlefilter$filterBreaking(BlockPos pos, BlockState state, CallbackInfo ci) {
-        if (FilterRules.isBlockHidden(state)) ci.cancel();
-        else BREAKING_BLOCK.set(particlefilter$blockId(state));
+        particlefilter$startBreaking(state, ci);
     }
 
     @Inject(method = "destroy(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V", at = @At("RETURN"))
@@ -107,9 +101,18 @@ public abstract class ParticleEngineMixin {
     @Inject(method = "crack(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)V", at = @At("HEAD"), cancellable = true)
     private void particlefilter$filterMining(BlockPos pos, Direction side, CallbackInfo ci) {
         if (level == null) return;
-        BlockState state = level.getBlockState(pos);
-        if (FilterRules.isBlockHidden(state)) ci.cancel();
-        else BREAKING_BLOCK.set(particlefilter$blockId(state));
+        particlefilter$startBreaking(level.getBlockState(pos), ci);
+    }
+
+    /**
+     * Skips breaking or mining particles entirely when the rules hide everything made from the block everywhere,
+     * unless a scan is recording them; otherwise names the block for the particles added meanwhile.
+     */
+    @Unique
+    private static void particlefilter$startBreaking(BlockState state, CallbackInfo ci) {
+        String block = particlefilter$blockId(state);
+        if (!ParticleScan.isRunning() && FilterRules.hidesEverythingFrom(block)) ci.cancel();
+        else BREAKING_BLOCK.set(block);
     }
 
     @Inject(method = "crack(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)V", at = @At("RETURN"))

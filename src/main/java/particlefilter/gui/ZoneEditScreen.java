@@ -138,7 +138,7 @@ public class ZoneEditScreen extends PfScreen {
         Set<String> listed = new LinkedHashSet<>(zone.particles);
         listed.addAll(zone.disabledParticles);
         for (String particle : listed) {
-            rows.add(entryRow(ParticleScan.displayName(particle), particle, particle.contains(":") ? Theme.TYPED : Theme.UNTYPED, false,
+            rows.add(entryRow(RuleNames.of(particle), particle, particle.contains(":") ? Theme.TYPED : Theme.UNTYPED, false,
                 () -> zone.particles.contains(particle), on -> PfConfig.setZoneEntryOn(zone, particle, on),
                 () -> PfConfig.setHiddenInZone(zone, particle, false), null));
         }

@@ -1,6 +1,5 @@
 package particlefilter.filter;
 
-import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 import particlefilter.config.FilterMode;
 import particlefilter.config.Zone;
@@ -27,15 +26,18 @@ class FilterRulesTest {
         return zone;
     }
 
-    private static FilterRules.Snapshot compile(FilterMode mode, List<String> everywhere, List<String> blocks, Zone... zones) {
-        return FilterRules.compile(mode, everywhere, blocks, List.of(zones));
+    /** Pretends only minecraft:iron_ore is in c:ores, so tag rules run without the game. */
+    private static final ParticlePattern.TagCheck ORES = (block, tag) -> tag.equals("c:ores") && block.equals("minecraft:iron_ore");
+
+    private static FilterRules.Snapshot compile(FilterMode mode, List<String> everywhere, Zone... zones) {
+        return FilterRules.compile(mode, everywhere, List.of(zones), ORES);
     }
 
     // ---- particles everywhere and in zones ----
 
     @Test
     void particleHiddenEverywhereIsHiddenAnywhere() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(SMOKE), List.of());
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(SMOKE));
 
         assertTrue(rules.hidesParticle(SMOKE, 1000, -50, 1e6));
         assertFalse(rules.hidesParticle(FLAME, 0, 0, 0));
@@ -43,7 +45,7 @@ class FilterRulesTest {
 
     @Test
     void zoneParticleIsHiddenOnlyInsideTheZone() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of(), zone(FLAME));
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), zone(FLAME));
 
         assertTrue(rules.hidesParticle(FLAME, 2, 2, 2));
         assertFalse(rules.hidesParticle(FLAME, 5, 2, 2));
@@ -57,7 +59,7 @@ class FilterRulesTest {
 
     @Test
     void ruleForOneBlockHidesOnlyThatBlocksParticles() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(DUST_STONE), List.of());
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(DUST_STONE));
 
         assertTrue(rules.hidesParticle(DUST_STONE, 0, 0, 0));
         assertFalse(rules.hidesParticle(DUST_DIRT, 0, 0, 0));
@@ -66,7 +68,7 @@ class FilterRulesTest {
 
     @Test
     void ruleForTheParticleHidesItFromEveryBlock() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of("minecraft:block"), List.of());
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of("minecraft:block"));
 
         assertTrue(rules.hidesParticle(DUST_STONE, 0, 0, 0));
         assertTrue(rules.hidesParticle(DUST_DIRT, 0, 0, 0));
@@ -74,7 +76,7 @@ class FilterRulesTest {
 
     @Test
     void zoneRuleForOneBlockStaysInsideTheZone() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of(), zone(DUST_STONE));
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), zone(DUST_STONE));
 
         assertTrue(rules.hidesParticle(DUST_STONE, 2, 2, 2));
         assertFalse(rules.hidesParticle(DUST_STONE, 5, 2, 2));
@@ -83,7 +85,7 @@ class FilterRulesTest {
 
     @Test
     void zoneRuleForTheParticleCoversEveryBlockInsideIt() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of(), zone("minecraft:block"));
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), zone("minecraft:block"));
 
         assertTrue(rules.hidesParticle(DUST_DIRT, 2, 2, 2));
         assertFalse(rules.hidesParticle(DUST_DIRT, 5, 2, 2));
@@ -94,7 +96,7 @@ class FilterRulesTest {
         // The compiled box and Zone.contains (used for outlines and the menu) must agree on every edge.
         Zone zone = zone(FLAME);
         zone.setBox(-3, 60, 7, 5, 2, 4);
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of(), zone);
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), zone);
         double[] xs = {-3.001, -3, -0.5, 1.999, 2};
         double[] ys = {59.999, 60, 61.999, 62};
         double[] zs = {6.999, 7, 10.999, 11};
@@ -109,7 +111,7 @@ class FilterRulesTest {
         Zone off = zone();
         off.disabledParticles = new ArrayList<>(List.of(FLAME));
 
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of(), off);
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), off);
 
         assertEquals(List.of(), rules.zones());
         assertFalse(rules.hasParticleRules());
@@ -120,94 +122,116 @@ class FilterRulesTest {
         // Particles may spawn off the client thread while the menu edits the config, so the snapshot copies.
         List<String> everywhere = new ArrayList<>(List.of(SMOKE));
         Zone zone = zone(FLAME);
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, everywhere, List.of(), zone);
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, everywhere, zone);
 
         everywhere.add(FLAME);
         zone.particles.add(SMOKE);
 
         assertFalse(rules.hidesParticle(FLAME, 100, 100, 100));
-        assertFalse(rules.particles().contains(FLAME));
-        assertEquals(Set.of(FLAME), rules.zones().get(0).particles());
+        assertFalse(rules.everywhere().exact().contains(FLAME));
+        assertEquals(Set.of(FLAME), rules.zones().get(0).rules().exact());
+    }
+
+    // ---- groups: wildcards and tags ----
+
+    private static final String TERRAIN = "net.minecraft.client.particle.TerrainParticle";
+
+    @Test
+    void modWildcardHidesEveryParticleOfThatMod() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of("geore:*"));
+
+        assertTrue(rules.hidesParticle("geore:sparkle", 0, 0, 0));
+        assertFalse(rules.hidesParticle(SMOKE, 0, 0, 0));
+        assertFalse(rules.hidesParticle("minecraft:block@geore:ruby_ore", 0, 0, 0));
+    }
+
+    @Test
+    void everythingFromAModsBlocks() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of("*@geore:*"));
+
+        assertTrue(rules.hidesParticle("minecraft:block@geore:ruby_ore", 0, 0, 0));
+        assertTrue(rules.hidesParticle(TERRAIN + "@geore:ruby_ore", 0, 0, 0));
+        assertFalse(rules.hidesParticle(TERRAIN + "@minecraft:stone", 0, 0, 0));
+        assertTrue(rules.everywhere().hidesEverythingFrom("geore:ruby_ore", ORES));
+        assertFalse(rules.everywhere().hidesEverythingFrom("minecraft:stone", ORES));
+    }
+
+    @Test
+    void oneParticleFromATagsBlocks() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of("minecraft:block@#c:ores"));
+
+        assertTrue(rules.hidesParticle("minecraft:block@minecraft:iron_ore", 0, 0, 0));
+        assertFalse(rules.hidesParticle(TERRAIN + "@minecraft:iron_ore", 0, 0, 0));
+        assertFalse(rules.hidesParticle("minecraft:block@minecraft:stone", 0, 0, 0));
+        assertFalse(rules.everywhere().hidesEverythingFrom("minecraft:iron_ore", ORES), "only one particle from it is hidden");
+    }
+
+    @Test
+    void groupInAZoneStaysInsideTheZone() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), zone("*@#c:ores"));
+
+        assertTrue(rules.hidesParticle(TERRAIN + "@minecraft:iron_ore", 2, 2, 2));
+        assertFalse(rules.hidesParticle(TERRAIN + "@minecraft:iron_ore", 5, 2, 2));
+        assertFalse(rules.everywhere().hidesEverythingFrom("minecraft:iron_ore", ORES), "zones never skip breaking particles");
+    }
+
+    @Test
+    void entriesAreReadWithMissingNamespacesAndSpaces() {
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(" smoke ", "*@stone"));
+
+        assertTrue(rules.hidesParticle(SMOKE, 0, 0, 0));
+        assertTrue(rules.hidesParticle(TERRAIN + "@minecraft:stone", 0, 0, 0));
+    }
+
+    @Test
+    void invalidEntryOnlyMatchesItsExactName() {
+        // As before groups existed, so a hand-edited oddity keeps doing what it did.
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of("Weird Name"));
+
+        assertEquals(Set.of("Weird Name"), rules.everywhere().exact());
+        assertTrue(rules.hidesParticle("Weird Name", 0, 0, 0));
+        assertFalse(rules.hidesParticle(SMOKE, 0, 0, 0));
     }
 
     // ---- Active rules ----
 
-    private static final List<String> EVERYWHERE = List.of(SMOKE);
-    private static final List<String> BLOCKS = List.of("minecraft:stone");
+    private static final List<String> EVERYWHERE = List.of(SMOKE, "*@minecraft:stone");
+    private static final String STONE_DEBRIS = TERRAIN + "@minecraft:stone";
 
     @Test
     void allKeepsEveryRule() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, EVERYWHERE, BLOCKS, zone(FLAME));
+        FilterRules.Snapshot rules = compile(FilterMode.ALL, EVERYWHERE, zone(FLAME));
 
         assertTrue(rules.hidesParticle(SMOKE, 100, 100, 100));
+        assertTrue(rules.hidesParticle(STONE_DEBRIS, 100, 100, 100));
         assertTrue(rules.hidesParticle(FLAME, 1, 1, 1));
-        assertTrue(rules.hasBlockRules());
     }
 
     @Test
     void everywhereOnlyPausesZones() {
-        FilterRules.Snapshot rules = compile(FilterMode.EVERYWHERE, EVERYWHERE, BLOCKS, zone(FLAME));
+        FilterRules.Snapshot rules = compile(FilterMode.EVERYWHERE, EVERYWHERE, zone(FLAME));
 
         assertTrue(rules.hidesParticle(SMOKE, 100, 100, 100));
+        assertTrue(rules.everywhere().hidesEverythingFrom("minecraft:stone", ORES));
         assertFalse(rules.hidesParticle(FLAME, 1, 1, 1));
-        assertTrue(rules.hasBlockRules());
     }
 
     @Test
-    void zonesOnlyPausesEverywhereAndBlocks() {
-        FilterRules.Snapshot rules = compile(FilterMode.ZONES, EVERYWHERE, BLOCKS, zone(FLAME));
+    void zonesOnlyPausesEverywhereIncludingBlockGroups() {
+        FilterRules.Snapshot rules = compile(FilterMode.ZONES, EVERYWHERE, zone(FLAME));
 
         assertFalse(rules.hidesParticle(SMOKE, 100, 100, 100));
+        assertFalse(rules.hidesParticle(STONE_DEBRIS, 100, 100, 100));
+        assertFalse(rules.everywhere().hidesEverythingFrom("minecraft:stone", ORES));
         assertTrue(rules.hidesParticle(FLAME, 1, 1, 1));
-        assertFalse(rules.hasBlockRules());
     }
 
     @Test
     void noneHidesNothing() {
         // Also what holding the Show All Particles key compiles.
-        FilterRules.Snapshot rules = compile(FilterMode.NONE, EVERYWHERE, BLOCKS, zone(FLAME));
+        FilterRules.Snapshot rules = compile(FilterMode.NONE, EVERYWHERE, zone(FLAME));
 
         assertFalse(rules.hasParticleRules());
-        assertFalse(rules.hasBlockRules());
-    }
-
-    // ---- block entries ----
-
-    @Test
-    void blockIdsAndWholeModsAreSortedByKind() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of("minecraft:stone", "create:*"));
-
-        assertEquals(Set.of(ResourceLocation.tryParse("minecraft:stone")), rules.blockIds());
-        assertEquals(Set.of("create"), rules.blockNamespaces());
-        assertEquals(List.of(), rules.blockTags());
-    }
-
-    // Making a tag key loads Minecraft's registries; before 1.21 that needs the game started, so 1.20.1 can't run this.
-    //? if >1.20.1 {
-    @Test
-    void blockTagEntriesBecomeTags() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of("#minecraft:logs"));
-
-        assertEquals(1, rules.blockTags().size());
-        assertEquals(ResourceLocation.tryParse("minecraft:logs"), rules.blockTags().get(0).location());
-        assertEquals(Set.of(), rules.blockIds());
-    }
-    //?}
-
-    @Test
-    void spacesAroundEntriesAreIgnored() {
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of("  minecraft:stone ", " create:* "));
-
-        assertEquals(Set.of(ResourceLocation.tryParse("minecraft:stone")), rules.blockIds());
-        assertEquals(Set.of("create"), rules.blockNamespaces());
-    }
-
-    @Test
-    void invalidBlockEntriesAreSkipped() {
-        // Ids can't have capitals or spaces; the rest still apply.
-        FilterRules.Snapshot rules = compile(FilterMode.ALL, List.of(), List.of("Minecraft:Stone", "#not a tag", "minecraft:dirt"));
-
-        assertEquals(Set.of(ResourceLocation.tryParse("minecraft:dirt")), rules.blockIds());
-        assertEquals(List.of(), rules.blockTags());
+        assertFalse(rules.everywhere().hidesEverythingFrom("minecraft:stone", ORES));
     }
 }

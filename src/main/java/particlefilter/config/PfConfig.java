@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import particlefilter.filter.FilterRules;
+import particlefilter.filter.ParticlePattern;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -32,8 +33,10 @@ import java.util.Locale;
  * Persistent settings in config/particlefilter.json. Only used on the client thread; particle spawning reads the
  * compiled {@link FilterRules} snapshot instead.
  *
- * Particle entries are particle type ids ("ae2:energy_fx") or, for particles a mod creates without a type, the
- * particle's class name. Block entries are block ids, "namespace:*", or "#tag".
+ * Particle entries are {@link particlefilter.filter.ParticlePattern}s: particle type ids ("ae2:energy_fx") or, for
+ * particles a mod creates without a type, class names, optionally with the block they were made from after "@", and
+ * "mod:*", "*@block", "*@mod:*" or "*@#tag" for groups. Block entries from before 1.3.0 ("geore:*" under "Hide block")
+ * are read once and turned into "*@" entries ({@link #blockEntry}).
  *
  * Every kind of entry has two lists: switched on (applied) and switched off (kept in the menu but not applied).
  * Off entries live in separate fields so versions that don't know them never hide them.
@@ -76,13 +79,15 @@ public final class PfConfig {
     /** The saved settings, as stored in the file. */
     static final class Data {
         List<String> hiddenParticles = new ArrayList<>();
-        List<String> hiddenBlocks = new ArrayList<>();
+        /** Before 1.3.0: blocks whose particles were hidden. Read once, moved to [hiddenParticles], never written again. */
+        List<String> hiddenBlocks;
         List<Zone> zones = new ArrayList<>();
         /** Added in 1.1.0; older files lack it and older versions ignore it. */
         FilterMode mode = FilterMode.ALL;
         /** Added after 1.2.0, like the fields below: entries switched off in the menu. */
         List<String> disabledParticles = new ArrayList<>();
-        List<String> disabledBlocks = new ArrayList<>();
+        /** Like [hiddenBlocks], for those switched off; moved to [disabledParticles]. */
+        List<String> disabledBlocks;
         Integer scanSeconds = DEFAULT_SCAN_SECONDS;
         Integer sourceDistance = DEFAULT_SOURCE_DISTANCE;
         Integer mergePercent = DEFAULT_MERGE_PERCENT;
@@ -99,13 +104,13 @@ public final class PfConfig {
         /** Fills defaults for fields missing from older or hand-edited files and puts values back in range. */
         void normalize() {
             if (hiddenParticles == null) hiddenParticles = new ArrayList<>();
-            if (hiddenBlocks == null) hiddenBlocks = new ArrayList<>();
             if (zones == null) zones = new ArrayList<>();
             if (mode == null) mode = FilterMode.ALL; // missing or unknown value
             if (disabledParticles == null) disabledParticles = new ArrayList<>();
-            if (disabledBlocks == null) disabledBlocks = new ArrayList<>();
+            moveBlockEntries(hiddenBlocks, hiddenParticles);
+            moveBlockEntries(disabledBlocks, disabledParticles);
+            hiddenBlocks = disabledBlocks = null;
             disabledParticles.removeAll(hiddenParticles);
-            disabledBlocks.removeAll(hiddenBlocks);
             if (scanSeconds == null) scanSeconds = DEFAULT_SCAN_SECONDS;
             scanSeconds = clampScanSeconds(scanSeconds);
             if (sourceDistance == null) sourceDistance = DEFAULT_SOURCE_DISTANCE;
@@ -122,6 +127,26 @@ public final class PfConfig {
             if (window != null && !window.valid()) window = null;
             zones.forEach(Zone::normalize);
         }
+
+        /** Adds each block entry from before 1.3.0 to [particles] as the entry hiding everything made from it. */
+        private static void moveBlockEntries(List<String> blocks, List<String> particles) {
+            if (blocks == null) return;
+            for (String block : blocks) {
+                if (block == null || block.isBlank()) continue;
+                String entry = blockEntry(block);
+                if (!particles.contains(entry)) particles.add(entry);
+            }
+        }
+    }
+
+    /**
+     * The entry hiding every particle made from [block]: a block id, "mod:*" or "#tag" ("*@minecraft:stone"). Blocks
+     * that aren't valid are kept as written after "*@", so they stay listed and can be fixed or deleted.
+     */
+    public static String blockEntry(String block) {
+        String entry = "*@" + block.trim();
+        ParticlePattern pattern = ParticlePattern.parse(entry);
+        return pattern == null ? entry : pattern.toString();
     }
 
     /**
@@ -534,31 +559,6 @@ public final class PfConfig {
     /** Switches an Everywhere entry on or off, keeping it listed. */
     public static void setEverywhereOn(String particle, boolean on) {
         setOn(data.hiddenParticles, data.disabledParticles, particle, on);
-    }
-
-    // ---- block breaking/mining/dust particles ----
-
-    public static List<String> hiddenBlocks() {
-        return List.copyOf(data.hiddenBlocks);
-    }
-
-    public static List<String> disabledBlocks() {
-        return List.copyOf(data.disabledBlocks);
-    }
-
-    /** True if [entry] is listed and switched on. */
-    public static boolean hasBlockEntry(String entry) {
-        return data.hiddenBlocks.contains(entry);
-    }
-
-    /** Hiding adds [entry] (or switches it back on); showing deletes the entry. */
-    public static void setBlockHidden(String entry, boolean hidden) {
-        if (hidden) hide(data.hiddenBlocks, data.disabledBlocks, entry);
-        else remove(data.hiddenBlocks, data.disabledBlocks, entry);
-    }
-
-    public static void setBlockOn(String entry, boolean on) {
-        setOn(data.hiddenBlocks, data.disabledBlocks, entry, on);
     }
 
     // ---- zones ----

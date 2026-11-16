@@ -160,13 +160,14 @@ public final class ParticleFilter {
         BlockState state = mc.level.getBlockState(target.get());
         String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         Component name = state.getBlock().getName();
-        if (FilterRules.isBlockHidden(state) && !PfConfig.hasBlockEntry(id)) {
+        String entry = PfConfig.blockEntry(id);
+        if (FilterRules.hidesEverythingFrom(id) && !PfConfig.isHiddenEverywhere(entry)) {
             // Hidden by a wildcard or tag entry; toggling the exact id would do nothing.
             player.displayClientMessage(Component.translatable("particlefilter.block.by_rule", name).withStyle(ChatFormatting.YELLOW), true);
             return;
         }
-        boolean hide = !PfConfig.hasBlockEntry(id);
-        PfConfig.setBlockHidden(id, hide);
+        boolean hide = !PfConfig.isHiddenEverywhere(entry);
+        PfConfig.setHiddenEverywhere(entry, hide);
         Component message = Component.translatable(hide ? "particlefilter.block.hidden" : "particlefilter.block.shown", name);
         if (hide && !PfConfig.mode().global) {
             // Saved, but not applied until Active rules includes it again.

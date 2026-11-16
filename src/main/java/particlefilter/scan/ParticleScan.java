@@ -8,6 +8,7 @@ import net.minecraft.world.phys.Vec3;
 import particlefilter.ParticleFilter;
 import particlefilter.config.PfConfig;
 import particlefilter.config.Zone;
+import particlefilter.filter.FilterRules;
 import particlefilter.filter.ParticleKey;
 
 import java.util.ArrayList;
@@ -280,21 +281,23 @@ public final class ParticleScan {
     }
 
     /**
-     * Names of the rules hiding [particle] around [spawns] right now: "Everywhere" and zone names. A rule for the
-     * particle without its block counts too ({@link ParticleKey}).
+     * Names of the rules hiding [particle] around [spawns] right now: "Everywhere" and zone names. Rules for groups it
+     * belongs to count too, such as the particle from any block or a mod's particles ({@link FilterRules#entryMatches}).
      */
     public static List<String> hiddenBy(String particle, AABB spawns) {
-        String base = ParticleKey.base(particle);
         List<String> by = new ArrayList<>();
-        if (PfConfig.isHiddenEverywhere(particle) || PfConfig.isHiddenEverywhere(base)) {
+        if (anyMatches(PfConfig.hiddenParticles(), particle)) {
             by.add(Component.translatable("particlefilter.scan.col_everywhere").getString());
         }
         for (Zone zone : PfConfig.zonesHere()) {
-            if ((zone.particles.contains(particle) || zone.particles.contains(base)) && zone.box().intersects(spawns.inflate(0.5))) {
-                by.add("\"" + zone.name + "\"");
-            }
+            if (anyMatches(zone.particles, particle) && zone.box().intersects(spawns.inflate(0.5))) by.add("\"" + zone.name + "\"");
         }
         return by;
+    }
+
+    private static boolean anyMatches(List<String> entries, String particle) {
+        for (String entry : entries) if (FilterRules.entryMatches(entry, particle)) return true;
+        return false;
     }
 
     /** Short display name: see {@link ParticleKey#displayName}. */
