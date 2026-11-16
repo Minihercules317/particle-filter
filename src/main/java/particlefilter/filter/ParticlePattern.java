@@ -133,6 +133,48 @@ public record ParticlePattern(String particle, String block) {
         return id.length() > namespace.length() && id.startsWith(namespace) && id.charAt(namespace.length()) == ':';
     }
 
+    /**
+     * True if every particle [other] matches, this matches too, now and for particles not yet seen: "geore:*" covers
+     * "geore:sparkle", "*@geore:*" covers "minecraft:block@geore:ruby_ore". A tag covers a block id in it ([tags]), but
+     * never a mod's blocks or another tag.
+     */
+    public boolean covers(ParticlePattern other, TagCheck tags) {
+        if (!coversParticle(other)) return false;
+        if (block == null) return true;
+        if (other.block == null) return false;
+        if (block.equals(other.block)) return true;
+        boolean otherIsBlock = other.blockNamespace() == null && other.blockTag() == null;
+        String namespace = blockNamespace();
+        if (namespace != null) return otherIsBlock && inNamespace(other.block, namespace);
+        String tag = blockTag();
+        return tag != null && otherIsBlock && tags.inTag(other.block, tag);
+    }
+
+    private boolean coversParticle(ParticlePattern other) {
+        if (particle.equals(ANY)) return true;
+        if (other.particle.equals(ANY)) return false;
+        String namespace = particleNamespace();
+        if (namespace == null) return particle.equals(other.particle);
+        String otherNamespace = other.particleNamespace();
+        return otherNamespace != null ? otherNamespace.equals(namespace) : inNamespace(other.particle, namespace);
+    }
+
+    /**
+     * True if the entry [rule] covers the entry [entry] ({@link #covers}), including an entry equal to it. Entries that
+     * aren't valid patterns only cover themselves.
+     */
+    public static boolean covers(String rule, String entry, TagCheck tags) {
+        if (rule.equals(entry)) return true;
+        ParticlePattern a = parse(rule), b = parse(entry);
+        return a != null && b != null && a.covers(b, tags);
+    }
+
+    /** True if [entry] matches the particle [key]; an entry that isn't a valid pattern only matches its own name. */
+    public static boolean entryMatches(String entry, String key, TagCheck tags) {
+        ParticlePattern pattern = parse(entry);
+        return pattern == null ? entry.equals(key) : pattern.matches(key, tags);
+    }
+
     /** The entry as saved: "particle" or "particle@block". */
     @Override
     public String toString() {

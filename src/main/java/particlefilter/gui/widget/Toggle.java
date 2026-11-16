@@ -15,7 +15,8 @@ import java.util.function.Consumer;
 
 /**
  * A slim on/off switch: a thin track with a round knob that slides across when flipped. With a label, the label sits
- * to the right and is part of the clickable area.
+ * to the right and is part of the clickable area. A switch for a group can show "partly on" ({@link #partial}): the
+ * knob rests in the middle, and flipping it switches the whole group on.
  */
 public class Toggle extends AbstractButton {
 
@@ -29,6 +30,7 @@ public class Toggle extends AbstractButton {
     private final Anim hover = new Anim(0);
     private final boolean labelled;
     private boolean value;
+    private boolean partial;
 
     /** [name] is only narrated; the switch shows no text. */
     public Toggle(int x, int y, boolean value, Component name, Consumer<Boolean> onChange) {
@@ -58,15 +60,23 @@ public class Toggle extends AbstractButton {
         return value;
     }
 
+    /** Shows the switch as partly on while it is off: some of what it stands for is on. */
+    public Toggle partial(boolean partial) {
+        this.partial = partial && !value;
+        if (this.partial) knob.set(0.5f);
+        return this;
+    }
+
     @Override
     public void onPress() {
         value = !value;
+        partial = false;
         onChange.accept(value);
     }
 
     @Override
     protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        float t = knob.to(value ? 1 : 0, 18);
+        float t = knob.to(value ? 1 : partial ? 0.5f : 0, 18);
         float h = hover.to(active && isHoveredOrFocused() ? 1 : 0, 16);
         int x = getX(), y = getY();
         int trackOff = Theme.mix(0xFF3A3F48, 0xFF4A505B, h);

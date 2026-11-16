@@ -16,12 +16,20 @@ import particlefilter.gui.widget.ScrollPanel.Row;
 import particlefilter.gui.widget.Slider;
 import particlefilter.gui.widget.Toggle;
 import particlefilter.render.ZoneRenderer;
+import particlefilter.filter.FilterRules;
+import particlefilter.filter.ParticleKey;
+import particlefilter.filter.ParticlePattern;
+import particlefilter.gui.RuleNames;
+import particlefilter.loader.ModNames;
 import particlefilter.scan.FittedZones;
 import particlefilter.scan.ParticleScan;
+import particlefilter.scan.ResultTree;
 import particlefilter.scan.ZoneFit;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntConsumer;
 
 import static particlefilter.gui.PfScreen.CARD_DOT_X;
@@ -77,6 +85,8 @@ public class ScanPage extends Page {
     private static final int COUNT_GAP = 8;
     /** Smallest gap between a result row's name and its count. */
     private static final int NAME_GAP = 7;
+    /** How far each level of the tree is indented. */
+    private static final int INDENT = 10;
     /** Gap between the Here switch and the number of zones beside it. */
     private static final int ZONE_COUNT_GAP = 3;
     /** Width of a grow notice's Grow to fit button. */
@@ -106,8 +116,8 @@ public class ScanPage extends Page {
     private final List<PlacedOption> options = new ArrayList<>();
     /** Top of the list, below the controls and the column labels; set in [init]. */
     private int listTop;
-    /** Particle of the row hovered this frame (the list paints before {@link #render}), for the Here line and outlines. */
-    private String hoveredParticle;
+    /** Row hovered this frame (the list paints before {@link #render}), for the Here line and outlines. */
+    private ResultTree.Node hoveredNode;
     /** Set while a notice is hovered this frame; it sets the outlines itself. */
     private boolean noticeHovered;
 
@@ -359,7 +369,19 @@ public class ScanPage extends Page {
         }
     }
 
-    // ---------------------------------------------------------------- Results
+    // ---------------------------------------------------------------- Results: a tree of folders
+
+    /** Folders the player opened or closed, by {@link ResultTree.Node#id}; the rest use {@link #openByDefault}. */
+    private static final Map<String, Boolean> opened = new HashMap<>();
+
+    /** Mod folders and Other start open, so the particles show; the folders inside them start closed. */
+    private static boolean openByDefault(ResultTree.Node node) {
+        return node.kind == ResultTree.Kind.MOD || node.kind == ResultTree.Kind.OTHER;
+    }
+
+    private static boolean isOpen(ResultTree.Node node) {
+        return opened.getOrDefault(node.id, openByDefault(node));
+    }
 
     /** Left edge of switch column [i], from the list's left. */
     private int column(int i) {
@@ -367,78 +389,165 @@ public class ScanPage extends Page {
     }
 
     /**
-     * One row per particle, those still appearing first, with Everywhere and Here switches. Below a row, a notice when
-     * it has more sources than Here makes zones for, or when a zone hiding it missed spots where it appeared.
+     * The results as a tree: a folder per mod (its particles, and what its blocks made), then Other. Open folders list
+     * what is in them, indented. Below a particle, a notice when it has more sources than Here makes zones for, or when
+     * a zone hiding it missed spots where it appeared.
      */
     private List<Row> rows() {
         List<Row> rows = new ArrayList<>();
         List<ParticleScan.Result> results = ParticleScan.results();
+        List<ResultTree.Item> items = results.stream().map(r -> new ResultTree.Item(r.particle(), r.count(), r.allHidden())).toList();
         int most = results.stream().mapToInt(ParticleScan.Result::count).max().orElse(1);
-        boolean fitted = ParticleScan.hereZone() == null;
-        for (ParticleScan.Result result : results) {
-            String particle = result.particle();
-            rows.add(resultRow(result, most));
-            if (fitted && FittedZones.hasMoreSources(particle) && !PfConfig.isHiddenEverywhere(particle)) {
-                int sources = FittedZones.sourcesOf(particle).size();
-                rows.add(noticeRow(Component.translatable("particlefilter.scan.many_sources", ParticleScan.displayName(particle), sources, PfConfig.maxZones()),
-                    noticeTextRight(), () -> ZoneRenderer.previewMore = ParticleScan.previewFor(particle)));
-            }
-            FittedZones.Growth growth = FittedZones.growthFor(particle);
-            if (growth != null) {
-                rows.add(growRow(Component.translatable("particlefilter.scan.grow_notice", growth.zone().name, ParticleScan.displayName(particle)),
-                    growTooltip(growth.zone(), growth.box()), () -> FittedZones.grow(growth), () -> {
-                        ZoneRenderer.highlighted = growth.zone();
-                        ZoneRenderer.preview = growth.box().aabb();
-                    }));
-            }
-        }
+        for (ResultTree.Node node : ResultTree.build(items)) addRows(rows, node, null, 0, most);
         return rows;
     }
 
+    private void addRows(List<Row> rows, ResultTree.Node node, ResultTree.Kind parent, int depth, int most) {
+        ParticlePattern.TagCheck tags = FilterRules.tags();
+        ResultTree.Coverage everywhere = ResultTree.coverage(node, key -> PfConfig.hiddenParticles(), tags);
+        rows.add(nodeRow(node, parent, depth, most, everywhere, tags));
+        if (node.isFolder()) {
+            if (isOpen(node)) node.children.forEach(child -> addRows(rows, child, node.kind, depth + 1, most));
+            return;
+        }
+        String particle = node.name;
+        if (ParticleScan.hereZone() == null && FittedZones.hasMoreSources(particle) && everywhere.state() != ResultTree.State.ON) {
+            int sources = FittedZones.sourcesOf(particle).size();
+            rows.add(noticeRow(depth, Component.translatable("particlefilter.scan.many_sources", ParticleScan.displayName(particle), sources, PfConfig.maxZones()),
+                noticeTextRight(), () -> ZoneRenderer.previewMore = ParticleScan.previewFor(List.of(particle))));
+        }
+        FittedZones.Growth growth = FittedZones.growthFor(particle);
+        if (growth != null) {
+            rows.add(growRow(depth, Component.translatable("particlefilter.scan.grow_notice", growth.zone().name, ParticleScan.displayName(particle)),
+                growTooltip(growth.zone(), growth.box()), () -> FittedZones.grow(growth), () -> {
+                    ZoneRenderer.highlighted = growth.zone();
+                    ZoneRenderer.preview = growth.box().aabb();
+                }));
+        }
+    }
+
     /**
-     * A result row: dot, name, a bar for how often it spawned next to [most], the count, and the switches. Dimmed when
-     * the rules hid every one. With Zone options open, the number of zones Here uses sits beside its switch.
+     * A folder or particle row, indented by [depth]: a folder has an arrow (click the row to open or close it), a
+     * particle a dot and a bar for how often it spawned next to [most]. Then the count and the Everywhere and Here
+     * switches, which show partly on when only some of a folder's particles are hidden, and can't be switched off while
+     * something outside the folder (such as a mod folder above) hides it all. Dimmed when the rules hid every one.
      */
-    private Row resultRow(ParticleScan.Result result, int most) {
+    private Row nodeRow(ResultTree.Node node, ResultTree.Kind parent, int depth, int most, ResultTree.Coverage everywhere, ParticlePattern.TagCheck tags) {
         var font = screen.font();
-        String particle = result.particle();
-        boolean dim = result.allHidden();
+        boolean folder = node.isFolder();
+        boolean dim = node.allHidden;
+        int indent = depth * INDENT;
         int firstX = column(0);
-        String countText = "×" + result.count();
+        String countText = "×" + node.count;
         int countRight = firstX - COUNT_GAP;
-        var name = screen.wrap(ParticleScan.displayName(particle), countRight - font.width(countText) - NAME_GAP - CARD_TEXT_X);
-        int color = result.typed() ? Theme.TYPED : Theme.UNTYPED;
-        float share = result.count() / (float) Math.max(1, most);
-        boolean counts = PfConfig.zoneOptionsOpen() && ParticleScan.hereZone() == null;
+        var name = screen.wrap(label(node, parent), countRight - font.width(countText) - NAME_GAP - CARD_TEXT_X - indent);
+        int color = folder ? Theme.TEXT_DIM : ParticleKey.isTyped(node.name) ? Theme.TYPED : Theme.UNTYPED;
+        float share = node.count / (float) Math.max(1, most);
+        boolean hereColumn = ParticleScan.target() != null && !node.rules.isEmpty();
+        ResultTree.Coverage here = hereColumn ? ResultTree.coverage(node, ParticleScan::hereEntries, tags) : null;
+        boolean counts = hereColumn && PfConfig.zoneOptionsOpen() && ParticleScan.hereZone() == null;
         Row row = new Row(PfScreen.textHeight(name.size()) + 2 * RESULT_TEXT_Y, (g, x, y, w, h, hovered) -> {
-            Theme.rect(g, x, y, w, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
-            // How often it spawned compared to the most frequent particle.
-            g.fill(x + CARD_TEXT_X, y + h - 3, x + CARD_TEXT_X + Math.max(2, Math.round((countRight - CARD_TEXT_X) * share)), y + h - 2, Theme.fade(color, dim ? 0.25f : 0.55f));
-            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, dim ? Theme.fade(color, 0.45f) : color);
-            screen.drawLines(g, name, x + CARD_TEXT_X, y + RESULT_TEXT_Y, dim ? Theme.TEXT_DIM : Theme.TEXT);
+            Theme.rect(g, x + indent, y, w - indent, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : folder ? Theme.FOLDER : Theme.CARD);
+            if (folder) {
+                Theme.text(g, font, isOpen(node) ? "▾" : "▸", x + indent + CARD_DOT_X - 1, y + (h - 8) / 2, Theme.TEXT_DIM);
+            } else {
+                // How often it spawned compared to the most frequent particle.
+                g.fill(x + indent + CARD_TEXT_X, y + h - 3, x + indent + CARD_TEXT_X + Math.max(2, Math.round((countRight - indent - CARD_TEXT_X) * share)), y + h - 2,
+                    Theme.fade(color, dim ? 0.25f : 0.55f));
+                Theme.dot(g, x + indent + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, dim ? Theme.fade(color, 0.45f) : color);
+            }
+            screen.drawLines(g, name, x + indent + CARD_TEXT_X, y + RESULT_TEXT_Y, dim ? Theme.TEXT_DIM : Theme.TEXT);
             Theme.text(g, font, countText, x + countRight - font.width(countText), y + (h - 8) / 2, Theme.TEXT_DIM);
             if (counts) {
-                int zones = ParticleScan.hereZoneCount(particle);
+                int zones = ParticleScan.hereZoneCount(node.rules);
                 // Cyan like the outlines previewed on hover, until it is switched on.
                 if (zones > 0) Theme.text(g, font, Integer.toString(zones), x + column(1) + (COLUMN + Toggle.WIDTH) / 2 + ZONE_COUNT_GAP,
-                    y + (h - 8) / 2, ParticleScan.isHiddenHere(particle) ? Theme.TEXT_DIM : Theme.NEW_ZONE);
+                    y + (h - 8) / 2, here.state() == ResultTree.State.ON ? Theme.TEXT_DIM : Theme.NEW_ZONE);
             }
-            if (hovered) hoveredParticle = particle;
-        }).tooltip(rowTooltip(result));
-        row.add(new Toggle(0, 0, PfConfig.isHiddenEverywhere(particle), Component.translatable("particlefilter.scan.col_everywhere"),
-                hidden -> PfConfig.setHiddenEverywhere(particle, hidden))
-                .tooltip(Component.translatable("particlefilter.scan.everywhere.tooltip", ParticleScan.displayName(particle))),
-            column(0) + (COLUMN - Toggle.WIDTH) / 2);
-        row.add(new Toggle(0, 0, ParticleScan.isHiddenHere(particle), Component.translatable("particlefilter.scan.col_zone"), hidden -> {
-                ParticleScan.setHiddenHere(particle, hidden);
-                screen.refreshNextTick(); // the Here line, buttons and notices follow zones created or removed
-            }).tooltip(hereTooltip(particle)),
-            column(1) + (COLUMN - Toggle.WIDTH) / 2);
+            if (hovered) hoveredNode = node;
+        }).tooltip(folder ? folderTooltip(node, parent) : rowTooltip(ParticleScan.result(node.name)));
+        if (folder) row.onClick(() -> {
+            opened.put(node.id, !isOpen(node));
+            screen.replaceRows(rows());
+        });
+        if (node.rules.isEmpty()) return row;
+        row.add(columnToggle(node, everywhere, "particlefilter.scan.col_everywhere", everywhereTooltip(node, everywhere),
+            on -> ParticleScan.setEverywhere(node, on)), column(0) + (COLUMN - Toggle.WIDTH) / 2);
+        if (hereColumn) {
+            row.add(columnToggle(node, here, "particlefilter.scan.col_zone", hereTooltip(node, here),
+                on -> ParticleScan.setHere(node, on)), column(1) + (COLUMN - Toggle.WIDTH) / 2);
+        }
         return row;
+    }
+
+    /** A column's switch for [node]: on, partly on or off as [coverage] says, and locked while it can't go off. */
+    private Toggle columnToggle(ResultTree.Node node, ResultTree.Coverage coverage, String nameKey, Component tooltip, java.util.function.Consumer<Boolean> set) {
+        Toggle toggle = new Toggle(0, 0, coverage.state() == ResultTree.State.ON, Component.translatable(nameKey), on -> {
+            set.accept(on);
+            screen.refreshNextTick(); // folders above and below, the Here line, buttons and notices follow
+        }).partial(coverage.state() == ResultTree.State.PARTIAL);
+        toggle.active = !coverage.locked();
+        return toggle.tooltip(tooltip);
+    }
+
+    /** How a row reads: a mod's name, "Made from GeOre blocks", a particle, or inside a particle's folder its block. */
+    private static String label(ResultTree.Node node, ResultTree.Kind parent) {
+        return switch (node.kind) {
+            case MOD -> ModNames.of(node.name);
+            case MOD_BLOCKS -> Component.translatable("particlefilter.scan.group.made_from", ModNames.of(node.name)).getString();
+            case BLOCK_MOD -> Component.translatable("particlefilter.scan.group.mod_blocks", ModNames.of(node.name)).getString();
+            case OTHER -> Component.translatable("particlefilter.scan.group.other").getString();
+            case PARTICLE -> ParticleKey.displayName(node.name);
+            case LEAF -> {
+                String block = ParticleKey.block(node.name);
+                boolean underParticle = parent == ResultTree.Kind.PARTICLE || parent == ResultTree.Kind.BLOCK_MOD;
+                yield block != null && underParticle ? RuleNames.blockName(block) : ParticleKey.displayName(node.name);
+            }
+        };
+    }
+
+    /** What a folder holds and what its switches hide. */
+    private static Component folderTooltip(ResultTree.Node node, ResultTree.Kind parent) {
+        if (node.kind == ResultTree.Kind.OTHER) return Component.translatable("particlefilter.scan.group_other.tooltip", node.leaves.size(), node.count);
+        return Component.translatable("particlefilter.scan.group.tooltip", label(node, parent), node.leaves.size(), node.count, rulesText(node));
+    }
+
+    /** The entries a folder's switches add, by name: "All GeOre particles, Everything made from GeOre blocks". */
+    private static String rulesText(ResultTree.Node node) {
+        return String.join(", ", node.rules.stream().map(RuleNames::of).toList());
+    }
+
+    private static Component lockedTooltip(String columnKey, ResultTree.Coverage coverage) {
+        return Component.translatable(columnKey, String.join(", ", coverage.lockedBy().stream().map(RuleNames::of).toList()));
+    }
+
+    private static Component everywhereTooltip(ResultTree.Node node, ResultTree.Coverage coverage) {
+        if (coverage.locked()) return lockedTooltip("particlefilter.scan.locked_everywhere.tooltip", coverage);
+        if (!node.isFolder()) return Component.translatable("particlefilter.scan.everywhere.tooltip", ParticleScan.displayName(node.name));
+        return Component.translatable("particlefilter.scan.group_everywhere.tooltip", rulesText(node));
+    }
+
+    /** What Here's switch does for [node]: hide it in Here's zone, or in zones fitted to it, and how many. */
+    private static Component hereTooltip(ResultTree.Node node, ResultTree.Coverage coverage) {
+        if (coverage.locked()) return lockedTooltip("particlefilter.scan.locked_here.tooltip", coverage);
+        String name = node.isFolder() ? rulesText(node) : ParticleScan.displayName(node.name);
+        Zone zone = ParticleScan.hereZone();
+        if (zone != null) return Component.translatable(node.isFolder() ? "particlefilter.scan.group_zone.tooltip" : "particlefilter.scan.zone.tooltip", name, zone.name);
+        String key = node.isFolder() ? "particlefilter.scan.group_here_fitted.tooltip" : "particlefilter.scan.here_fitted.tooltip";
+        return Component.empty().append(Component.translatable(key, name)).append("\n").append(zoneCountText(node, coverage));
+    }
+
+    /** How many zones Here hides [node] in, or would if switched on. */
+    private static Component zoneCountText(ResultTree.Node node, ResultTree.Coverage here) {
+        int count = ParticleScan.hereZoneCount(node.rules);
+        String name = node.isFolder() ? rulesText(node) : ParticleScan.displayName(node.name);
+        String key = here.state() == ResultTree.State.ON ? "particlefilter.scan.here_count_on" : "particlefilter.scan.here_count_new";
+        return count == 1 ? Component.translatable(key + "_one", name) : Component.translatable(key, name, count);
     }
 
     /** The particle's id and kind, how many appeared and were hidden, where, and which rules hid them. */
     private static Component rowTooltip(ParticleScan.Result result) {
+        if (result == null) return Component.empty();
         String particle = result.particle();
         int appeared = result.count() - result.hiddenCount();
         String where = boxText(result.spawns());
@@ -457,22 +566,6 @@ public class ScanPage extends Page {
             + (int) Math.floor(box.maxX) + ", " + (int) Math.floor(box.maxY) + ", " + (int) Math.floor(box.maxZ);
     }
 
-    /** What the Here switch does for [particle]: hide it in Here's zone, or in zones fitted to it, and how many. */
-    private static Component hereTooltip(String particle) {
-        String name = ParticleScan.displayName(particle);
-        Zone zone = ParticleScan.hereZone();
-        if (zone != null) return Component.translatable("particlefilter.scan.zone.tooltip", name, zone.name);
-        return Component.empty().append(Component.translatable("particlefilter.scan.here_fitted.tooltip", name)).append("\n").append(zoneCountText(particle));
-    }
-
-    /** How many zones Here hides [particle] in, or would if switched on. */
-    private static Component zoneCountText(String particle) {
-        int count = ParticleScan.hereZoneCount(particle);
-        String name = ParticleScan.displayName(particle);
-        String key = ParticleScan.isHiddenHere(particle) ? "particlefilter.scan.here_count_on" : "particlefilter.scan.here_count_new";
-        return count == 1 ? Component.translatable(key + "_one", name) : Component.translatable(key, name, count);
-    }
-
     // ---------------------------------------------------------------- Notices
 
     /**
@@ -480,9 +573,9 @@ public class ScanPage extends Page {
      * Grow to fit button with [tip]. [grow] runs on click, then the page is rebuilt. [whileHovered] runs every frame the
      * card is hovered, to outline the grown zone.
      */
-    private Row growRow(Component text, Component tip, Runnable grow, Runnable whileHovered) {
+    private Row growRow(int depth, Component text, Component tip, Runnable grow, Runnable whileHovered) {
         int buttonX = screen.panel().contentWidth() - GROW_WIDTH - NOTICE_GAP;
-        Row row = noticeRow(text, buttonX - NOTICE_GAP, whileHovered);
+        Row row = noticeRow(depth, text, buttonX - NOTICE_GAP, whileHovered);
         row.add(screen.rowButton(Style.SECONDARY, Component.translatable("particlefilter.grow"), GROW_WIDTH, () -> {
             grow.run();
             screen.refreshNextTick();
@@ -490,13 +583,17 @@ public class ScanPage extends Page {
         return row;
     }
 
-    /** A notice card: a warning dot and [text] wrapped to end [textRight] px from the card's left edge. */
-    private Row noticeRow(Component text, int textRight, Runnable whileHovered) {
-        var lines = screen.wrap(text, textRight - CARD_TEXT_X);
+    /**
+     * A notice card under a particle, indented like it ([depth]): a warning dot and [text] wrapped to end [textRight]
+     * px from the list's left edge.
+     */
+    private Row noticeRow(int depth, Component text, int textRight, Runnable whileHovered) {
+        int indent = depth * INDENT;
+        var lines = screen.wrap(text, textRight - indent - CARD_TEXT_X);
         return new Row(PfScreen.textHeight(lines.size()) + 2 * NOTICE_TEXT_Y, (g, x, y, w, h, hovered) -> {
-            Theme.rect(g, x, y, w, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
-            Theme.dot(g, x + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, Theme.WARNING);
-            screen.drawLines(g, lines, x + CARD_TEXT_X, y + NOTICE_TEXT_Y, Theme.TEXT);
+            Theme.rect(g, x + indent, y, w - indent, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : Theme.CARD);
+            Theme.dot(g, x + indent + CARD_DOT_X, y + (h - DOT_SIZE) / 2, DOT_SIZE, Theme.WARNING);
+            screen.drawLines(g, lines, x + indent + CARD_TEXT_X, y + NOTICE_TEXT_Y, Theme.TEXT);
             if (hovered) {
                 noticeHovered = true;
                 whileHovered.run();
@@ -530,8 +627,8 @@ public class ScanPage extends Page {
         int cx = screen.cx(), cw = screen.cw();
         renderLengthAndRadius(g);
         renderOptionLabels(g);
-        String hovered = hoveredParticle;
-        hoveredParticle = null;
+        ResultTree.Node hovered = hoveredNode;
+        hoveredNode = null;
         boolean notice = noticeHovered;
         noticeHovered = false;
 
@@ -554,11 +651,13 @@ public class ScanPage extends Page {
         if (ParticleScan.target() == null) return;
         Zone zone = ParticleScan.hereZone();
         if (editZoneButton != null) editZoneButton.active = editableZone() != null;
+        ResultTree.Coverage hoveredHere = hovered == null || hovered.rules.isEmpty() ? null
+            : ResultTree.coverage(hovered, ParticleScan::hereEntries, FilterRules.tags());
         if (hovered != null) {
-            // The zones the hovered particle is in, or where Here would put them.
+            // The zones hiding the hovered row's particles, or where Here would put them.
             ZoneRenderer.highlighted = zone;
-            ZoneRenderer.highlightedMore = ParticleScan.zonesFor(hovered);
-            if (!ParticleScan.isHiddenHere(hovered)) ZoneRenderer.previewMore = ParticleScan.previewFor(hovered);
+            ZoneRenderer.highlightedMore = ParticleScan.zonesHiding(hovered);
+            if (hoveredHere != null && hoveredHere.state() != ResultTree.State.ON) ZoneRenderer.previewMore = ParticleScan.previewFor(hovered.rules);
         } else if (!notice) {
             // Where Here hides particles: its zone, the zones this scan made, or the scanned block where they start.
             ZoneRenderer.highlighted = zone;
@@ -568,7 +667,7 @@ public class ScanPage extends Page {
                 else ZoneRenderer.highlightedMore = made;
             }
         }
-        renderHereLine(g, mouseX, mouseY, zone, hovered, cw - FOOTER_BUTTONS_WIDTH - FOOTER_GAP);
+        renderHereLine(g, mouseX, mouseY, zone, hovered, hoveredHere, cw - FOOTER_BUTTONS_WIDTH - FOOTER_GAP);
     }
 
     /** Column headers above the list: PARTICLE on the left and one label per switch column on the right. */
@@ -585,7 +684,7 @@ public class ScanPage extends Page {
      * The line under the list saying where Here hides particles: an existing zone, the zones this scan made, or new
      * zones still to be made. With Zone options open, while a row is hovered, how many zones Here gives that particle.
      */
-    private void renderHereLine(GuiGraphics g, int mouseX, int mouseY, Zone zone, String hovered, int maxWidth) {
+    private void renderHereLine(GuiGraphics g, int mouseX, int mouseY, Zone zone, ResultTree.Node hovered, ResultTree.Coverage hoveredHere, int maxWidth) {
         Component text;
         Component tip;
         int color;
@@ -598,8 +697,8 @@ public class ScanPage extends Page {
             boolean capped = FittedZones.anyCapped();
             tip = Component.translatable("particlefilter.scan.zone_fitted.tooltip", Zone.MAX_SIZE);
             color = capped ? Theme.WARNING : Theme.NEW_ZONE;
-            if (hovered != null && PfConfig.zoneOptionsOpen() && ParticleScan.hereZoneCount(hovered) > 0) {
-                text = zoneCountText(hovered);
+            if (hoveredHere != null && PfConfig.zoneOptionsOpen() && ParticleScan.hereZoneCount(hovered.rules) > 0) {
+                text = zoneCountText(hovered, hoveredHere);
                 color = Theme.NEW_ZONE;
             } else if (capped) {
                 text = Component.translatable("particlefilter.scan.zone_capped");

@@ -12,6 +12,11 @@ public final class Anim {
         value = initial;
     }
 
+    /** Jumps to [value] without easing, e.g. for the state a widget is created in. */
+    public void set(float value) {
+        this.value = value;
+    }
+
     /** Moves toward [target] by the time passed since the last call; [speed] is roughly 1 / seconds to settle. */
     public float to(float target, float speed) {
         long now = Util.getMillis();

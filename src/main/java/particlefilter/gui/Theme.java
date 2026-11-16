@@ -16,6 +16,8 @@ public final class Theme {
     public static final int SIDEBAR = 0xF70C0E11;
     public static final int CARD = 0xFF1A1D23;
     public static final int CARD_HOVER = 0xFF22262D;
+    /** A folder of scan results: a shade darker than the particles in it. */
+    public static final int FOLDER = 0xFF15181D;
     public static final int CONTROL = 0xFF2A2F37;
     public static final int CONTROL_HOVER = 0xFF363C46;
     public static final int FIELD = 0xFF0E1013;

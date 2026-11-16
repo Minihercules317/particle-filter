@@ -127,4 +127,53 @@ class ParticlePatternTest {
         assertTrue(matches("minecraft:*@geore:*", "minecraft:block@geore:ruby_ore"));
         assertFalse(matches("minecraft:*@geore:*", TERRAIN + "@geore:ruby_ore"));
     }
+
+    // ---- one entry covering another ----
+
+    private static boolean covers(String rule, String entry) {
+        return ParticlePattern.covers(rule, entry, ORES);
+    }
+
+    @Test
+    void modWildcardCoversItsParticles() {
+        assertTrue(covers("geore:*", "geore:sparkle"));
+        assertTrue(covers("geore:*", "geore:sparkle@minecraft:stone"));
+        assertTrue(covers("geore:*", "geore:*@minecraft:stone"));
+        assertFalse(covers("geore:*", "minecraft:block@geore:ruby_ore"));
+        assertFalse(covers("geore:*", "*@geore:*"));
+        assertFalse(covers("geore:sparkle", "geore:*"), "narrower never covers wider");
+    }
+
+    @Test
+    void particleCoversItFromEveryBlock() {
+        assertTrue(covers("minecraft:block", "minecraft:block@minecraft:stone"));
+        assertTrue(covers("minecraft:block", "minecraft:block@geore:*"));
+        assertTrue(covers("minecraft:block", "minecraft:block@#c:ores"));
+        assertFalse(covers("minecraft:block@minecraft:stone", "minecraft:block"));
+    }
+
+    @Test
+    void anythingFromBlocksCoversEachParticleFromThem() {
+        assertTrue(covers("*@geore:*", "minecraft:block@geore:ruby_ore"));
+        assertTrue(covers("*@geore:*", "minecraft:block@geore:*"));
+        assertTrue(covers("*@geore:*", "*@geore:ruby_ore"));
+        assertFalse(covers("*@geore:*", "minecraft:block@minecraft:stone"));
+        assertFalse(covers("*@geore:*", "geore:sparkle"), "not made from a block");
+        assertFalse(covers("*@geore:*", "*@#c:ores"), "a tag may hold other mods' blocks");
+    }
+
+    @Test
+    void tagCoversTheBlocksInIt() {
+        assertTrue(covers("*@#c:ores", "*@geore:ruby_ore"));
+        assertTrue(covers("*@#c:ores", "minecraft:block@minecraft:iron_ore"));
+        assertFalse(covers("*@#c:ores", "*@minecraft:stone"));
+        assertFalse(covers("*@#c:ores", "*@geore:*"));
+    }
+
+    @Test
+    void entriesCoverThemselvesEvenWhenNotValid() {
+        assertTrue(covers("minecraft:smoke", "minecraft:smoke"));
+        assertTrue(covers("Weird Name", "Weird Name"));
+        assertFalse(covers("Weird Name", "minecraft:smoke"));
+    }
 }

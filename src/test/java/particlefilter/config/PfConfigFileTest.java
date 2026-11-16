@@ -232,4 +232,46 @@ class PfConfigFileTest {
             setPermissions(dir, "rwxr-xr-x");
         }
     }
+
+    // ---- hiding groups ----
+
+    @Test
+    void hidingAGroupDropsTheEntriesItCovers() throws IOException {
+        Path file = dir.resolve("particlefilter.json");
+        Files.writeString(file, """
+            {"hiddenParticles": ["geore:sparkle", "minecraft:smoke", "minecraft:block@geore:ruby_ore"],
+             "disabledParticles": ["geore:glint"]}
+            """);
+        PfConfig.load(file);
+
+        PfConfig.setHiddenEverywhere("geore:*", true);
+        PfConfig.setHiddenEverywhere("*@geore:*", true);
+
+        assertEquals(List.of("minecraft:smoke", "geore:*", "*@geore:*"), PfConfig.hiddenParticles());
+        assertEquals(List.of(), PfConfig.disabledParticles());
+    }
+
+    @Test
+    void hidingASwitchedOffEntrySwitchesItBackOn() throws IOException {
+        Path file = dir.resolve("particlefilter.json");
+        Files.writeString(file, "{\"disabledParticles\": [\"geore:*\"]}");
+        PfConfig.load(file);
+
+        PfConfig.setHiddenEverywhere("geore:*", true);
+
+        assertEquals(List.of("geore:*"), PfConfig.hiddenParticles());
+        assertEquals(List.of(), PfConfig.disabledParticles());
+    }
+
+    @Test
+    void showingAGroupDeletesWhatItOwns() throws IOException {
+        Path file = dir.resolve("particlefilter.json");
+        Files.writeString(file, "{\"hiddenParticles\": [\"geore:*\", \"minecraft:smoke\"], \"disabledParticles\": [\"geore:glint\"]}");
+        PfConfig.load(file);
+
+        PfConfig.showEverywhere(e -> e.startsWith("geore:"));
+
+        assertEquals(List.of("minecraft:smoke"), PfConfig.hiddenParticles());
+        assertEquals(List.of(), PfConfig.disabledParticles());
+    }
 }

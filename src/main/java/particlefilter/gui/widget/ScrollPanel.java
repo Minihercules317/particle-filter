@@ -39,6 +39,7 @@ public class ScrollPanel extends ContainerWidget {
         private final Painter painter;
         private final List<Placed> placed = new ArrayList<>();
         private Component tooltip;
+        private Runnable onClick;
 
         public Row(int height, Painter painter) {
             this(() -> height, painter);
@@ -69,6 +70,12 @@ public class ScrollPanel extends ContainerWidget {
             painter.paint(g, x, y, width, height, hovered);
         }
 
+        /** Runs when the row's empty space (not its widgets) is clicked, e.g. to open or close a folder. */
+        public Row onClick(Runnable onClick) {
+            this.onClick = onClick;
+            return this;
+        }
+
         /** Shown after a short hover over the row's empty space (not its widgets). */
         public Row tooltip(Component tooltip) {
             this.tooltip = tooltip;
@@ -88,6 +95,8 @@ public class ScrollPanel extends ContainerWidget {
     private boolean draggingBar;
     private Row tooltipRow;
     private long tooltipSince;
+    /** The row under the mouse, outside its widgets, when the panel was last drawn; clicks there go to the row. */
+    private Row clickableRow;
 
     public ScrollPanel(int x, int y, int width, int height, int gap) {
         super(x, y, width, height, Component.empty());
@@ -182,7 +191,8 @@ public class ScrollPanel extends ContainerWidget {
         }
         g.disableScissor();
         renderScrollbar(g, mouseX, mouseY);
-        updateRowTooltip(overWidget ? null : hoveredRow, now);
+        clickableRow = overWidget ? null : hoveredRow;
+        updateRowTooltip(clickableRow, now);
     }
 
     private void renderScrollbar(GuiGraphics g, int mouseX, int mouseY) {
@@ -220,7 +230,13 @@ public class ScrollPanel extends ContainerWidget {
             scrollToMouse(mouseY);
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        if (button == 0 && clickableRow != null && clickableRow.onClick != null) {
+            playDownSound(Minecraft.getInstance().getSoundManager());
+            clickableRow.onClick.run();
+            return true;
+        }
+        return false;
     }
 
     @Override

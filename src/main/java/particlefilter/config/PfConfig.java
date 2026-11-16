@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Predicate;
 
 /**
  * Persistent settings in config/particlefilter.json. Only used on the client thread; particle spawning reads the
@@ -515,8 +516,11 @@ public final class PfConfig {
 
     // ---- entry lists: hide adds or switches on, remove deletes, setOn moves between the on and off lists ----
 
+    /** Adds [entry] to [on]; narrower entries it covers ("geore:sparkle" under "geore:*") go, as they'd change nothing. */
     private static void hide(List<String> on, List<String> off, String entry) {
-        off.remove(entry);
+        ParticlePattern.TagCheck tags = FilterRules.tags();
+        on.removeIf(e -> !e.equals(entry) && ParticlePattern.covers(entry, e, tags));
+        off.removeIf(e -> ParticlePattern.covers(entry, e, tags));
         if (!on.contains(entry)) on.add(entry);
         changed();
     }
@@ -554,6 +558,13 @@ public final class PfConfig {
     public static void setHiddenEverywhere(String particle, boolean hidden) {
         if (hidden) hide(data.hiddenParticles, data.disabledParticles, particle);
         else remove(data.hiddenParticles, data.disabledParticles, particle);
+    }
+
+    /** Deletes every Everywhere entry [which] accepts, switched on or off, e.g. those a folder of scan results owns. */
+    public static void showEverywhere(Predicate<String> which) {
+        data.hiddenParticles.removeIf(which);
+        data.disabledParticles.removeIf(which);
+        changed();
     }
 
     /** Switches an Everywhere entry on or off, keeping it listed. */
@@ -639,6 +650,13 @@ public final class PfConfig {
     public static void setHiddenInZone(Zone zone, String particle, boolean hidden) {
         if (hidden) hide(zone.particles, zone.disabledParticles, particle);
         else remove(zone.particles, zone.disabledParticles, particle);
+    }
+
+    /** Deletes every entry of [zone] that [which] accepts, switched on or off. */
+    public static void showInZone(Zone zone, Predicate<String> which) {
+        zone.particles.removeIf(which);
+        zone.disabledParticles.removeIf(which);
+        changed();
     }
 
     public static void setZoneEntryOn(Zone zone, String particle, boolean on) {

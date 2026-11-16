@@ -199,8 +199,12 @@ public final class FilterRules {
      * entry that isn't a valid pattern only covers a particle with exactly that name.
      */
     public static boolean entryMatches(String entry, String key) {
-        ParticlePattern pattern = ParticlePattern.parse(entry);
-        return pattern == null ? entry.equals(key) : pattern.matches(key, snapshot.tags);
+        return ParticlePattern.entryMatches(entry, key, snapshot.tags);
+    }
+
+    /** Block tags as the compiled rules see them: from the game once compiled in a world. */
+    public static TagCheck tags() {
+        return snapshot.tags;
     }
 
     public static boolean hasParticleRules() {
