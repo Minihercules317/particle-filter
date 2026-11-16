@@ -221,9 +221,21 @@ public final class ResultTree {
      * How a node's switch shows, for one column. [state]: whether every particle in it is hidden, some, or none.
      * [locked]: switching it off wouldn't show any of them, because entries outside the group hide every one
      * ([lockedBy]), such as a switched-on mod folder above it. Entries outside the group that hide only some of its
-     * particles are in [lockedBy] too.
+     * particles are in [lockedBy] too. [asGroup]: every particle is hidden by one of the node's own rules, so it was
+     * switched on as a whole and the folders inside it are locked ({@link #inside}).
      */
-    public record Coverage(State state, boolean locked, List<String> lockedBy) {}
+    public record Coverage(State state, boolean locked, List<String> lockedBy, boolean asGroup) {}
+
+    /**
+     * [own], the coverage of a node inside [parent] whose coverage is [above]: locked as well while the parent is
+     * locked or switched on as a group. Otherwise switching the node off could delete one of the parent's own rules
+     * (a mod's "Made from … blocks" folder shares "*@mod:*" with it) and leave the parent partly on.
+     */
+    public static Coverage inside(Coverage own, Node parent, Coverage above) {
+        if (above.locked) return new Coverage(own.state, true, above.lockedBy, own.asGroup);
+        if (above.asGroup) return new Coverage(own.state, true, parent.rules, own.asGroup);
+        return own;
+    }
 
     /**
      * [node]'s switch for a column whose switched-on entries applying to a particle are [entriesFor] (for Everywhere,
@@ -232,13 +244,16 @@ public final class ResultTree {
     public static Coverage coverage(Node node, Function<String, ? extends Collection<String>> entriesFor, TagCheck tags) {
         int covered = 0;
         int coveredOutside = 0;
+        int coveredByRules = 0;
         Set<String> lockedBy = new LinkedHashSet<>();
         for (String leaf : node.leaves) {
             boolean hidden = false;
             boolean outside = false;
+            boolean byRule = false;
             for (String entry : entriesFor.apply(leaf)) {
                 if (!ParticlePattern.entryMatches(entry, leaf, tags)) continue;
                 hidden = true;
+                byRule |= node.rules.contains(entry);
                 if (!owns(node, entry, tags)) {
                     outside = true;
                     lockedBy.add(entry);
@@ -246,9 +261,11 @@ public final class ResultTree {
             }
             if (hidden) covered++;
             if (outside) coveredOutside++;
+            if (byRule) coveredByRules++;
         }
         State state = covered == 0 ? State.OFF : covered == node.leaves.size() ? State.ON : State.PARTIAL;
-        return new Coverage(state, coveredOutside > 0 && coveredOutside == node.leaves.size(), List.copyOf(lockedBy));
+        return new Coverage(state, coveredOutside > 0 && coveredOutside == node.leaves.size(), List.copyOf(lockedBy),
+            !node.leaves.isEmpty() && coveredByRules == node.leaves.size());
     }
 
     /** True if [entry] is one of [node]'s rules or covered by one, so switching the node off removes it. */

@@ -398,16 +398,23 @@ public class ScanPage extends Page {
         List<ParticleScan.Result> results = ParticleScan.results();
         List<ResultTree.Item> items = results.stream().map(r -> new ResultTree.Item(r.particle(), r.count(), r.allHidden())).toList();
         int most = results.stream().mapToInt(ParticleScan.Result::count).max().orElse(1);
-        for (ResultTree.Node node : ResultTree.build(items)) addRows(rows, node, null, 0, most);
+        for (ResultTree.Node node : ResultTree.build(items)) addRows(rows, node, null, null, null, 0, most);
         return rows;
     }
 
-    private void addRows(List<Row> rows, ResultTree.Node node, ResultTree.Kind parent, int depth, int most) {
+    /**
+     * Adds [node]'s row, then its contents while open. [parent] and its switches' coverage ([aboveEverywhere],
+     * [aboveHere]) lock the node's switches while the parent's are locked or switched on as a group.
+     */
+    private void addRows(List<Row> rows, ResultTree.Node node, ResultTree.Node parent, ResultTree.Coverage aboveEverywhere,
+                         ResultTree.Coverage aboveHere, int depth, int most) {
         ParticlePattern.TagCheck tags = FilterRules.tags();
-        ResultTree.Coverage everywhere = ResultTree.coverage(node, key -> PfConfig.hiddenParticles(), tags);
-        rows.add(nodeRow(node, parent, depth, most, everywhere, tags));
+        ResultTree.Coverage everywhere = within(ResultTree.coverage(node, key -> PfConfig.hiddenParticles(), tags), parent, aboveEverywhere);
+        ResultTree.Coverage here = ParticleScan.target() == null ? null
+            : within(ResultTree.coverage(node, ParticleScan::hereEntries, tags), parent, aboveHere);
+        rows.add(nodeRow(node, parent == null ? null : parent.kind, depth, most, everywhere, here));
         if (node.isFolder()) {
-            if (isOpen(node)) node.children.forEach(child -> addRows(rows, child, node.kind, depth + 1, most));
+            if (isOpen(node)) node.children.forEach(child -> addRows(rows, child, node, everywhere, here, depth + 1, most));
             return;
         }
         String particle = node.name;
@@ -432,7 +439,12 @@ public class ScanPage extends Page {
      * switches, which show partly on when only some of a folder's particles are hidden, and can't be switched off while
      * something outside the folder (such as a mod folder above) hides it all. Dimmed when the rules hid every one.
      */
-    private Row nodeRow(ResultTree.Node node, ResultTree.Kind parent, int depth, int most, ResultTree.Coverage everywhere, ParticlePattern.TagCheck tags) {
+    /** [own] locked by [parent]'s switch [above] where {@link ResultTree#inside} says so; Other locks nothing. */
+    private static ResultTree.Coverage within(ResultTree.Coverage own, ResultTree.Node parent, ResultTree.Coverage above) {
+        return parent == null || above == null || parent.rules.isEmpty() ? own : ResultTree.inside(own, parent, above);
+    }
+
+    private Row nodeRow(ResultTree.Node node, ResultTree.Kind parent, int depth, int most, ResultTree.Coverage everywhere, ResultTree.Coverage here) {
         var font = screen.font();
         boolean folder = node.isFolder();
         boolean dim = node.allHidden;
@@ -443,8 +455,7 @@ public class ScanPage extends Page {
         var name = screen.wrap(label(node, parent), countRight - font.width(countText) - NAME_GAP - CARD_TEXT_X - indent);
         int color = folder ? Theme.TEXT_DIM : ParticleKey.isTyped(node.name) ? Theme.TYPED : Theme.UNTYPED;
         float share = node.count / (float) Math.max(1, most);
-        boolean hereColumn = ParticleScan.target() != null && !node.rules.isEmpty();
-        ResultTree.Coverage here = hereColumn ? ResultTree.coverage(node, ParticleScan::hereEntries, tags) : null;
+        boolean hereColumn = here != null && !node.rules.isEmpty();
         boolean counts = hereColumn && PfConfig.zoneOptionsOpen() && ParticleScan.hereZone() == null;
         Row row = new Row(PfScreen.textHeight(name.size()) + 2 * RESULT_TEXT_Y, (g, x, y, w, h, hovered) -> {
             Theme.rect(g, x + indent, y, w - indent, h, CARD_RADIUS, hovered ? Theme.CARD_HOVER : folder ? Theme.FOLDER : Theme.CARD);
@@ -712,6 +723,8 @@ public class ScanPage extends Page {
         int cx = screen.cx();
         int y = screen.bodyBottom() - FOOTER_LINE;
         String shown = Theme.fit(font, text.getString(), maxWidth);
+        // Shortened to one line, so the tooltip starts with the whole line.
+        if (!shown.equals(text.getString())) tip = Component.empty().append(text).append("\n").append(tip);
         Theme.dot(g, cx + DOT_X, y + 1, DOT_SIZE, color);
         Theme.text(g, font, shown, cx + DOT_TEXT_X, y, Theme.TEXT_DIM);
         if (mouseX >= cx && mouseX < cx + DOT_TEXT_X + font.width(shown) && mouseY >= y - 4 && mouseY < y + 12) {

@@ -188,14 +188,16 @@ public final class ParticleScan {
 
     /**
      * What the Here button switches to: from a zone, always new zones; from new zones, back to the zone used before
-     * (or the smallest zone around the scanned block). Null means new zones, and also "nothing to switch to" while
+     * (or the smallest zone around the scanned block that this scan didn't make). Null means new zones, and also "nothing to switch to" while
      * Here already makes new zones with no zone around.
      */
     public static Zone nextHereChoice() {
         if (hereZone() != null) return null;
         Zone previous = PfConfig.zoneById(previousZoneId);
         if (previous != null && PfConfig.isInCurrentWorld(previous)) return previous;
-        return zonesAtTarget().stream().findFirst().orElse(null);
+        // Not a zone this scan made itself: Here already hides particles in those.
+        List<Zone> managed = FittedZones.managedZones();
+        return zonesAtTarget().stream().filter(z -> !managed.contains(z)).findFirst().orElse(null);
     }
 
     public static void cycleHere() {

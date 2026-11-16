@@ -209,4 +209,37 @@ class ResultTreeTest {
             leaf -> leaf.endsWith("ruby_ore") ? List.of("minecraft:block@geore:*") : List.of(), NO_TAGS);
         assertEquals(State.PARTIAL, coverage.state());
     }
+
+    @Test
+    void folderSharingARuleWithASwitchedOnParentIsLocked() {
+        // "Made from Minecraft blocks" adds *@minecraft:*, one of the Minecraft folder's own two rules.
+        // Debris without a particle type: only *@minecraft:* covers it, not minecraft:*.
+        List<Node> tree = ResultTree.build(List.of(item(TERRAIN + "@minecraft:stone", 4), item(TERRAIN + "@minecraft:dirt", 1),
+            item("minecraft:smoke", 2)));
+        Node minecraft = top(tree, "minecraft");
+        Node madeFrom = child(minecraft, "minecraft");
+        List<String> entries = List.of("minecraft:*", "*@minecraft:*");
+
+        ResultTree.Coverage parent = coverage(minecraft, entries);
+        assertTrue(parent.asGroup());
+        ResultTree.Coverage own = coverage(madeFrom, entries);
+        assertFalse(own.locked(), "on its own it looks like its own rule");
+        ResultTree.Coverage inside = ResultTree.inside(own, minecraft, parent);
+        assertTrue(inside.locked());
+        assertEquals(minecraft.rules, inside.lockedBy());
+    }
+
+    @Test
+    void foldersInsideAParentSwitchedOnPieceByPieceStayFree() {
+        List<Node> tree = ResultTree.build(List.of(item(TERRAIN + "@minecraft:stone", 4), item(TERRAIN + "@minecraft:dirt", 1),
+            item("minecraft:smoke", 2)));
+        Node minecraft = top(tree, "minecraft");
+        Node madeFrom = child(minecraft, "minecraft");
+        List<String> entries = List.of("*@minecraft:*", "minecraft:smoke");
+
+        ResultTree.Coverage parent = coverage(minecraft, entries);
+        assertEquals(State.ON, parent.state());
+        assertFalse(parent.asGroup(), "smoke is hidden by its own entry, not the folder's");
+        assertFalse(ResultTree.inside(coverage(madeFrom, entries), minecraft, parent).locked());
+    }
 }
